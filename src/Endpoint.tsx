@@ -143,7 +143,7 @@ export async function getAIResponse(
       content = response.data.choices?.[0]?.message?.content || '';
     }
   } catch (e: unknown) {
-    if (e instanceof Error && (e.name === 'AbortError' || axios.isCancel(e))) {
+    if (e instanceof Error && (e.name === 'AbortError' || e.message === 'Request was cancelled' || axios.isCancel(e))) {
       throw new Error('Request was cancelled');
     }
     if (e instanceof Error && e.message.startsWith('API error ')) throw e;
