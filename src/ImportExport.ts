@@ -1,8 +1,9 @@
 import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
+import pako from 'pako';
 import {Character} from './CharacterEditor';
 import {LorebookState} from './RAGHandler';
-import {ChatSession} from './useChat';
+import {ChatSession, ChatMessage} from './useChat';
 import {PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
 import {AppSettings, DEFAULT_APP_SETTINGS} from './store';
 import {
@@ -19,7 +20,7 @@ import {
 } from './Database';
 import {readPngCharaMetadata, writePngWithCharaMetadata, isPngSignature} from './PngMetadata';
 
-export type ImportFormat = 'ccv1' | 'ccv2' | 'buk';
+export type ImportFormat = 'ccv1' | 'ccv2' | 'buk' | 'perchance';
 export type ExportFormat = 'ccv1' | 'ccv2' | 'buk';
 
 export interface BukImportResult {
@@ -79,6 +80,75 @@ function parseV2Json(json: Record<string, any>, id?: string): Character {
   };
 }
 
+interface PerchanceCharacter {
+  name: string;
+  roleInstruction: string;
+  generalWritingInstructions: string;
+  initialMessages: Array<{author: string; content: string}>;
+  avatar: {url: string; size: number; shape: string};
+  loreBookUrls: string[];
+  id: number;
+  [key: string]: any;
+}
+
+interface PerchanceThread {
+  id: number;
+  characterId: number;
+  name: string;
+  creationTime: number;
+  lastMessageTime: number;
+  [key: string]: any;
+}
+
+interface PerchanceMessage {
+  id: number;
+  threadId: number;
+  characterId: number;
+  message: string;
+  creationTime: number;
+  order: number;
+  [key: string]: any;
+}
+
+function parsePerchanceCharacter(pChar: PerchanceCharacter): Character {
+  const initialMessage = pChar.initialMessages?.find(m => m.author === 'ai')?.content || '';
+  return {
+    id: generateId(),
+    name: pChar.name || '',
+    description: pChar.roleInstruction || '',
+    personality: '',
+    scenario: '',
+    initialMessage,
+    exampleMessages: '',
+    writingStyle: pChar.generalWritingInstructions || '',
+    lorebookIds: [],
+  };
+}
+
+async function downloadPerchanceIcon(url: string, charId: string): Promise<string | null> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1] || '');
+      };
+      reader.onerror = () => reject(new Error('Failed to read blob'));
+      reader.readAsDataURL(blob);
+    });
+    if (!base64) return null;
+    const ext = url.split('.').pop()?.split('?')[0] || 'png';
+    await RNFS.mkdir(`${RNFS.DocumentDirectoryPath}/icons`);
+    const iconPath = `${RNFS.DocumentDirectoryPath}/icons/${charId}.${ext}`;
+    await RNFS.writeFile(iconPath, base64, 'base64');
+    return `file://${iconPath}`;
+  } catch {
+    return null;
+  }
+}
+
 function serializeV1(char: Character): Record<string, any> {
   return {
     name: char.name,
@@ -124,9 +194,19 @@ export async function detectImportFormat(fileUri: string, fileName: string): Pro
       return 'ccv2';
     }
 
-    const text = new TextDecoder().decode(buffer);
+    let text: string;
+    if (fileName.endsWith('.gz')) {
+      const decompressed = pako.ungzip(new Uint8Array(buffer));
+      text = new TextDecoder().decode(decompressed);
+    } else {
+      text = new TextDecoder().decode(buffer);
+    }
+
     const json = JSON.parse(text);
 
+    if (json.formatName === 'dexie' && json.data?.tables) {
+      return 'perchance';
+    }
     if (json.spec === 'chara_card_v2') return 'ccv2';
     if (json.name || json.first_mes || json.description) return 'ccv1';
   } catch (e) { console.warn('Failed to detect import format:', e); }
@@ -414,6 +494,107 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     delete merged.apiUrl;
     delete merged.apiKey;
     setKV('promptConfig', JSON.stringify(merged));
+  }
+
+  return result;
+}
+
+export async function importPerchance(fileUri: string): Promise<{characters: Character[]; sessions: ChatSession[]; skippedCharacters: string[]}> {
+  const response = await fetch(fileUri);
+  const buffer = await response.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  let text: string;
+  if (fileUri.endsWith('.gz')) {
+    const decompressed = pako.ungzip(bytes);
+    text = new TextDecoder().decode(decompressed);
+  } else {
+    text = new TextDecoder().decode(buffer);
+  }
+
+  const json = JSON.parse(text);
+  const tables = json.data?.data || [];
+
+  const charTable = tables.find((t: any) => t.tableName === 'characters');
+  const threadTable = tables.find((t: any) => t.tableName === 'threads');
+  const messageTable = tables.find((t: any) => t.tableName === 'messages');
+
+  const pCharacters: PerchanceCharacter[] = charTable?.rows || [];
+  const pThreads: PerchanceThread[] = threadTable?.rows || [];
+  const pMessages: PerchanceMessage[] = messageTable?.rows || [];
+
+  const result = {
+    characters: [] as Character[],
+    sessions: [] as ChatSession[],
+    skippedCharacters: [] as string[],
+  };
+
+  const existing = await getAllCharactersFromDB();
+  const perchanceIdToNewId = new Map<number, string>();
+
+  for (const pChar of pCharacters) {
+    if (existing.some(c => c.name === pChar.name)) {
+      result.skippedCharacters.push(pChar.name);
+      continue;
+    }
+
+    const char = parsePerchanceCharacter(pChar);
+    perchanceIdToNewId.set(pChar.id, char.id);
+
+    if (pChar.avatar?.url) {
+      const icon = await downloadPerchanceIcon(pChar.avatar.url, char.id);
+      if (icon) {
+        char.icon = icon;
+      }
+    }
+
+    result.characters.push(char);
+
+    await saveCharacterToDB({
+      id: char.id,
+      name: char.name,
+      description: char.description,
+      initial_message: char.initialMessage,
+      writing_style: char.writingStyle,
+      personality: char.personality,
+      scenario: char.scenario,
+      example_messages: char.exampleMessages || '',
+      icon: char.icon || '',
+      lorebook_id: '',
+    });
+  }
+
+  for (const pThread of pThreads) {
+    const newCharId = perchanceIdToNewId.get(pThread.characterId);
+    if (!newCharId) continue;
+
+    const threadMessages = pMessages
+      .filter(m => m.threadId === pThread.id)
+      .sort((a, b) => a.order - b.order);
+
+    if (threadMessages.length === 0) continue;
+
+    const sessionId = generateId();
+
+    const messages: ChatMessage[] = threadMessages.map(m => ({
+      id: generateId(),
+      role: m.characterId === -1 ? 'user' as const : 'assistant' as const,
+      content: m.message,
+      timestamp: m.creationTime,
+      characterId: m.characterId === -1 ? undefined : newCharId,
+    }));
+
+    const session: ChatSession = {
+      id: sessionId,
+      characterId: newCharId,
+      messages,
+      createdAt: pThread.creationTime,
+      updatedAt: pThread.lastMessageTime,
+    };
+
+    result.sessions.push(session);
+
+    await createSession(session);
   }
 
   return result;
