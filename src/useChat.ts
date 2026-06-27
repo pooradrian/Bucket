@@ -1,7 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList} from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import axios from 'axios';
 import {Character} from './CharacterEditor';
 import {loadPromptConfig, sendToLLM, sendToGroupLLM, PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
 import {LorebookState} from './RAGHandler';
@@ -309,7 +308,8 @@ export function useChat({
         }
       } catch (e: unknown) {
         setIsStreaming(false);
-        if (axios.isCancel(e)) {
+        const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
+        if (isCancelled) {
           handleCancelSave(withUser.messages, withUser);
         } else {
           setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
@@ -424,8 +424,26 @@ export function useChat({
       resetStreamingContent();
     } catch (e: unknown) {
       setIsStreaming(false);
-      if (axios.isCancel(e)) {
-        setSession(prev => prev ? {...prev, messages: updated, updatedAt: Date.now()} : prev);
+      const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
+      if (isCancelled) {
+        const partial = streamingContentRef.current;
+        if (partial.length > 0) {
+          const assistantMessage: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: partial,
+            timestamp: Date.now(),
+            ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
+          };
+          const withAssistant = {
+            messages: [...updated, assistantMessage],
+            updatedAt: Date.now(),
+          };
+          setSession(prev => prev ? {...prev, ...withAssistant} : prev);
+          persistMessage(session.id, assistantMessage, withAssistant.updatedAt);
+        } else {
+          setSession(prev => prev ? {...prev, messages: updated, updatedAt: Date.now()} : prev);
+        }
         resetStreamingContent();
       } else {
         setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
@@ -498,7 +516,25 @@ export function useChat({
       resetStreamingContent();
     } catch (e: unknown) {
       setIsStreaming(false);
-      if (axios.isCancel(e)) {
+      const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
+      if (isCancelled) {
+        const partial = streamingContentRef.current;
+        if (partial.length > 0) {
+          const assistantMessage: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: partial,
+            timestamp: Date.now(),
+            ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
+          };
+          const withAssistant = {
+            ...session,
+            messages: [...session.messages, assistantMessage],
+            updatedAt: Date.now(),
+          };
+          setSession(withAssistant);
+          persistMessage(session.id, assistantMessage, withAssistant.updatedAt);
+        }
         resetStreamingContent();
       } else {
         setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
