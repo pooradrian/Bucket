@@ -16,6 +16,7 @@ import {
   detectImportFormat,
   importCharacter,
   importBuk,
+  importPerchance,
   exportCCV1,
   exportCCV2,
   exportBuk,
@@ -73,6 +74,19 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         await loadCharacters();
         await loadLorebooks();
         await loadSettings();
+
+        Alert.alert('Import Complete', message);
+      } else if (format === 'perchance') {
+        const imported = await importPerchance(file.uri);
+        let message = `Imported ${imported.characters.length} characters`;
+        if (imported.sessions.length > 0) {
+          message += `, ${imported.sessions.length} chat sessions`;
+        }
+        if (imported.skippedCharacters.length > 0) {
+          message += `\n\nSkipped ${imported.skippedCharacters.length} duplicate(s): ${imported.skippedCharacters.join(', ')}`;
+        }
+
+        await loadCharacters();
 
         Alert.alert('Import Complete', message);
       } else {
@@ -209,7 +223,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
           {importing ? 'Importing...' : 'Import'}
         </Text>
         <Text style={st.cardDescription}>
-          Supports Character Card V1, V2, and .buk files
+          Supports Character Card V1, V2, .buk, and Perchance exports
         </Text>
       </TouchableOpacity>
 
