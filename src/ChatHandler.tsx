@@ -1,4 +1,4 @@
-import React, {useCallback} from 'react';
+import React, {useCallback, useEffect} from 'react';
 import {
   FlatList,
   Image,
@@ -55,6 +55,29 @@ function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
       </View>
     </View>
   );
+}
+
+function renderFormattedText(text: string, baseStyle: object) {
+  const parts: {text: string; italic: boolean}[] = [];
+  const regex = /\*([^*]+)\*/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({text: text.slice(lastIndex, match.index), italic: false});
+    }
+    parts.push({text: match[1], italic: true});
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push({text: text.slice(lastIndex), italic: false});
+  }
+  if (parts.length === 0) {
+    parts.push({text, italic: false});
+  }
+  return parts.map((p, i) => (
+    <Text key={i} style={[baseStyle, p.italic && {fontStyle: 'italic'}]}>{p.text}</Text>
+  ));
 }
 
 const MessageBubble = React.memo(function MessageBubble({
@@ -125,7 +148,7 @@ const MessageBubble = React.memo(function MessageBubble({
           <>
             <Text
               style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-              {item.content}
+              {renderFormattedText(item.content, st.bubbleText)}
             </Text>
             {!isStreamingMsg && (
               <Text style={[st.timestampText, isUser ? st.timestampUser : st.timestampAssistant]}>
@@ -179,6 +202,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
     setInputText,
     sending,
     isStreaming,
+    streamingContent,
     selectedMessageId,
     setSelectedMessageId,
     editingMessageId,
@@ -202,6 +226,12 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
 
   const isGroupChat = !!groupChat;
   const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
+
+  useEffect(() => {
+    if (isStreaming) {
+      flatListRef.current?.scrollToOffset({offset: 0, animated: true});
+    }
+  }, [streamingContent, isStreaming]);
 
   const renderMessage = useCallback(({item}: {item: ChatMessage}) => {
     const isUser = item.role === 'user';
