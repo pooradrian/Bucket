@@ -403,10 +403,24 @@ export async function searchMessages(query: string): Promise<MessageSearchResult
   return matches;
 }
 
+/**
+ * Deletes all sessions and messages whose ids share a given prefix.
+ *
+ * This is a debug/stress-test helper only: the debugger creates throwaway
+ * sessions and messages whose ids are deliberately constructed with a known
+ * prefix (e.g. `_stress_`). Real ids are `crypto.randomUUID()` and never start
+ * with such a prefix, so this cannot match real data. We match messages on both
+ * their own id prefix and their session id prefix so no stress rows are left
+ * orphaned.
+ */
 export function deleteAllByPrefix(prefix: string): {sessions: number; messages: number} {
   const d = initDB();
-  const msgResult = d.execute('DELETE FROM chat_messages WHERE session_id IN (SELECT id FROM chat_sessions WHERE id LIKE ?)', [`${prefix}%`]);
-  const sessResult = d.execute('DELETE FROM chat_sessions WHERE id LIKE ?', [`${prefix}%`]);
+  const like = `${prefix}%`;
+  const msgResult = d.execute(
+    'DELETE FROM chat_messages WHERE id LIKE ? OR session_id LIKE ?',
+    [like, like],
+  );
+  const sessResult = d.execute('DELETE FROM chat_sessions WHERE id LIKE ?', [like]);
   return {
     sessions: sessResult.rowsAffected ?? 0,
     messages: msgResult.rowsAffected ?? 0,
