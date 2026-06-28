@@ -24,6 +24,29 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function tableColumns(conn: NitroSQLiteConnection, table: string): Set<string> {
+  const result = conn.execute(`PRAGMA table_info(${table})`);
+  const columns = new Set<string>();
+  for (const row of result.results || []) {
+    const name = row.name as string;
+    if (name) {
+      columns.add(name);
+    }
+  }
+  return columns;
+}
+
+function addColumnIfMissing(
+  conn: NitroSQLiteConnection,
+  table: string,
+  column: string,
+  definition: string,
+) {
+  if (!tableColumns(conn, table).has(column)) {
+    conn.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
   for (let v = from + 1; v <= to; v++) {
     conn.execute('BEGIN');
@@ -111,8 +134,8 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
           )
         `);
         conn.execute('CREATE INDEX IF NOT EXISTS idx_group_chat_members_group ON group_chat_members(group_chat_id)');
-        conn.execute('ALTER TABLE chat_sessions ADD COLUMN group_chat_id TEXT DEFAULT ""');
-        conn.execute('ALTER TABLE chat_sessions ADD COLUMN last_reply_character_id TEXT DEFAULT ""');
+        addColumnIfMissing(conn, 'chat_sessions', 'group_chat_id', 'TEXT DEFAULT ""');
+        addColumnIfMissing(conn, 'chat_sessions', 'last_reply_character_id', 'TEXT DEFAULT ""');
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
