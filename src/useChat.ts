@@ -92,6 +92,27 @@ export function useChat({
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef('');
   const streamingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always tracks the id of the session currently shown in the UI. Used to
+  // detect when the active session changes mid-stream so that streamed results
+  // are not applied to (or persisted into) the wrong session.
+  const sessionIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    sessionIdRef.current = session?.id ?? null;
+  }, [session?.id]);
+
+  // Applies a functional session update only if the active session is still the
+  // one the in-flight request started on. Prevents stale-session writes when the
+  // user switches chats while a response is streaming.
+  const updateSessionIfCurrent = useCallback(
+    (startSessionId: string, updater: (prev: ChatSession) => ChatSession) => {
+      if (sessionIdRef.current !== startSessionId) {
+        return;
+      }
+      setSession(prev => (prev && prev.id === startSessionId ? updater(prev) : prev));
+    },
+    [],
+  );
 
   const flushStreamingContent = useCallback((token: string) => {
     streamingContentRef.current += token;
@@ -208,16 +229,16 @@ export function useChat({
         content: partial,
         timestamp: Date.now(),
       };
-      const withAssistant = {
-        ...baseSession,
+      const updatedAt = Date.now();
+      updateSessionIfCurrent(baseSession.id, prev => ({
+        ...prev,
         messages: [...baseMessages, assistantMessage],
-        updatedAt: Date.now(),
-      };
-      setSession(withAssistant);
-      persistMessage(baseSession.id, assistantMessage, withAssistant.updatedAt);
+        updatedAt,
+      }));
+      persistMessage(baseSession.id, assistantMessage, updatedAt);
     }
     resetStreamingContent();
-  }, [persistMessage, resetStreamingContent]);
+  }, [persistMessage, resetStreamingContent, updateSessionIfCurrent]);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -233,6 +254,8 @@ export function useChat({
       setInputText('');
       setError(null);
 
+      const startSessionId = session.id;
+
       const userMessage: ChatMessage = {
         id: generateId(),
         role: 'user',
@@ -246,7 +269,7 @@ export function useChat({
         updatedAt: Date.now(),
       };
       setSession(withUser);
-      persistMessage(session.id, userMessage, withUser.updatedAt);
+      persistMessage(startSessionId, userMessage, withUser.updatedAt);
 
       try {
         streamingContentRef.current = '';
@@ -286,24 +309,29 @@ export function useChat({
           timestamp: Date.now(),
           ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
         };
-        const withAssistant = {
-          ...withUser,
-          messages: [...withUser.messages, assistantMessage],
-          updatedAt: Date.now(),
-        };
-        setSession(withAssistant);
-        persistMessage(session.id, assistantMessage, withAssistant.updatedAt);
+        const assistantUpdatedAt = Date.now();
+        updateSessionIfCurrent(startSessionId, prev => ({
+          ...prev,
+          messages: [...prev.messages, assistantMessage],
+          updatedAt: assistantUpdatedAt,
+        }));
+        persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
         if (isGroupChat && selectedReplyCharacter) {
-          setLastReplyCharacterId(session.id, selectedReplyCharacter.id);
+          setLastReplyCharacterId(startSessionId, selectedReplyCharacter.id);
         }
         setIsStreaming(false);
         resetStreamingContent();
 
         const sumConfig = getSummarizationConfig(promptConfig);
         if (sumConfig.enabled) {
+          const withAssistant = {
+            ...withUser,
+            messages: [...withUser.messages, assistantMessage],
+            updatedAt: assistantUpdatedAt,
+          };
           const summarized = await checkAndSummarize(withAssistant, sumConfig, promptConfig);
           if (summarized.messages.length !== withAssistant.messages.length) {
-            setSession(summarized);
+            updateSessionIfCurrent(startSessionId, () => summarized);
           }
         }
       } catch (e: unknown) {
@@ -320,7 +348,7 @@ export function useChat({
         setSending(false);
       }
     },
-    [session, sending, persistMessage, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, handleCancelSave, flushStreamingContent, resetStreamingContent],
+    [session, sending, persistMessage, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, handleCancelSave, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
   );
 
   const handleEditMessage = useCallback((msg: ChatMessage) => {
@@ -367,10 +395,11 @@ export function useChat({
     const lastMsg = session.messages[session.messages.length - 1];
     if (!lastMsg || lastMsg.role !== 'assistant') {return;}
 
+    const startSessionId = session.id;
     const updated = session.messages.slice(0, -1);
-    setSession(prev => prev ? {...prev, messages: updated, updatedAt: Date.now()} : prev);
+    updateSessionIfCurrent(startSessionId, prev => ({...prev, messages: updated, updatedAt: Date.now()}));
     deleteMessage(lastMsg.id);
-    updateSessionTimestamp(session.id, Date.now());
+    updateSessionTimestamp(startSessionId, Date.now());
     setSelectedMessageId(null);
 
     const lastUserMsg = [...updated].reverse().find(m => m.role === 'user');
@@ -416,10 +445,13 @@ export function useChat({
         timestamp: Date.now(),
         ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
       };
-      setSession(prev => prev
-        ? {...prev, messages: [...prev.messages, assistantMessage], updatedAt: Date.now()}
-        : prev);
-      persistMessage(session.id, assistantMessage, Date.now());
+      const assistantUpdatedAt = Date.now();
+      updateSessionIfCurrent(startSessionId, prev => ({
+        ...prev,
+        messages: [...prev.messages, assistantMessage],
+        updatedAt: assistantUpdatedAt,
+      }));
+      persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
       setIsStreaming(false);
       resetStreamingContent();
     } catch (e: unknown) {
@@ -435,14 +467,15 @@ export function useChat({
             timestamp: Date.now(),
             ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
           };
-          const withAssistant = {
+          const cancelUpdatedAt = Date.now();
+          updateSessionIfCurrent(startSessionId, prev => ({
+            ...prev,
             messages: [...updated, assistantMessage],
-            updatedAt: Date.now(),
-          };
-          setSession(prev => prev ? {...prev, ...withAssistant} : prev);
-          persistMessage(session.id, assistantMessage, withAssistant.updatedAt);
+            updatedAt: cancelUpdatedAt,
+          }));
+          persistMessage(startSessionId, assistantMessage, cancelUpdatedAt);
         } else {
-          setSession(prev => prev ? {...prev, messages: updated, updatedAt: Date.now()} : prev);
+          updateSessionIfCurrent(startSessionId, prev => ({...prev, messages: updated, updatedAt: Date.now()}));
         }
         resetStreamingContent();
       } else {
@@ -453,7 +486,7 @@ export function useChat({
       abortControllerRef.current = null;
       setSending(false);
     }
-  }, [session, sending, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, persistMessage, lorebook, flushStreamingContent, resetStreamingContent]);
+  }, [session, sending, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, persistMessage, lorebook, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -463,6 +496,9 @@ export function useChat({
     if (!session || sending) {return;}
     const lastUserMsg = [...session.messages].reverse().find(m => m.role === 'user');
     if (!lastUserMsg) {return;}
+
+    const startSessionId = session.id;
+    const baseMessages = session.messages;
 
     setError(null);
     setSending(true);
@@ -479,7 +515,7 @@ export function useChat({
           groupMembers,
           selectedReplyCharacter,
           lastUserMsg.content,
-          session.messages,
+          baseMessages,
           promptConfig,
           flushStreamingContent,
           ctrl,
@@ -488,7 +524,7 @@ export function useChat({
         result = await sendToLLM(
           activeCharacter,
           lastUserMsg.content,
-          session.messages,
+          baseMessages,
           promptConfig,
           flushStreamingContent,
           lorebook,
@@ -505,13 +541,13 @@ export function useChat({
         timestamp: Date.now(),
         ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
       };
-      const withAssistant = {
-        ...session,
-        messages: [...session.messages, assistantMessage],
-        updatedAt: Date.now(),
-      };
-      setSession(withAssistant);
-      persistMessage(session.id, assistantMessage, withAssistant.updatedAt);
+      const assistantUpdatedAt = Date.now();
+      updateSessionIfCurrent(startSessionId, prev => ({
+        ...prev,
+        messages: [...prev.messages, assistantMessage],
+        updatedAt: assistantUpdatedAt,
+      }));
+      persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
       setIsStreaming(false);
       resetStreamingContent();
     } catch (e: unknown) {
@@ -527,13 +563,13 @@ export function useChat({
             timestamp: Date.now(),
             ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
           };
-          const withAssistant = {
-            ...session,
-            messages: [...session.messages, assistantMessage],
-            updatedAt: Date.now(),
-          };
-          setSession(withAssistant);
-          persistMessage(session.id, assistantMessage, withAssistant.updatedAt);
+          const cancelUpdatedAt = Date.now();
+          updateSessionIfCurrent(startSessionId, prev => ({
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
+            updatedAt: cancelUpdatedAt,
+          }));
+          persistMessage(startSessionId, assistantMessage, cancelUpdatedAt);
         }
         resetStreamingContent();
       } else {
@@ -544,7 +580,7 @@ export function useChat({
       abortControllerRef.current = null;
       setSending(false);
     }
-  }, [session, sending, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent]);
+  }, [session, sending, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent]);
 
   const messagesData = useMemo(() => {
     const base = [...(session?.messages ?? [])].reverse();
