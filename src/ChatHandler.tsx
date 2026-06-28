@@ -1,8 +1,11 @@
-import React, {useCallback, useEffect} from 'react';
+import React, {useCallback, useEffect, useRef} from 'react';
 import {
+  Animated,
   FlatList,
   Image,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   ScrollView,
   Text,
@@ -44,13 +47,30 @@ interface MessageBubbleProps {
 }
 
 function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
+  const opacities = useRef([new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]).current;
+
+  useEffect(() => {
+    const animations = opacities.map((val, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 200),
+          Animated.timing(val, {toValue: 1, duration: 400, useNativeDriver: true}),
+          Animated.timing(val, {toValue: 0.3, duration: 400, useNativeDriver: true}),
+        ]),
+      ),
+    );
+    const composite = Animated.parallel(animations);
+    composite.start();
+    return () => composite.stop();
+  }, [opacities]);
+
   return (
     <View style={[st.messageContainer, st.messageContainerAssistant]}>
       <View style={[st.bubble, st.bubbleAssistant, st.typingBubble]}>
         <View style={st.typingDots}>
-          <View style={[st.typingDot, st.typingDot1]} />
-          <View style={[st.typingDot, st.typingDot2]} />
-          <View style={[st.typingDot, st.typingDot3]} />
+          {opacities.map((val, i) => (
+            <Animated.View key={i} style={[st.typingDot, {opacity: val}]} />
+          ))}
         </View>
       </View>
     </View>
@@ -88,6 +108,7 @@ const MessageBubble = React.memo(function MessageBubble({
   const isUser = item.role === 'user';
   const isStreamingMsg = item.id === '__streaming__';
   const isError = item.id === '__error__';
+  const isTyping = item.id === '__typing__';
   const isEditing = editingMessageId === item.id;
 
   if (isError) {
@@ -103,6 +124,10 @@ const MessageBubble = React.memo(function MessageBubble({
         </View>
       </View>
     );
+  }
+
+  if (isTyping) {
+    return <TypingIndicator st={st} />;
   }
 
   return (
@@ -227,11 +252,26 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
   const isGroupChat = !!groupChat;
   const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
 
+  const scrollOffsetRef = useRef(0);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+  }, []);
+
+  useEffect(() => {
+    if (editingMessageId) {
+      const offset = scrollOffsetRef.current;
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToOffset({offset, animated: false});
+      });
+    }
+  }, [editingMessageId, flatListRef]);
+
   useEffect(() => {
     if (isStreaming) {
       flatListRef.current?.scrollToOffset({offset: 0, animated: true});
     }
-  }, [streamingContent, isStreaming]);
+  }, [streamingContent, isStreaming, flatListRef]);
 
   const renderMessage = useCallback(({item}: {item: ChatMessage}) => {
     const isUser = item.role === 'user';
@@ -306,10 +346,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
         maintainVisibleContentPosition={{minIndexForVisible: 0}}
         style={{flex: 1}}
         contentContainerStyle={st.chatContent}
+        onScroll={handleScroll}
         onScrollBeginDrag={() => {
           if (selectedMessageId) {setSelectedMessageId(null);}
         }}
-        ListHeaderComponent={sending && !isStreaming ? <TypingIndicator st={st} /> : null}
+        ListHeaderComponent={null}
         ListEmptyComponent={
           <View style={st.emptyStateContainer}>
             <View style={st.emptyStateBubble}>

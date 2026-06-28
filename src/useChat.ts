@@ -596,6 +596,13 @@ export function useChat({
         content: streamingContent,
         timestamp: Date.now(),
       });
+    } else if (sending && streamingContent.length === 0 && !error) {
+      base.unshift({
+        id: '__typing__',
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+      });
     } else if (error) {
       base.unshift({
         id: '__error__',
@@ -605,7 +612,7 @@ export function useChat({
       });
     }
     return base;
-  }, [session?.messages, isStreaming, streamingContent, error]);
+  }, [session?.messages, isStreaming, streamingContent, sending, error]);
 
   return {
     session,
