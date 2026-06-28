@@ -336,24 +336,71 @@ export function getDBInfo(): {sessionCount: number; messageCount: number} {
   };
 }
 
-export async function searchMessages(query: string): Promise<Array<{sessionId: string; id: string; role: string; content: string; timestamp: number}>> {
+export interface MessageSearchResult {
+  sessionId: string;
+  id: string;
+  role: string;
+  content: string;
+  timestamp: number;
+}
+
+const SEARCH_PAGE_SIZE = 500;
+const SEARCH_MAX_RESULTS = 200;
+
+/**
+ * Full-text search across all chat messages.
+ *
+ * Message content is encrypted at rest, so we cannot filter with a SQL `LIKE`.
+ * Instead we page through every row in deterministic order, decrypt each page,
+ * and filter in JS. Scanning is bounded by `SEARCH_MAX_RESULTS` matches, but we
+ * no longer silently look at only the first 200 arbitrary rows.
+ */
+export async function searchMessages(query: string): Promise<MessageSearchResult[]> {
   const d = initDB();
-  const result = d.execute(
-    'SELECT session_id, id, role, content, timestamp FROM chat_messages LIMIT 200',
-  );
-  if (!result.results) {
+  const needle = query.toLowerCase();
+  if (!needle) {
     return [];
   }
-  const messages = await Promise.all(
-    result.results.map(async row => ({
-      sessionId: row.session_id as string,
-      id: row.id as string,
-      role: row.role as string,
-      content: await decrypt(row.content as string),
-      timestamp: row.timestamp as number,
-    }))
-  );
-  return messages.filter(m => m.content.toLowerCase().includes(query.toLowerCase()));
+
+  const matches: MessageSearchResult[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const result = d.execute(
+      'SELECT session_id, id, role, content, timestamp FROM chat_messages ORDER BY timestamp DESC, id ASC LIMIT ? OFFSET ?',
+      [SEARCH_PAGE_SIZE, offset],
+    );
+    const rows = result.results;
+    if (!rows || rows.length === 0) {
+      break;
+    }
+
+    const decrypted = await Promise.all(
+      rows.map(async row => ({
+        sessionId: row.session_id as string,
+        id: row.id as string,
+        role: row.role as string,
+        content: await decrypt(row.content as string),
+        timestamp: row.timestamp as number,
+      }))
+    );
+
+    for (const msg of decrypted) {
+      if (msg.content.toLowerCase().includes(needle)) {
+        matches.push(msg);
+        if (matches.length >= SEARCH_MAX_RESULTS) {
+          return matches;
+        }
+      }
+    }
+
+    if (rows.length < SEARCH_PAGE_SIZE) {
+      break;
+    }
+    offset += SEARCH_PAGE_SIZE;
+  }
+
+  return matches;
 }
 
 export function deleteAllByPrefix(prefix: string): {sessions: number; messages: number} {
