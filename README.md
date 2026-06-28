@@ -14,8 +14,7 @@ npm install
 npm start
 
 # In a new terminal:
-npm run android   # or
-npm run ios       # (run `bundle install && bundle exec pod install` first on iOS)
+npm run android
 ```
 
 ## Test
