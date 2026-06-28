@@ -157,7 +157,7 @@ export async function getSessionForCharacter(characterId: string): Promise<ChatS
   const d = initDB();
 
   const sessionResult = d.execute(
-    'SELECT id, character_id, created_at, updated_at FROM chat_sessions WHERE character_id = ?',
+    'SELECT id, character_id, created_at, updated_at FROM chat_sessions WHERE character_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT 1',
     [characterId],
   );
 
