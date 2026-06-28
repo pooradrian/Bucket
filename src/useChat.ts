@@ -274,6 +274,7 @@ export function useChat({
       };
       setSession(withUser);
       persistMessage(startSessionId, userMessage, withUser.updatedAt);
+      setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
 
       try {
         streamingContentRef.current = '';
