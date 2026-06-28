@@ -54,7 +54,9 @@ export async function loadLorebook(): Promise<LorebookState | null> {
 export async function loadAllLorebooks(): Promise<LorebookState[]> {
   try {
     return await getAllLorebooksFromDB();
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to load lorebooks from DB:', e);
+  }
   return [];
 }
 

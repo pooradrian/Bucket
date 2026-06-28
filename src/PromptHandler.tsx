@@ -103,7 +103,9 @@ export async function loadPromptConfig(): Promise<PromptConfig> {
       const withProvider = await resolveProvider({...DEFAULT_PROMPT_CONFIG, ...parsed});
       return withProvider;
     }
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to load prompt config:', e);
+  }
   const defaults = {...DEFAULT_PROMPT_CONFIG};
   const activeId = await getActiveProviderId();
   if (activeId) {
@@ -119,7 +121,9 @@ export async function savePromptConfig(config: PromptConfig): Promise<void> {
       Object.entries(config).filter(([k]) => k !== 'apiUrl' && k !== 'apiKey'),
     );
     setKV(PROMPT_CONFIG_KEY, JSON.stringify(toStore));
-  } catch {}
+  } catch (e) {
+    console.warn('Failed to save prompt config:', e);
+  }
 }
 
 let cachedEncoder: ReturnType<typeof encodingForModel> | null = null;
