@@ -144,7 +144,9 @@ export function useChat({
     try {
       await addMessage(sessionId, message);
       updateSessionTimestamp(sessionId, updatedAt);
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to persist message:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -213,7 +215,9 @@ export function useChat({
       await createSession(newSession);
       setSession(newSession);
       onSessionCreated(newSession.id);
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to load or create session:', e);
+    }
   }, [activeSessionId, isGroupChat, groupChat, groupMembers, activeCharacter, onSessionCreated]);
 
   useEffect(() => {

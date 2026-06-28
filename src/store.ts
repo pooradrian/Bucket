@@ -149,7 +149,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
           } as AppSettings,
         });
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to load settings:', e);
+    }
   },
   applyThemeMode: (mode) => {
     const {appSettings} = get();
@@ -181,7 +183,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [],
         icon: c.icon || undefined,
       })), charactersLoading: false});
-    } catch {
+    } catch (e) {
+      console.warn('Failed to load characters:', e);
       set({charactersLoading: false});
     }
   },
@@ -205,13 +208,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
         lorebook_id: (char.lorebookIds || []).join(','),
       });
       set({characters: updated});
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to save character:', e);
+    }
   },
   deleteCharacter: (id) => {
     try {
       deleteCharacterFromDB(id);
       set({characters: get().characters.filter(c => c.id !== id)});
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to delete character:', e);
+    }
   },
 
   groupChats: [],
@@ -227,7 +234,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         icon: r.icon || undefined,
         characterIds: r.characterIds,
       })), groupChatsLoading: false});
-    } catch {
+    } catch (e) {
+      console.warn('Failed to load group chats:', e);
       set({groupChatsLoading: false});
     }
   },
@@ -246,13 +254,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
         characterIds: group.characterIds,
       });
       set({groupChats: updated});
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to save group chat:', e);
+    }
   },
   deleteGroupChat: (id) => {
     try {
       deleteGroupChatFromDB(id);
       set({groupChats: get().groupChats.filter(g => g.id !== id)});
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to delete group chat:', e);
+    }
   },
 
   lorebooks: [],
@@ -264,7 +276,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const loaded = await loadAllLorebooksFromStorage();
       set({lorebooks: loaded});
-    } catch {}
+    } catch (e) {
+      console.warn('Failed to load lorebooks:', e);
+    }
   },
 
   showSysStats: false,

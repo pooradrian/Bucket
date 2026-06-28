@@ -166,7 +166,9 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
         const updated = await addLorebook(loaded);
         setLorebooks(updated);
       }
-    } catch {} finally {
+    } catch (e) {
+      console.warn('Failed to load lorebook:', e);
+    } finally {
       setLorebookLoading(false);
     }
   }, [setLorebooks]);
