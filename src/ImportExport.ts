@@ -23,6 +23,10 @@ import {readPngCharaMetadata, writePngWithCharaMetadata, isPngSignature} from '.
 export type ImportFormat = 'ccv1' | 'ccv2' | 'buk' | 'perchance';
 export type ExportFormat = 'ccv1' | 'ccv2' | 'buk';
 
+function isGzipSignature(bytes: Uint8Array): boolean {
+  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
 export interface BukImportResult {
   characters: Character[];
   settings?: Partial<AppSettings>;
@@ -195,8 +199,8 @@ export async function detectImportFormat(fileUri: string, fileName: string): Pro
     }
 
     let text: string;
-    if (fileName.endsWith('.gz')) {
-      const decompressed = pako.ungzip(new Uint8Array(buffer));
+    if (isGzipSignature(bytes)) {
+      const decompressed = pako.ungzip(bytes);
       text = new TextDecoder().decode(decompressed);
     } else {
       text = new TextDecoder().decode(buffer);
@@ -505,7 +509,7 @@ export async function importPerchance(fileUri: string): Promise<{characters: Cha
   const bytes = new Uint8Array(buffer);
 
   let text: string;
-  if (fileUri.endsWith('.gz')) {
+  if (isGzipSignature(bytes)) {
     const decompressed = pako.ungzip(bytes);
     text = new TextDecoder().decode(decompressed);
   } else {
