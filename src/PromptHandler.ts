@@ -38,6 +38,7 @@ export interface PromptConfig {
   apiUrl: string;
   apiKey: string;
   model: string;
+  temperature: string;
   ragModel: string;
   ragEnabled: boolean;
   ragMaxEntriesToSend: string;
@@ -60,6 +61,7 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   apiUrl: '',
   apiKey: '',
   model: 'gpt-4o',
+  temperature: '1',
   ragModel: '',
   ragEnabled: false,
   ragMaxEntriesToSend: '50',

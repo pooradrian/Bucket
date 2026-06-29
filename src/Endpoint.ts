@@ -128,11 +128,21 @@ export async function getAIResponse(
     headers.Authorization = `Bearer ${apiKey}`;
   }
 
-  const body = {
+  const tempNum = Number(config.temperature);
+  const hasTemp =
+    config.temperature !== '' &&
+    !Number.isNaN(tempNum) &&
+    tempNum >= 0 &&
+    tempNum <= 2;
+
+  const body: Record<string, unknown> = {
     model: config.model || 'gpt-4o',
     messages,
     stream: streaming,
   };
+  if (hasTemp) {
+    body.temperature = tempNum;
+  }
 
   const ctrl = controller || new AbortController();
   const t0 = performance.now();
