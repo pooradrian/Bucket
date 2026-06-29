@@ -128,23 +128,61 @@ export function writePngWithCharaMetadata(avatarBase64: string, charaJson: strin
   newChunk.set(chunkData, 8);
   newChunk.set(crcBytes, 8 + chunkData.length);
 
-  // Find IEND chunk position
   let iendOffset = bytes.length;
-  for (let i = bytes.length - 12; i >= 8; i--) {
-    if (bytes[i + 4] === 0x49 && bytes[i + 5] === 0x45 && bytes[i + 6] === 0x4e && bytes[i + 7] === 0x44) {
-      iendOffset = i;
+  const charaSpans: Array<[number, number]> = [];
+  let offset = 8; // skip signature
+  while (offset + 8 <= bytes.length) {
+    const length = readUint32BE(bytes, offset);
+    const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+    const chunkEnd = offset + 12 + length; // length + type + data + crc
+    if (chunkEnd > bytes.length) break;
+
+    if (type === 'tEXt') {
+      const data = bytes.slice(offset + 8, offset + 8 + length);
+      const nullIndex = data.indexOf(0);
+      if (nullIndex !== -1) {
+        const kw = String.fromCharCode(...data.slice(0, nullIndex));
+        if (kw === keyword) {
+          charaSpans.push([offset, chunkEnd]);
+        }
+      }
+    }
+
+    offset = chunkEnd;
+    if (type === 'IEND') {
+      iendOffset = offset - 12 - length; // start of IEND chunk
       break;
     }
   }
 
-  const result = new Uint8Array(iendOffset + newChunk.length + (bytes.length - iendOffset));
-  result.set(bytes.slice(0, iendOffset), 0);
-  result.set(newChunk, iendOffset);
-  result.set(bytes.slice(iendOffset), iendOffset + newChunk.length);
+  const segments: Uint8Array[] = [];
+  let cursor = 0;
+  for (const [start, end] of charaSpans) {
+    if (start > cursor) segments.push(bytes.slice(cursor, start));
+    cursor = Math.max(cursor, end);
+  }
+  if (cursor < iendOffset) segments.push(bytes.slice(cursor, iendOffset));
+  const prefix = concatUint8(segments);
+
+  const result = new Uint8Array(prefix.length + newChunk.length + (bytes.length - iendOffset));
+  result.set(prefix, 0);
+  result.set(newChunk, prefix.length);
+  result.set(bytes.slice(iendOffset), prefix.length + newChunk.length);
 
   let output = '';
   for (let i = 0; i < result.length; i++) {
     output += String.fromCharCode(result[i]);
   }
   return btoa(output);
+}
+
+function concatUint8(parts: Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, p) => sum + p.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const p of parts) {
+    out.set(p, pos);
+    pos += p.length;
+  }
+  return out;
 }
