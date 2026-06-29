@@ -659,8 +659,8 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
           }
 
           case 'providers': {
-            const providers = await getProviders();
-            const activeId = await getActiveProviderId();
+            const providers = getProviders();
+            const activeId = getActiveProviderId();
             if (providers.length === 0) {
               appendLog('info', 'No providers configured.');
             } else {
@@ -678,11 +678,11 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
           case 'provider': {
             const sub = rest[0]?.toLowerCase();
             if (sub === 'active') {
-              const activeId = await getActiveProviderId();
+              const activeId = getActiveProviderId();
               if (!activeId) {
                 appendLog('info', 'No active provider set.');
               } else {
-                const providers = await getProviders();
+                const providers = getProviders();
                 const p = providers.find(x => x.id === activeId);
                 if (p) {
                   const key = await getProviderKey(p.id);

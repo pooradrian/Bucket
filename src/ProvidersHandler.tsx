@@ -34,7 +34,7 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
   const [providerKeys, setProviderKeys] = useState<Record<string, string>>({});
 
   const refreshProviders = useCallback(async () => {
-    const list = await getProviders();
+    const list = getProviders();
     setProviders(list);
     const keys: Record<string, string> = {};
     for (const p of list) {
@@ -49,7 +49,7 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
   }, [refreshProviders]);
 
   const handleSelect = useCallback(async (id: string) => {
-    await setActiveProviderId(id);
+    setActiveProviderId(id);
     onSelect(id);
   }, [onSelect]);
 
@@ -74,9 +74,9 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
   const handleSaveUrl = useCallback(async (id: string) => {
     const trimmed = editUrlText.trim();
     if (!trimmed) {return;}
-    const list = await getProviders();
+    const list = getProviders();
     const updated = list.map(p => p.id === id ? {...p, url: trimmed} : p);
-    await saveProviders(updated);
+    saveProviders(updated);
     setEditingUrlId(null);
     refreshProviders();
   }, [editUrlText, refreshProviders]);
@@ -198,9 +198,9 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
       return;
     }
     const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
-    const providers = await getProviders();
+    const providers = getProviders();
     providers.push({id, name: trimmedName, url: trimmedUrl});
-    await saveProviders(providers);
+    saveProviders(providers);
     if (trimmedKey) {
       await setProviderKey(id, trimmedKey);
     }

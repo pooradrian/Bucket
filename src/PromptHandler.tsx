@@ -82,11 +82,11 @@ export const PLACEHOLDERS = [
 ];
 
 export async function resolveProvider(config: PromptConfig): Promise<PromptConfig> {
-  const providerId = config.providerId || await getActiveProviderId();
+  const providerId = config.providerId || getActiveProviderId();
   if (!providerId) {
     return {...config, apiUrl: '', apiKey: ''};
   }
-  const providers = await getProviders();
+  const providers = getProviders();
   const provider = providers.find(p => p.id === providerId);
   if (!provider) {
     return {...config, apiUrl: '', apiKey: ''};
@@ -107,7 +107,7 @@ export async function loadPromptConfig(): Promise<PromptConfig> {
     console.warn('Failed to load prompt config:', e);
   }
   const defaults = {...DEFAULT_PROMPT_CONFIG};
-  const activeId = await getActiveProviderId();
+  const activeId = getActiveProviderId();
   if (activeId) {
     defaults.providerId = activeId;
     return resolveProvider(defaults);
