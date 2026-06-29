@@ -15,7 +15,24 @@ function streamWithXHR(
     let firstToken = true;
     let processedLen = 0;
     let lineBuffer = '';
-    let done = false;
+    let settled = false;
+    let startTime = 0;
+
+    // Single idempotent settle point — every completion path funnels
+    // through here, guaranteeing the promise is settled exactly once
+    // and that no callback can re-enter after teardown.
+    function settle(mode: 'resolve' | 'reject', value?: unknown) {
+      if (settled) return;
+      settled = true;
+      xhr.onprogress = null;
+      xhr.onload = null;
+      xhr.onerror = null;
+      if (mode === 'resolve') {
+        resolve(value as {content: string; ttfbMs: number});
+      } else {
+        reject(value);
+      }
+    }
 
     xhr.open('POST', url, true);
     for (const [k, v] of Object.entries(headers)) {
@@ -23,7 +40,7 @@ function streamWithXHR(
     }
 
     xhr.onprogress = () => {
-      if (done) return;
+      if (settled) return;
       const fullText = xhr.responseText || '';
       if (fullText.length <= processedLen) return;
 
@@ -39,9 +56,9 @@ function streamWithXHR(
 
         const data = trimmed.slice(6);
         if (data === '[DONE]') {
-          done = true;
-          xhr.abort();
-          resolve({content, ttfbMs});
+          // Stream is naturally complete — resolve without aborting.
+          // Calling xhr.abort() here risks re-entrant onload/onerror.
+          settle('resolve', {content, ttfbMs});
           return;
         }
 
@@ -63,33 +80,30 @@ function streamWithXHR(
     };
 
     xhr.onload = () => {
-      if (done) return;
-      done = true;
+      if (settled) return;
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve({content, ttfbMs});
+        settle('resolve', {content, ttfbMs});
       } else {
         const errorText = xhr.responseText || '';
-        reject(new Error(`API error ${xhr.status}: ${errorText}`));
+        settle('reject', new Error(`API error ${xhr.status}: ${errorText}`));
       }
     };
 
     xhr.onerror = () => {
-      if (!done) {
-        done = true;
-        reject(new Error('Network error'));
-      }
+      settle('reject', new Error('Network error'));
     };
 
-    const startTime = performance.now();
-    xhr.send(JSON.stringify(body));
-
+    // Attach the abort listener BEFORE xhr.send() so an immediate
+    // cancel cannot slip through the window between send and
+    // addEventListener.  settle() is called first so any re-entrant
+    // callback triggered by xhr.abort() is a no-op.
     controller.signal.addEventListener('abort', () => {
-      if (!done) {
-        done = true;
-        xhr.abort();
-        reject(new Error('Request was cancelled'));
-      }
+      settle('reject', new Error('Request was cancelled'));
+      xhr.abort();
     });
+
+    startTime = performance.now();
+    xhr.send(JSON.stringify(body));
   });
 }
 
