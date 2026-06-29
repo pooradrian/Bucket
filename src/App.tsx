@@ -4,7 +4,7 @@ import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {NavigationContainer} from '@react-navigation/native';
 import {useAppStore} from './store';
 import {ThemeProvider} from './ThemeContext';
-import {installCrashExport} from './CrashExport';
+import {installCrashExport, checkPendingCrashExport} from './CrashExport';
 import {RootNavigator} from './Navigation';
 import {initDB} from './Database';
 import SysStatsOverlay from './SysStatsOverlay';
@@ -65,6 +65,7 @@ export default function App() {
     (async () => {
       initDB();
       installCrashExport();
+      await checkPendingCrashExport();
       await loadSettings();
       setLoaded(true);
       loadCharacters();
