@@ -2,7 +2,7 @@ import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
 import pako from 'pako';
 import {Character} from './CharacterEditor';
-import {LorebookState} from './RAGHandler';
+import {LorebookState, parseLorebook} from './RAGHandler';
 import {ChatSession, ChatMessage} from './useChat';
 import {PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
 import {AppSettings, DEFAULT_APP_SETTINGS} from './store';
@@ -148,6 +148,19 @@ async function downloadPerchanceIcon(url: string, charId: string): Promise<strin
     const iconPath = `${RNFS.DocumentDirectoryPath}/icons/${charId}.${ext}`;
     await RNFS.writeFile(iconPath, base64, 'base64');
     return `file://${iconPath}`;
+  } catch {
+    return null;
+  }
+}
+
+async function downloadPerchanceLorebook(url: string, charId: string): Promise<LorebookState | null> {
+  try {
+    const response = await fetch(url);
+    const text = await response.text();
+    const entries = parseLorebook(text);
+    if (entries.length === 0) return null;
+    const fileName = url.split('/').pop()?.split('?')[0] || `lorebook_${charId}.txt`;
+    return {id: generateId(), entries, fileName};
   } catch {
     return null;
   }
@@ -503,7 +516,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   return result;
 }
 
-export async function importPerchance(fileUri: string, downloadIcons: boolean = false): Promise<{characters: Character[]; sessions: ChatSession[]; skippedCharacters: string[]}> {
+export async function importPerchance(fileUri: string, downloadIcons: boolean = false, downloadLorebooks: boolean = false): Promise<{characters: Character[]; sessions: ChatSession[]; skippedCharacters: string[]}> {
   const response = await fetch(fileUri);
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -552,6 +565,16 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
       }
     }
 
+    if (downloadLorebooks && pChar.loreBookUrls?.length) {
+      for (const url of pChar.loreBookUrls) {
+        const lb = await downloadPerchanceLorebook(url, char.id);
+        if (lb) {
+          await saveLorebookToDB(lb);
+          char.lorebookIds.push(lb.id);
+        }
+      }
+    }
+
     result.characters.push(char);
 
     await saveCharacterToDB({
@@ -564,7 +587,7 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
       scenario: char.scenario,
       example_messages: char.exampleMessages || '',
       icon: char.icon || '',
-      lorebook_id: '',
+      lorebook_id: (char.lorebookIds || []).join(','),
     });
   }
 

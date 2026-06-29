@@ -21,7 +21,7 @@ export interface LorebookState {
   fileName: string;
 }
 
-function parseLorebook(raw: string): LorebookEntry[] {
+export function parseLorebook(raw: string): LorebookEntry[] {
   return raw
     .split('\n')
     .map(line => line.trim())
