@@ -1,5 +1,5 @@
 import {useEffect, useState, useCallback, useRef, useMemo} from 'react';
-import {Alert, ScrollView, Text, TextInput, TouchableOpacity, View, NativeModules} from 'react-native';
+import {Alert, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {
   Persona,
   PromptConfig,
@@ -13,6 +13,7 @@ import {getActiveProviderId} from './SecureStore';
 import ProvidersHandler from './ProvidersHandler';
 import ImportExportHandler from './ImportExportHandler';
 import {useAppStore, AppSettings, DEFAULT_APP_SETTINGS, getThemePreset} from './store';
+import {setIcon} from './IconModule';
 import {useTheme} from './ThemeContext';
 
 type Settings = Omit<Record<keyof AppSettings, string>, 'themeMode'> & {themeMode: 'dark' | 'light'};
@@ -201,7 +202,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                   style={[st.settingsToggleButton, appSettings.themeMode === 'dark' && {backgroundColor: appSettings.accentColor}]}
                   onPress={() => {
                     applyThemeMode('dark');
-                    if (appSettings.dynamicIcon) { try { NativeModules.IconModule.setIcon('dark'); } catch {} /* icon module may not be available */ }
+                    if (appSettings.dynamicIcon) { setIcon('dark'); }
                   }}>
                   <Text style={[st.settingsToggleText, appSettings.themeMode === 'dark' && st.settingsToggleTextActive]}>
                     Dark
@@ -211,7 +212,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                   style={[st.settingsToggleButton, appSettings.themeMode === 'light' && {backgroundColor: appSettings.accentColor}]}
                   onPress={() => {
                     applyThemeMode('light');
-                    if (appSettings.dynamicIcon) { try { NativeModules.IconModule.setIcon('light'); } catch {} /* icon module may not be available */ }
+                    if (appSettings.dynamicIcon) { setIcon('light'); }
                   }}>
                   <Text style={[st.settingsToggleText, appSettings.themeMode === 'light' && st.settingsToggleTextActive]}>
                     Light
@@ -234,7 +235,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                     const next = values.dynamicIcon === 'true' ? 'false' : 'true';
                     handleChange('dynamicIcon', next);
                     if (next === 'true') {
-                      try { NativeModules.IconModule.setIcon(values.themeMode); } catch {} /* icon module may not be available */
+                      setIcon(values.themeMode);
                     }
                   }}>
                   <Text

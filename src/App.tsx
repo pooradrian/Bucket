@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, StyleSheet, NativeModules} from 'react-native';
+import {View, Text, StyleSheet} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {NavigationContainer} from '@react-navigation/native';
 import {useAppStore} from './store';
@@ -7,6 +7,7 @@ import {ThemeProvider} from './ThemeContext';
 import {installCrashExport, checkPendingCrashExport} from './CrashExport';
 import {RootNavigator} from './Navigation';
 import {initDB} from './Database';
+import {setIcon} from './IconModule';
 import SysStatsOverlay from './SysStatsOverlay';
 
 const SPLASH_MIN_MS = 1500;
@@ -71,7 +72,7 @@ export default function App() {
       loadCharacters();
       loadGroupChats();
       loadLorebooks();
-      try { if (useAppStore.getState().appSettings.dynamicIcon) NativeModules.IconModule.setIcon(useAppStore.getState().appSettings.themeMode); } catch {} /* icon module may not be available */
+      if (useAppStore.getState().appSettings.dynamicIcon) setIcon(useAppStore.getState().appSettings.themeMode);
     })();
   }, [loadSettings, loadCharacters, loadGroupChats, loadLorebooks]);
 
