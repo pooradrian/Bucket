@@ -88,6 +88,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
   const setLorebooks = useAppStore(sto => sto.setLorebooks);
   const appSettings = useAppStore(sto => sto.appSettings);
   const applyThemeMode = useAppStore(sto => sto.applyThemeMode);
+  const promptConfigVersion = useAppStore(sto => sto.promptConfigVersion);
   const [settingsView, setSettingsView] = useState<'main' | 'customization'>('main');
   const [values, setValues] = useState<Settings>(() => toDraft(appSettings));
   const [promptValues, setPromptValues] = useState<PromptConfig>(DEFAULT_PROMPT_CONFIG);
@@ -115,7 +116,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
       setPromptSaved(cfg);
     });
     setActiveProviderId(getActiveProviderId() || '');
-  }, []);
+  }, [promptConfigVersion]);
 
   useEffect(() => {
     if (!mountedRef.current) return;

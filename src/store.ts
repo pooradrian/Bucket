@@ -109,6 +109,9 @@ interface AppStore {
   setLorebooks: (lorebooks: LorebookState[]) => void;
   loadLorebooks: () => Promise<void>;
 
+  promptConfigVersion: number;
+  bumpPromptConfigVersion: () => void;
+
   showSysStats: boolean;
   toggleSysStats: () => void;
 }
@@ -299,6 +302,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
       console.warn('Failed to load lorebooks:', e);
     }
   },
+
+  promptConfigVersion: 0,
+  bumpPromptConfigVersion: () => set(s => ({promptConfigVersion: s.promptConfigVersion + 1})),
 
   showSysStats: false,
   toggleSysStats: () => set(s => ({showSysStats: !s.showSysStats})),
