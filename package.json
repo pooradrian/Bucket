@@ -1,6 +1,6 @@
 {
   "name": "Bucket",
-  "version": "1.1",
+  "version": "1.1.0",
   "private": true,
   "scripts": {
     "postinstall": "patch-package",
