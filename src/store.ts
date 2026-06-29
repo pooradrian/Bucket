@@ -117,6 +117,45 @@ export function getThemePreset(mode: 'dark' | 'light'): ThemePreset {
   return mode === 'dark' ? DARK_THEME : LIGHT_THEME;
 }
 
+const NUMERIC_SETTING_KEYS = [
+  'cardRadius', 'pillRadius', 'bubbleRadius', 'chatMaxWidth',
+  'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
+  'bottomBarPad', 'sideBtnSize', 'inputRadius', 'sendBtnSize',
+] as const;
+
+const THEME_COLOR_KEYS = [
+  'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
+  'textPrimary', 'textSecondary', 'textMuted',
+  'accentColor', 'userBubbleBg',
+] as const;
+
+export function parseSavedSettings(raw: unknown): AppSettings {
+  const result: AppSettings = {...DEFAULT_APP_SETTINGS};
+  if (!raw || typeof raw !== 'object') {
+    return result;
+  }
+  const saved = raw as Record<string, unknown>;
+
+  for (const key of NUMERIC_SETTING_KEYS) {
+    if (key in saved) {
+      const n = Number(saved[key]);
+      result[key] = Number.isNaN(n) ? DEFAULT_APP_SETTINGS[key] : n;
+    }
+  }
+
+  result.showCharacterIcons = saved.showCharacterIcons === true || saved.showCharacterIcons === 'true';
+  result.dynamicIcon = saved.dynamicIcon === true || saved.dynamicIcon === 'true';
+  result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
+
+  for (const key of THEME_COLOR_KEYS) {
+    if (typeof saved[key] === 'string') {
+      result[key] = saved[key];
+    }
+  }
+
+  return result;
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   appSettings: DEFAULT_APP_SETTINGS,
   setAppSettings: (settings) => {
@@ -127,30 +166,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const stored = getKV(SETTINGS_KEY);
       if (stored) {
-        const saved: Record<string, string> = JSON.parse(stored);
-        const numericKeys: (keyof AppSettings)[] = [
-          'cardRadius', 'pillRadius', 'bubbleRadius', 'chatMaxWidth',
-          'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-          'bottomBarPad', 'sideBtnSize', 'inputRadius', 'sendBtnSize',
-        ];
-        const parsed: Record<string, unknown> = {...saved};
-        for (const k of numericKeys) {
-          if (k in parsed) {
-            parsed[k] = Number(parsed[k]);
-            if (isNaN(parsed[k] as number)) {
-              parsed[k] = (DEFAULT_APP_SETTINGS as unknown as Record<string, unknown>)[k];
-            }
-          }
-        }
-        set({
-          appSettings: {
-            ...DEFAULT_APP_SETTINGS,
-            ...parsed,
-            showCharacterIcons: (saved as Record<string, unknown>).showCharacterIcons === true || (saved as Record<string, unknown>).showCharacterIcons === 'true',
-            dynamicIcon: (saved as Record<string, unknown>).dynamicIcon === true || (saved as Record<string, unknown>).dynamicIcon === 'true',
-            themeMode: ((saved as Record<string, unknown>).themeMode as 'dark' | 'light') || 'dark',
-          } as AppSettings,
-        });
+        set({appSettings: parseSavedSettings(JSON.parse(stored))});
       }
     } catch (e) {
       console.warn('Failed to load settings:', e);
