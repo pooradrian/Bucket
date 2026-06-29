@@ -113,9 +113,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
       setPromptValues(cfg);
       setPromptSaved(cfg);
     });
-    getActiveProviderId().then(id => {
-      setActiveProviderId(id || '');
-    });
+    setActiveProviderId(getActiveProviderId() || '');
   }, []);
 
   useEffect(() => {

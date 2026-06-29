@@ -11,7 +11,7 @@ export interface Provider {
   url: string;
 }
 
-export async function getProviders(): Promise<Provider[]> {
+export function getProviders(): Provider[] {
   try {
     const stored = getKV(PROVIDERS_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -20,11 +20,11 @@ export async function getProviders(): Promise<Provider[]> {
   }
 }
 
-export async function saveProviders(providers: Provider[]): Promise<void> {
+export function saveProviders(providers: Provider[]): void {
   setKV(PROVIDERS_KEY, JSON.stringify(providers));
 }
 
-export async function getActiveProviderId(): Promise<string | null> {
+export function getActiveProviderId(): string | null {
   try {
     return getKV(ACTIVE_PROVIDER_KEY);
   } catch {
@@ -32,7 +32,7 @@ export async function getActiveProviderId(): Promise<string | null> {
   }
 }
 
-export async function setActiveProviderId(id: string): Promise<void> {
+export function setActiveProviderId(id: string): void {
   setKV(ACTIVE_PROVIDER_KEY, id);
 }
 
@@ -59,13 +59,13 @@ async function deleteProviderKey(providerId: string): Promise<void> {
 }
 
 export async function deleteProvider(providerId: string): Promise<void> {
-  const providers = await getProviders();
-  await saveProviders(providers.filter(p => p.id !== providerId));
+  const providers = getProviders();
+  saveProviders(providers.filter(p => p.id !== providerId));
   await deleteProviderKey(providerId);
-  const activeId = await getActiveProviderId();
+  const activeId = getActiveProviderId();
   if (activeId === providerId) {
-    const remaining = await getProviders();
-    await setActiveProviderId(remaining.length > 0 ? remaining[0].id : '');
+    const remaining = getProviders();
+    setActiveProviderId(remaining.length > 0 ? remaining[0].id : '');
   }
 }
 
