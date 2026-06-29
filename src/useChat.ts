@@ -224,58 +224,23 @@ export function useChat({
     loadOrCreateSession();
   }, [activeSessionId, loadOrCreateSession]);
 
-  const handleCancelSave = useCallback((baseMessages: ChatMessage[], baseSession: ChatSession) => {
-    const partial = streamingContentRef.current;
-    if (partial.length > 0) {
-      const assistantMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: partial,
-        timestamp: Date.now(),
-      };
-      const updatedAt = Date.now();
-      updateSessionIfCurrent(baseSession.id, prev => ({
-        ...prev,
-        messages: [...baseMessages, assistantMessage],
-        updatedAt,
-      }));
-      persistMessage(baseSession.id, assistantMessage, updatedAt);
-    }
-    resetStreamingContent();
-  }, [persistMessage, resetStreamingContent, updateSessionIfCurrent]);
-
-  const handleSend = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || !session || sending) {
-        return;
-      }
-      if (isGroupChat && !selectedReplyCharacter) {
-        return;
-      }
-
+  // Shared send/retry/regenerate engine. `messages` is the conversation
+  // history handed to the model; `userText` is the latest user turn. Cancel
+  // saves append the partial stream to the *current* session's messages (which,
+  // for all three callers, equals the base messages they passed in).
+  const runLLMRequest = useCallback(
+    async (
+      startSessionId: string,
+      messages: ChatMessage[],
+      userText: string,
+      opts: {
+        setLastReplyCharacter?: boolean;
+        summarize?: boolean;
+        summaryBase?: ChatSession;
+      } = {},
+    ) => {
       setSending(true);
-      setInputText('');
       setError(null);
-
-      const startSessionId = session.id;
-
-      const userMessage: ChatMessage = {
-        id: generateId(),
-        role: 'user',
-        content: trimmed,
-        timestamp: Date.now(),
-      };
-
-      const withUser = {
-        ...session,
-        messages: [...session.messages, userMessage],
-        updatedAt: Date.now(),
-      };
-      setSession(withUser);
-      persistMessage(startSessionId, userMessage, withUser.updatedAt);
-      setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
-
       try {
         streamingContentRef.current = '';
         setIsStreaming(true);
@@ -287,8 +252,8 @@ export function useChat({
           result = await sendToGroupLLM(
             groupMembers,
             selectedReplyCharacter,
-            trimmed,
-            withUser.messages,
+            userText,
+            messages,
             promptConfig,
             flushStreamingContent,
             ctrl,
@@ -296,8 +261,8 @@ export function useChat({
         } else if (activeCharacter) {
           result = await sendToLLM(
             activeCharacter,
-            trimmed,
-            withUser.messages,
+            userText,
+            messages,
             promptConfig,
             flushStreamingContent,
             lorebook,
@@ -321,29 +286,48 @@ export function useChat({
           updatedAt: assistantUpdatedAt,
         }));
         persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
-        if (isGroupChat && selectedReplyCharacter) {
+        if (opts.setLastReplyCharacter && isGroupChat && selectedReplyCharacter) {
           setLastReplyCharacterId(startSessionId, selectedReplyCharacter.id);
         }
         setIsStreaming(false);
         resetStreamingContent();
 
-        const sumConfig = getSummarizationConfig(promptConfig);
-        if (sumConfig.enabled) {
-          const withAssistant = {
-            ...withUser,
-            messages: [...withUser.messages, assistantMessage],
-            updatedAt: assistantUpdatedAt,
-          };
-          const summarized = await checkAndSummarize(withAssistant, sumConfig, promptConfig);
-          if (summarized.messages.length !== withAssistant.messages.length) {
-            updateSessionIfCurrent(startSessionId, () => summarized);
+        if (opts.summarize && opts.summaryBase) {
+          const sumConfig = getSummarizationConfig(promptConfig);
+          if (sumConfig.enabled) {
+            const withAssistant: ChatSession = {
+              ...opts.summaryBase,
+              messages: [...messages, assistantMessage],
+              updatedAt: assistantUpdatedAt,
+            };
+            const summarized = await checkAndSummarize(withAssistant, sumConfig, promptConfig);
+            if (summarized.messages.length !== withAssistant.messages.length) {
+              updateSessionIfCurrent(startSessionId, () => summarized);
+            }
           }
         }
       } catch (e: unknown) {
         setIsStreaming(false);
         const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
         if (isCancelled) {
-          handleCancelSave(withUser.messages, withUser);
+          const partial = streamingContentRef.current;
+          if (partial.length > 0) {
+            const assistantMessage: ChatMessage = {
+              id: generateId(),
+              role: 'assistant',
+              content: partial,
+              timestamp: Date.now(),
+              ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
+            };
+            const cancelUpdatedAt = Date.now();
+            updateSessionIfCurrent(startSessionId, prev => ({
+              ...prev,
+              messages: [...prev.messages, assistantMessage],
+              updatedAt: cancelUpdatedAt,
+            }));
+            persistMessage(startSessionId, assistantMessage, cancelUpdatedAt);
+          }
+          resetStreamingContent();
         } else {
           setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
           resetStreamingContent();
@@ -353,7 +337,45 @@ export function useChat({
         setSending(false);
       }
     },
-    [session, sending, persistMessage, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, handleCancelSave, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
+    [isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
+  );
+
+  const handleSend = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || !session || sending) {
+        return;
+      }
+      if (isGroupChat && !selectedReplyCharacter) {
+        return;
+      }
+
+      const startSessionId = session.id;
+
+      const userMessage: ChatMessage = {
+        id: generateId(),
+        role: 'user',
+        content: trimmed,
+        timestamp: Date.now(),
+      };
+
+      const withUser: ChatSession = {
+        ...session,
+        messages: [...session.messages, userMessage],
+        updatedAt: Date.now(),
+      };
+      setSession(withUser);
+      persistMessage(startSessionId, userMessage, withUser.updatedAt);
+      setInputText('');
+      setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
+
+      await runLLMRequest(startSessionId, withUser.messages, trimmed, {
+        setLastReplyCharacter: true,
+        summarize: true,
+        summaryBase: withUser,
+      });
+    },
+    [session, sending, isGroupChat, selectedReplyCharacter, persistMessage, runLLMRequest],
   );
 
   const handleEditMessage = useCallback((msg: ChatMessage) => {
@@ -396,9 +418,13 @@ export function useChat({
   }, [session]);
 
   const handleRegenerate = useCallback(async () => {
-    if (!session || sending) {return;}
+    if (!session || sending) {
+      return;
+    }
     const lastMsg = session.messages[session.messages.length - 1];
-    if (!lastMsg || lastMsg.role !== 'assistant') {return;}
+    if (!lastMsg || lastMsg.role !== 'assistant') {
+      return;
+    }
 
     const startSessionId = session.id;
     const updated = session.messages.slice(0, -1);
@@ -408,184 +434,28 @@ export function useChat({
     setSelectedMessageId(null);
 
     const lastUserMsg = [...updated].reverse().find(m => m.role === 'user');
-    if (!lastUserMsg) {return;}
-
-    try {
-      streamingContentRef.current = '';
-      setSending(true);
-      setIsStreaming(true);
-      setError(null);
-      const ctrl = new AbortController();
-      abortControllerRef.current = ctrl;
-
-      let result;
-      if (isGroupChat && selectedReplyCharacter) {
-        result = await sendToGroupLLM(
-          groupMembers,
-          selectedReplyCharacter,
-          lastUserMsg.content,
-          updated,
-          promptConfig,
-          flushStreamingContent,
-          ctrl,
-        );
-      } else if (activeCharacter) {
-        result = await sendToLLM(
-          activeCharacter,
-          lastUserMsg.content,
-          updated,
-          promptConfig,
-          flushStreamingContent,
-          lorebook,
-          ctrl,
-        );
-      } else {
-        return;
-      }
-
-      const assistantMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: result.content,
-        timestamp: Date.now(),
-        ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
-      };
-      const assistantUpdatedAt = Date.now();
-      updateSessionIfCurrent(startSessionId, prev => ({
-        ...prev,
-        messages: [...prev.messages, assistantMessage],
-        updatedAt: assistantUpdatedAt,
-      }));
-      persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
-      setIsStreaming(false);
-      resetStreamingContent();
-    } catch (e: unknown) {
-      setIsStreaming(false);
-      const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
-      if (isCancelled) {
-        const partial = streamingContentRef.current;
-        if (partial.length > 0) {
-          const assistantMessage: ChatMessage = {
-            id: generateId(),
-            role: 'assistant',
-            content: partial,
-            timestamp: Date.now(),
-            ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
-          };
-          const cancelUpdatedAt = Date.now();
-          updateSessionIfCurrent(startSessionId, prev => ({
-            ...prev,
-            messages: [...updated, assistantMessage],
-            updatedAt: cancelUpdatedAt,
-          }));
-          persistMessage(startSessionId, assistantMessage, cancelUpdatedAt);
-        } else {
-          updateSessionIfCurrent(startSessionId, prev => ({...prev, messages: updated, updatedAt: Date.now()}));
-        }
-        resetStreamingContent();
-      } else {
-        setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
-        resetStreamingContent();
-      }
-    } finally {
-      abortControllerRef.current = null;
-      setSending(false);
+    if (!lastUserMsg) {
+      return;
     }
-  }, [session, sending, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, persistMessage, lorebook, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent]);
+
+    await runLLMRequest(startSessionId, updated, lastUserMsg.content);
+  }, [session, sending, updateSessionIfCurrent, runLLMRequest]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
 
   const handleRetryError = useCallback(async () => {
-    if (!session || sending) {return;}
-    const lastUserMsg = [...session.messages].reverse().find(m => m.role === 'user');
-    if (!lastUserMsg) {return;}
-
-    const startSessionId = session.id;
-    const baseMessages = session.messages;
-
-    setError(null);
-    setSending(true);
-
-    try {
-      streamingContentRef.current = '';
-      setIsStreaming(true);
-      const ctrl = new AbortController();
-      abortControllerRef.current = ctrl;
-
-      let result;
-      if (isGroupChat && selectedReplyCharacter) {
-        result = await sendToGroupLLM(
-          groupMembers,
-          selectedReplyCharacter,
-          lastUserMsg.content,
-          baseMessages,
-          promptConfig,
-          flushStreamingContent,
-          ctrl,
-        );
-      } else if (activeCharacter) {
-        result = await sendToLLM(
-          activeCharacter,
-          lastUserMsg.content,
-          baseMessages,
-          promptConfig,
-          flushStreamingContent,
-          lorebook,
-          ctrl,
-        );
-      } else {
-        return;
-      }
-
-      const assistantMessage: ChatMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: result.content,
-        timestamp: Date.now(),
-        ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
-      };
-      const assistantUpdatedAt = Date.now();
-      updateSessionIfCurrent(startSessionId, prev => ({
-        ...prev,
-        messages: [...prev.messages, assistantMessage],
-        updatedAt: assistantUpdatedAt,
-      }));
-      persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
-      setIsStreaming(false);
-      resetStreamingContent();
-    } catch (e: unknown) {
-      setIsStreaming(false);
-      const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
-      if (isCancelled) {
-        const partial = streamingContentRef.current;
-        if (partial.length > 0) {
-          const assistantMessage: ChatMessage = {
-            id: generateId(),
-            role: 'assistant',
-            content: partial,
-            timestamp: Date.now(),
-            ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
-          };
-          const cancelUpdatedAt = Date.now();
-          updateSessionIfCurrent(startSessionId, prev => ({
-            ...prev,
-            messages: [...prev.messages, assistantMessage],
-            updatedAt: cancelUpdatedAt,
-          }));
-          persistMessage(startSessionId, assistantMessage, cancelUpdatedAt);
-        }
-        resetStreamingContent();
-      } else {
-        setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
-        resetStreamingContent();
-      }
-    } finally {
-      abortControllerRef.current = null;
-      setSending(false);
+    if (!session || sending) {
+      return;
     }
-  }, [session, sending, isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent]);
+    const lastUserMsg = [...session.messages].reverse().find(m => m.role === 'user');
+    if (!lastUserMsg) {
+      return;
+    }
+
+    await runLLMRequest(session.id, session.messages, lastUserMsg.content);
+  }, [session, sending, runLLMRequest]);
 
   const messagesData = useMemo(() => {
     const base = [...(session?.messages ?? [])].reverse();
