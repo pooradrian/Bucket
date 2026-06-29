@@ -88,7 +88,18 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
             {cancelable: false},
           );
         });
-        const imported = await importPerchance(file.uri, downloadIcons);
+        const downloadLorebooks = await new Promise<boolean>(resolve => {
+          Alert.alert(
+            'Download Lorebooks?',
+            'This Perchance export references lorebook URLs. Download lorebooks from the internet?',
+            [
+              {text: 'Skip', onPress: () => resolve(false), style: 'cancel'},
+              {text: 'Download', onPress: () => resolve(true)},
+            ],
+            {cancelable: false},
+          );
+        });
+        const imported = await importPerchance(file.uri, downloadIcons, downloadLorebooks);
         let message = `Imported ${imported.characters.length} characters`;
         if (imported.sessions.length > 0) {
           message += `, ${imported.sessions.length} chat sessions`;
