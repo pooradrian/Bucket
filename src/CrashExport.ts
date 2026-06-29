@@ -10,6 +10,7 @@ import {
 import {saveToDisk} from './ImportExport';
 
 const CRASH_EXPORT_DIR = `${RNFS.DocumentDirectoryPath}/crash_recovery`;
+const CRASH_MARKER_PATH = `${CRASH_EXPORT_DIR}/crash_marker.txt`;
 
 async function safeReadFileBase64(filePath: string): Promise<string | null> {
   try {
@@ -112,16 +113,53 @@ export async function crashExport(): Promise<string | null> {
 
 let installed = false;
 
+/**
+ * Writes a minimal marker file during a fatal error.
+ *
+ * The actual recovery export is deferred to the next app launch via
+ * `checkPendingCrashExport()`, because doing heavy async work (reading
+ * all characters/chats, zipping, invoking the save-sheet UI) inside the
+ * fatal global error handler is unlikely to complete and may worsen the
+ * crash.
+ */
 function writeCrashMarker(): void {
   try {
-    const now = new Date();
-    const ts = now.toISOString();
+    const ts = new Date().toISOString();
     RNFS.mkdir(CRASH_EXPORT_DIR)
-      .then(() => RNFS.writeFile(`${CRASH_EXPORT_DIR}/crash_marker.txt`, ts, 'utf8'))
+      .then(() => RNFS.writeFile(CRASH_MARKER_PATH, ts, 'utf8'))
       .catch((e) => console.warn('CrashExport marker write failed:', e));
   } catch {
     // never throw
   }
+}
+
+/**
+ * Checks for a crash marker left by a previous fatal error and, if
+ * found, runs the full recovery export.  Should be called early during
+ * app startup (after the DB is initialised).
+ *
+ * Returns the marker timestamp if a pending crash was detected, or
+ * `null` if no crash marker was present.
+ */
+export async function checkPendingCrashExport(): Promise<string | null> {
+  let marker: string | null = null;
+  try {
+    marker = await RNFS.readFile(CRASH_MARKER_PATH, 'utf8');
+  } catch {
+    return null;
+  }
+
+  // Delete the marker immediately so a subsequent crash doesn't
+  // produce a duplicate export.
+  RNFS.unlink(CRASH_MARKER_PATH).catch(() => {});
+
+  try {
+    await crashExport();
+  } catch (e) {
+    console.warn('Pending crash export failed:', e);
+  }
+
+  return marker;
 }
 
 export function installCrashExport(): void {
@@ -133,7 +171,6 @@ export function installCrashExport(): void {
   ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
     if (isFatal) {
       writeCrashMarker();
-      crashExport().catch((e) => console.warn('CrashExport failed:', e));
     }
     if (originalHandler) {
       originalHandler(error, isFatal);
