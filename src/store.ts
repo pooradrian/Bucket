@@ -11,7 +11,7 @@ export interface GroupChat {
   characterIds: string[];
 }
 
-export interface AppSettings {
+export interface ThemePreset {
   bgPrimary: string;
   bgSecondary: string;
   bgPill: string;
@@ -19,6 +19,12 @@ export interface AppSettings {
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
+  accentColor: string;
+  userBubbleBg: string;
+  dynamicIcon: boolean;
+}
+
+export interface AppSettings extends ThemePreset {
   cardRadius: number;
   pillRadius: number;
   bubbleRadius: number;
@@ -30,17 +36,14 @@ export interface AppSettings {
   sideBtnSize: number;
   inputRadius: number;
   sendBtnSize: number;
-  accentColor: string;
-  userBubbleBg: string;
   showCharacterIcons: boolean;
   themeMode: 'dark' | 'light';
-  dynamicIcon: boolean;
 }
 
 const SETTINGS_KEY = 'settings';
 const LOREBOOKS_KEY = 'lorebooks';
 
-const DARK_THEME: Omit<AppSettings, 'themeMode' | 'showCharacterIcons' | 'cardRadius' | 'pillRadius' | 'bubbleRadius' | 'chatMaxWidth' | 'fontSizeBody' | 'fontSizeHeader' | 'fontSizeTab' | 'bottomBarPad' | 'sideBtnSize' | 'inputRadius' | 'sendBtnSize'> = {
+const DARK_THEME: ThemePreset = {
   bgPrimary: '#000000',
   bgSecondary: '#111111',
   bgPill: '#111111',
@@ -53,7 +56,7 @@ const DARK_THEME: Omit<AppSettings, 'themeMode' | 'showCharacterIcons' | 'cardRa
   dynamicIcon: false,
 };
 
-const LIGHT_THEME: Omit<AppSettings, 'themeMode' | 'showCharacterIcons' | 'cardRadius' | 'pillRadius' | 'bubbleRadius' | 'chatMaxWidth' | 'fontSizeBody' | 'fontSizeHeader' | 'fontSizeTab' | 'bottomBarPad' | 'sideBtnSize' | 'inputRadius' | 'sendBtnSize'> = {
+const LIGHT_THEME: ThemePreset = {
   bgPrimary: '#F5F5F5',
   bgSecondary: '#FFFFFF',
   bgPill: '#E8E8E8',
@@ -110,7 +113,7 @@ interface AppStore {
   toggleSysStats: () => void;
 }
 
-export function getThemePreset(mode: 'dark' | 'light') {
+export function getThemePreset(mode: 'dark' | 'light'): ThemePreset {
   return mode === 'dark' ? DARK_THEME : LIGHT_THEME;
 }
 
