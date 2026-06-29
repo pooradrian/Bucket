@@ -758,6 +758,20 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
               />
             </View>
 
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>Temperature</Text>
+              <TextInput
+                style={st.settingsInput}
+                value={promptValues.temperature}
+                onChangeText={text => setPromptValues(prev => ({...prev, temperature: text}))}
+                placeholder={DEFAULT_PROMPT_CONFIG.temperature}
+                placeholderTextColor={st.textMuted.color}
+                keyboardType="decimal-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
             {/* Import / Export */}
             <View style={st.settingsSectionHeader}>
               <Text style={st.settingsSectionHeaderText}>Import / Export</Text>

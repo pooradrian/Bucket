@@ -589,6 +589,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
                 `API URL:       ${config.apiUrl || '(not set)'}`,
                 `API Key:       ${config.apiKey ? '****' + config.apiKey.slice(-4) : '(not set)'}`,
                 `Model:         ${config.model}`,
+                `Temperature:   ${config.temperature || '(default)'}`,
                 `RAG Model:     ${config.ragModel || '(uses main model)'}`,
                 `RAG Enabled:   ${config.ragEnabled ? 'yes' : 'no'}`,
                 `RAG Max Entry: ${config.ragMaxEntriesToSend}`,
