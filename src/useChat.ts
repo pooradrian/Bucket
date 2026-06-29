@@ -101,6 +101,14 @@ export function useChat({
     sessionIdRef.current = session?.id ?? null;
   }, [session?.id]);
 
+  const pendingCreationKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      pendingCreationKeyRef.current = null;
+    }
+  }, [activeSessionId]);
+
   // Applies a functional session update only if the active session is still the
   // one the in-flight request started on. Prevents stale-session writes when the
   // user switches chats while a response is streaming.
@@ -178,7 +186,19 @@ export function useChat({
         }
       }
 
+      const creationKey = isGroupChat
+        ? `group:${groupChat?.id ?? ''}`
+        : `char:${activeCharacter?.id ?? ''}`;
+
+      if (pendingCreationKeyRef.current === creationKey) {
+        return;
+      }
+
       if (isGroupChat) {
+        if (!groupChat) {
+          return;
+        }
+        pendingCreationKeyRef.current = creationKey;
         const newSession: ChatSession = {
           id: generateId(),
           characterId: '',
@@ -193,8 +213,11 @@ export function useChat({
         return;
       }
 
-      if (!activeCharacter) return;
+      if (!activeCharacter) {
+        return;
+      }
 
+      pendingCreationKeyRef.current = creationKey;
       const initialMessages: ChatMessage[] = activeCharacter.initialMessage
         ? [
             {
@@ -216,6 +239,7 @@ export function useChat({
       setSession(newSession);
       onSessionCreated(newSession.id);
     } catch (e) {
+      pendingCreationKeyRef.current = null;
       console.warn('Failed to load or create session:', e);
     }
   }, [activeSessionId, isGroupChat, groupChat, groupMembers, activeCharacter, onSessionCreated]);
