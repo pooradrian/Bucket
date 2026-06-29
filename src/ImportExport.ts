@@ -49,7 +49,27 @@ export interface ExportOptions {
   includeChats: boolean;
 }
 
-function parseV1Json(json: Record<string, any>, id?: string): Character {
+interface CharacterCardExtensions {
+  lorebookIds?: string[];
+  lorebookId?: string;
+}
+
+interface CharacterCardData {
+  name?: string;
+  description?: string;
+  personality?: string;
+  scenario?: string;
+  first_mes?: string;
+  mes_example?: string;
+  extensions?: CharacterCardExtensions;
+}
+
+interface CharacterCardJson extends CharacterCardData {
+  spec?: string;
+  data?: CharacterCardData;
+}
+
+function parseV1Json(json: CharacterCardJson, id?: string): Character {
   return {
     id: id || generateId(),
     name: json.name || '',
@@ -63,8 +83,8 @@ function parseV1Json(json: Record<string, any>, id?: string): Character {
   };
 }
 
-function parseV2Json(json: Record<string, any>, id?: string): Character {
-  const data = json.data || json;
+function parseV2Json(json: CharacterCardJson, id?: string): Character {
+  const data: CharacterCardData = json.data ?? json;
   let lorebookIds: string[] = [];
   if (data.extensions?.lorebookIds && Array.isArray(data.extensions.lorebookIds)) {
     lorebookIds = data.extensions.lorebookIds;
@@ -92,7 +112,7 @@ interface PerchanceCharacter {
   avatar: {url: string; size: number; shape: string};
   loreBookUrls: string[];
   id: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface PerchanceThread {
@@ -101,7 +121,7 @@ interface PerchanceThread {
   name: string;
   creationTime: number;
   lastMessageTime: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface PerchanceMessage {
@@ -111,7 +131,12 @@ interface PerchanceMessage {
   message: string;
   creationTime: number;
   order: number;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+interface PerchanceTable {
+  tableName: string;
+  rows: PerchanceCharacter[] | PerchanceThread[] | PerchanceMessage[];
 }
 
 function parsePerchanceCharacter(pChar: PerchanceCharacter): Character {
@@ -166,7 +191,16 @@ async function downloadPerchanceLorebook(url: string, charId: string): Promise<L
   }
 }
 
-function serializeV1(char: Character): Record<string, any> {
+interface CCV1Card {
+  name: string;
+  description: string;
+  personality: string;
+  scenario: string;
+  first_mes: string;
+  mes_example: string;
+}
+
+function serializeV1(char: Character): CCV1Card {
   return {
     name: char.name,
     description: char.description,
@@ -177,7 +211,29 @@ function serializeV1(char: Character): Record<string, any> {
   };
 }
 
-function serializeV2(char: Character): Record<string, any> {
+interface CCV2Card {
+  spec: 'chara_card_v2';
+  data: {
+    name: string;
+    description: string;
+    personality: string;
+    scenario: string;
+    first_mes: string;
+    mes_example: string;
+    alternate_greetings: string[];
+    system_prompt: string;
+    post_history_instructions: string;
+    creator_notes: string;
+    tags: string[];
+    creator: string;
+    character_version: string;
+    extensions: {
+      lorebookIds?: string[];
+    };
+  };
+}
+
+function serializeV2(char: Character): CCV2Card {
   return {
     spec: 'chara_card_v2',
     data: {
@@ -530,15 +586,15 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
   }
 
   const json = JSON.parse(text);
-  const tables = json.data?.data || [];
+  const tables: PerchanceTable[] = json.data?.data || [];
 
-  const charTable = tables.find((t: any) => t.tableName === 'characters');
-  const threadTable = tables.find((t: any) => t.tableName === 'threads');
-  const messageTable = tables.find((t: any) => t.tableName === 'messages');
+  const charTable = tables.find(t => t.tableName === 'characters');
+  const threadTable = tables.find(t => t.tableName === 'threads');
+  const messageTable = tables.find(t => t.tableName === 'messages');
 
-  const pCharacters: PerchanceCharacter[] = charTable?.rows || [];
-  const pThreads: PerchanceThread[] = threadTable?.rows || [];
-  const pMessages: PerchanceMessage[] = messageTable?.rows || [];
+  const pCharacters: PerchanceCharacter[] = (charTable?.rows ?? []) as PerchanceCharacter[];
+  const pThreads: PerchanceThread[] = (threadTable?.rows ?? []) as PerchanceThread[];
+  const pMessages: PerchanceMessage[] = (messageTable?.rows ?? []) as PerchanceMessage[];
 
   const result = {
     characters: [] as Character[],
