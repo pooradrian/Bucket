@@ -77,7 +77,18 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
 
         Alert.alert('Import Complete', message);
       } else if (format === 'perchance') {
-        const imported = await importPerchance(file.uri);
+        const downloadIcons = await new Promise<boolean>(resolve => {
+          Alert.alert(
+            'Download Icons?',
+            'This Perchance export references icon URLs. Download icons from the internet?',
+            [
+              {text: 'Skip', onPress: () => resolve(false), style: 'cancel'},
+              {text: 'Download', onPress: () => resolve(true)},
+            ],
+            {cancelable: false},
+          );
+        });
+        const imported = await importPerchance(file.uri, downloadIcons);
         let message = `Imported ${imported.characters.length} characters`;
         if (imported.sessions.length > 0) {
           message += `, ${imported.sessions.length} chat sessions`;

@@ -503,7 +503,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   return result;
 }
 
-export async function importPerchance(fileUri: string): Promise<{characters: Character[]; sessions: ChatSession[]; skippedCharacters: string[]}> {
+export async function importPerchance(fileUri: string, downloadIcons: boolean = false): Promise<{characters: Character[]; sessions: ChatSession[]; skippedCharacters: string[]}> {
   const response = await fetch(fileUri);
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -545,7 +545,7 @@ export async function importPerchance(fileUri: string): Promise<{characters: Cha
     const char = parsePerchanceCharacter(pChar);
     perchanceIdToNewId.set(pChar.id, char.id);
 
-    if (pChar.avatar?.url) {
+    if (pChar.avatar?.url && downloadIcons) {
       const icon = await downloadPerchanceIcon(pChar.avatar.url, char.id);
       if (icon) {
         char.icon = icon;
