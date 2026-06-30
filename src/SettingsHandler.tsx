@@ -1,5 +1,6 @@
 import {useEffect, useState, useCallback, useRef, useMemo} from 'react';
-import {Alert, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {Alert, ScrollView, Share, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import {
   Persona,
   PromptConfig,
@@ -22,6 +23,7 @@ import {
   CUSTOMIZATION_KEYS,
   NUMERIC_KEYS,
 } from './settingsDraft';
+import {encodeThemeURL, decodeThemeURL, applyThemeToSettings} from './themeShare';
 
 interface SettingsHandlerProps {
   onApply?: (settings: AppSettings) => void;
@@ -34,6 +36,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
   const lorebooks = useAppStore(sto => sto.lorebooks);
   const setLorebooks = useAppStore(sto => sto.setLorebooks);
   const appSettings = useAppStore(sto => sto.appSettings);
+  const setAppSettings = useAppStore(sto => sto.setAppSettings);
   const applyThemeMode = useAppStore(sto => sto.applyThemeMode);
   const promptConfigVersion = useAppStore(sto => sto.promptConfigVersion);
   const [settingsView, setSettingsView] = useState<'main' | 'customization'>('main');
@@ -104,6 +107,37 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
       return next;
     });
   };
+
+  const handleShareTheme = useCallback(async () => {
+    const url = encodeThemeURL(appSettings);
+    Clipboard.setString(url);
+    try {
+      await Share.share({message: url});
+    } catch {
+      Alert.alert('Theme copied', 'Share URL copied to clipboard.');
+    }
+  }, [appSettings]);
+
+  const handleImportTheme = useCallback(async () => {
+    try {
+      const clip = await Clipboard.getString();
+      const theme = decodeThemeURL(clip);
+      if (!theme) {
+        Alert.alert('Import theme', 'No valid Bucket theme URL found on the clipboard. Copy a shared theme URL first.');
+        return;
+      }
+      const updated = applyThemeToSettings(appSettings, theme);
+      setAppSettings(updated);
+      setValues(toDraft(updated));
+      if (updated.dynamicIcon) {
+        setIcon(updated.themeMode);
+      }
+      Alert.alert('Theme imported', theme.name ? `Applied "${theme.name}".` : 'Theme applied.');
+    } catch (e) {
+      console.warn('Failed to import theme:', e);
+      Alert.alert('Import theme', 'Could not read a valid theme from the clipboard.');
+    }
+  }, [appSettings, setAppSettings]);
 
   const handleLoadLorebook = useCallback(async () => {
     setLorebookLoading(true);
@@ -243,6 +277,29 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                     ]}>
                     {values.showCharacterIcons === 'true' ? 'On' : 'Off'}
                   </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={st.settingsSectionHeader}>
+              <Text style={st.settingsSectionHeaderText}>Share</Text>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>Shareable theme</Text>
+              <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
+                Encode the current colors into a URL you can send to someone else.
+              </Text>
+              <View style={st.settingsToggleRow}>
+                <TouchableOpacity
+                  style={[st.settingsToggleButton, {backgroundColor: appSettings.accentColor}]}
+                  onPress={handleShareTheme}>
+                  <Text style={[st.settingsToggleText, st.settingsToggleTextActive]}>Share</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={st.settingsToggleButton}
+                  onPress={handleImportTheme}>
+                  <Text style={st.settingsToggleText}>Import from clipboard</Text>
                 </TouchableOpacity>
               </View>
             </View>
