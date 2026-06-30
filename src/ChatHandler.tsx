@@ -77,7 +77,7 @@ function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
   );
 }
 
-function renderFormattedText(text: string, baseStyle: object) {
+function renderFormattedText(text: string, baseStyle: object, forceItalic: boolean = false) {
   const parts: {text: string; italic: boolean}[] = [];
   const regex = /\*([^*]+)\*/g;
   let lastIndex = 0;
@@ -96,7 +96,17 @@ function renderFormattedText(text: string, baseStyle: object) {
     parts.push({text, italic: false});
   }
   return parts.map((p, i) => (
-    <Text key={i} style={[baseStyle, p.italic && {fontStyle: 'italic'}]}>{p.text}</Text>
+    <Text
+      key={i}
+      style={[
+        baseStyle,
+        p.italic &&
+          (forceItalic
+            ? {transform: [{skewX: '-10deg'}]}
+            : {fontStyle: 'italic' as const}),
+      ]}>
+      {p.text}
+    </Text>
   ));
 }
 
@@ -105,6 +115,7 @@ const MessageBubble = React.memo(function MessageBubble({
   onSelect, onEdit, onEditSave, onEditCancel, editingMessageId, editingText, onEditingTextChange,
   onCopy, onDelete, onRegenerate, onRetry,
 }: MessageBubbleProps) {
+  const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const isUser = item.role === 'user';
   const isStreamingMsg = item.id === '__streaming__';
   const isError = item.id === '__error__';
@@ -173,7 +184,7 @@ const MessageBubble = React.memo(function MessageBubble({
           <>
             <Text
               style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-              {renderFormattedText(item.content, st.bubbleText)}
+              {renderFormattedText(item.content, st.bubbleText, forceItalic)}
             </Text>
             {!isStreamingMsg && (
               <Text style={[st.timestampText, isUser ? st.timestampUser : st.timestampAssistant]}>
