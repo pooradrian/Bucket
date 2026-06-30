@@ -37,6 +37,7 @@ export interface AppSettings extends ThemePreset {
   inputRadius: number;
   sendBtnSize: number;
   showCharacterIcons: boolean;
+  forceItalic: boolean;
   themeMode: 'dark' | 'light';
 }
 
@@ -83,6 +84,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   inputRadius: 12,
   sendBtnSize: 38,
   showCharacterIcons: true,
+  forceItalic: false,
   themeMode: 'dark',
   dynamicIcon: false,
 };
@@ -147,6 +149,7 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   }
 
   result.showCharacterIcons = saved.showCharacterIcons === true || saved.showCharacterIcons === 'true';
+  result.forceItalic = saved.forceItalic === true || saved.forceItalic === 'true';
   result.dynamicIcon = saved.dynamicIcon === true || saved.dynamicIcon === 'true';
   result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
 

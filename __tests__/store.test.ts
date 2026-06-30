@@ -39,6 +39,13 @@ describe('parseSavedSettings', () => {
     expect(parseSavedSettings({showCharacterIcons: 'no'}).showCharacterIcons).toBe(false);
   });
 
+  test('coerces forceItalic like other boolean toggles', () => {
+    expect(parseSavedSettings({forceItalic: true}).forceItalic).toBe(true);
+    expect(parseSavedSettings({forceItalic: 'true'}).forceItalic).toBe(true);
+    expect(parseSavedSettings({forceItalic: false}).forceItalic).toBe(false);
+    expect(DEFAULT_APP_SETTINGS.forceItalic).toBe(false);
+  });
+
   test('themeMode maps to light only for "light", dark otherwise', () => {
     expect(parseSavedSettings({themeMode: 'light'}).themeMode).toBe('light');
     expect(parseSavedSettings({themeMode: 'dark'}).themeMode).toBe('dark');

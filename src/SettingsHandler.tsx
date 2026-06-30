@@ -88,6 +88,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
       }
     }
     converted.showCharacterIcons = draft.showCharacterIcons === 'true';
+    converted.forceItalic = draft.forceItalic === 'true';
     converted.dynamicIcon = draft.dynamicIcon === 'true';
     onApply?.(converted as unknown as AppSettings);
   }, [onApply]);
@@ -276,6 +277,33 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                       values.showCharacterIcons === 'true' && st.settingsToggleTextActive,
                     ]}>
                     {values.showCharacterIcons === 'true' ? 'On' : 'Off'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>{LABELS.forceItalic}</Text>
+              <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
+                Skews *italic* text geometrically for fonts without an italic face.
+              </Text>
+              <View style={st.settingsToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    values.forceItalic === 'true' && {
+                      backgroundColor: values.accentColor,
+                    },
+                  ]}
+                  onPress={() =>
+                    handleChange('forceItalic', values.forceItalic === 'true' ? 'false' : 'true')
+                  }>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      values.forceItalic === 'true' && st.settingsToggleTextActive,
+                    ]}>
+                    {values.forceItalic === 'true' ? 'On' : 'Off'}
                   </Text>
                 </TouchableOpacity>
               </View>
