@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import axios, {AxiosRequestConfig} from 'axios';
-import {Character} from './CharacterEditor';
 import {ChatMessage} from './useChat';
 import {
   buildPrompt,
@@ -40,6 +39,7 @@ import {useAppStore} from './store';
 import {useTheme} from './ThemeContext';
 import {crashExport} from './CrashExport';
 import {encrypt, decrypt} from './Crypto';
+import {LogEntry, parseArgs, findCharacter} from './debuggerUtils';
 
 const encryptText = encrypt;
 const decryptText = decrypt;
@@ -49,51 +49,6 @@ const reqMetaMap = new WeakMap<AxiosRequestConfig, {reqId: string; t0: number}>(
 interface DebuggerProps {
   onClose: () => void;
   bottomInset: number;
-}
-
-interface LogEntry {
-  id: string;
-  type: 'input' | 'output' | 'error' | 'info';
-  text: string;
-}
-
-function parseArgs(input: string): string[] {
-  const args: string[] = [];
-  let current = '';
-  let inQuote = false;
-  let quoteChar = '';
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-    if (inQuote) {
-      if (ch === quoteChar) {
-        inQuote = false;
-      } else {
-        current += ch;
-      }
-    } else if (ch === '"' || ch === "'") {
-      inQuote = true;
-      quoteChar = ch;
-    } else if (ch === ' ') {
-      if (current) {
-        args.push(current);
-        current = '';
-      }
-    } else {
-      current += ch;
-    }
-  }
-  if (current) {
-    args.push(current);
-  }
-  return args;
-}
-
-function findCharacter(characters: Character[], query: string): Character | undefined {
-  return (
-    characters.find(c => c.id === query) ||
-    characters.find(c => c.name.toLowerCase() === query.toLowerCase()) ||
-    characters.find(c => c.name.toLowerCase().startsWith(query.toLowerCase()))
-  );
 }
 
 export default function Debugger({onClose, bottomInset}: DebuggerProps) {

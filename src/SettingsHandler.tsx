@@ -15,72 +15,19 @@ import ImportExportHandler from './ImportExportHandler';
 import {useAppStore, AppSettings, DEFAULT_APP_SETTINGS, getThemePreset} from './store';
 import {setIcon} from './IconModule';
 import {useTheme} from './ThemeContext';
-
-type Settings = Omit<Record<keyof AppSettings, string>, 'themeMode'> & {themeMode: 'dark' | 'light'};
-const SETTINGS_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
-  'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
-  'textPrimary', 'textSecondary', 'textMuted',
-  'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
-  'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-  'accentColor', 'userBubbleBg', 'showCharacterIcons', 'dynamicIcon',
-];
-
-function toDraft(s: AppSettings): Settings {
-  const draft = {} as Settings;
-  for (const k of SETTINGS_KEYS) {
-    draft[k] = String(s[k]);
-  }
-  draft.themeMode = s.themeMode;
-  return draft;
-}
-
-const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
-  bgPrimary: 'Background (primary)',
-  bgSecondary: 'Background (secondary)',
-  bgPill: 'Tab pill color',
-  borderPrimary: 'Border color',
-  textPrimary: 'Text (primary)',
-  textSecondary: 'Text (secondary)',
-  textMuted: 'Text (muted)',
-  cardRadius: 'Card border radius',
-  pillRadius: 'Pill border radius',
-  bubbleRadius: 'Bubble border radius',
-  chatMaxWidth: 'Chat max width %',
-  fontSizeBody: 'Body font size',
-  fontSizeHeader: 'Header font size',
-  fontSizeTab: 'Tab font size',
-  bottomBarPad: 'Bottom bar padding',
-  sideBtnSize: 'Side button size',
-  inputRadius: 'Input border radius',
-  sendBtnSize: 'Send button size',
-  accentColor: 'Accent color',
-  userBubbleBg: 'User bubble color',
-  showCharacterIcons: 'Show character icons',
-  dynamicIcon: 'Match icon to theme',
-};
-
-const CUSTOMIZATION_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
-  'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
-  'textPrimary', 'textSecondary', 'textMuted',
-  'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
-  'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-  'accentColor', 'userBubbleBg',
-];
-
+import {
+  Settings,
+  toDraft,
+  LABELS,
+  CUSTOMIZATION_KEYS,
+  NUMERIC_KEYS,
+} from './settingsDraft';
 
 interface SettingsHandlerProps {
   onApply?: (settings: AppSettings) => void;
   onOpenDebugger?: () => void;
   bottomInset: number;
 }
-
-const NUMERIC_KEYS: Exclude<keyof Settings, 'themeMode' | 'showCharacterIcons'>[] = [
-  'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
-  'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-];
 
 export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: SettingsHandlerProps) {
   const st = useTheme();
