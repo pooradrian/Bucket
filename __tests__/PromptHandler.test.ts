@@ -12,7 +12,8 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {estimateTokens, buildPrompt, DEFAULT_PROMPT_CONFIG} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona} from '../src/PromptHandler';
+import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
 import type {ChatMessage} from '../src/useChat';
 
@@ -74,5 +75,69 @@ describe('buildPrompt', () => {
     const msgs = buildPrompt(char, 'hello', history, cfg);
     expect(msgs.length).toBe(3);
     expect(msgs[1].content).toBe('u2');
+  });
+});
+
+describe('persona helpers', () => {
+  const base: PromptConfig = {
+    ...DEFAULT_PROMPT_CONFIG,
+    personas: [
+      {id: 'a', name: 'Alpha', description: 'desc a'},
+      {id: 'b', name: 'Beta', description: 'desc b'},
+    ],
+    activePersonaId: 'a',
+    userDescription: 'desc a',
+  };
+
+  test('addPersona appends without mutating the source list', () => {
+    const next = addPersona(base, {id: 'c', name: 'Gamma', description: 'desc c'});
+    expect(next.personas).toHaveLength(3);
+    expect(next.personas[2].name).toBe('Gamma');
+    expect(base.personas).toHaveLength(2);
+  });
+
+  test('addPersona chains so rapid double-add keeps both entries', () => {
+    const p1 = {id: 'c', name: 'Gamma', description: ''};
+    const p2 = {id: 'd', name: 'Delta', description: ''};
+    const next = addPersona(addPersona(base, p1), p2);
+    expect(next.personas.map(p => p.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  test('updatePersona edits the matched index and leaves others intact', () => {
+    const next = updatePersona(base, 1, {name: 'Beta+'});
+    expect(next.personas[1].name).toBe('Beta+');
+    expect(next.personas[1].description).toBe('desc b');
+    expect(next.personas[0].name).toBe('Alpha');
+  });
+
+  test('updatePersona is a no-op for an out-of-range index', () => {
+    const next = updatePersona(base, 99, {name: 'X'});
+    expect(next.personas).toEqual(base.personas);
+  });
+
+  test('deletePersona clears activePersonaId when the active one is removed', () => {
+    const next = deletePersona(base, 0);
+    expect(next.personas.map(p => p.id)).toEqual(['b']);
+    expect(next.activePersonaId).toBeNull();
+    expect(next.userDescription).toBe('desc b');
+  });
+
+  test('deletePersona keeps activePersonaId when an inactive one is removed', () => {
+    const next = deletePersona(base, 1);
+    expect(next.personas.map(p => p.id)).toEqual(['a']);
+    expect(next.activePersonaId).toBe('a');
+    expect(next.userDescription).toBe('desc a');
+  });
+
+  test('activatePersona sets activePersonaId and userDescription from the latest config', () => {
+    const edited = updatePersona(base, 1, {description: 'fresh desc'});
+    const next = activatePersona(edited, 1);
+    expect(next.activePersonaId).toBe('b');
+    expect(next.userDescription).toBe('fresh desc');
+  });
+
+  test('activatePersona is a no-op for an out-of-range index', () => {
+    const next = activatePersona(base, 99);
+    expect(next).toEqual(base);
   });
 });
