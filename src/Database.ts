@@ -475,14 +475,26 @@ export function getAllKVKeys(): string[] {
 
 export async function saveLorebookToDB(lorebook: LorebookState): Promise<void> {
   const d = initDB();
-  d.execute('INSERT OR REPLACE INTO lorebooks (id, file_name) VALUES (?, ?)', [lorebook.id, lorebook.fileName]);
-  d.execute('DELETE FROM lorebook_entries WHERE lorebook_id = ?', [lorebook.id]);
-  for (const entry of lorebook.entries) {
-    const encryptedText = await encrypt(entry.text);
-    d.execute(
-      'INSERT INTO lorebook_entries (lorebook_id, entry_index, text) VALUES (?, ?, ?)',
-      [lorebook.id, entry.id, encryptedText],
-    );
+  const encryptedEntries = await Promise.all(
+    lorebook.entries.map(async entry => ({
+      id: entry.id,
+      encryptedText: await encrypt(entry.text),
+    })),
+  );
+  d.execute('BEGIN');
+  try {
+    d.execute('INSERT OR REPLACE INTO lorebooks (id, file_name) VALUES (?, ?)', [lorebook.id, lorebook.fileName]);
+    d.execute('DELETE FROM lorebook_entries WHERE lorebook_id = ?', [lorebook.id]);
+    for (const entry of encryptedEntries) {
+      d.execute(
+        'INSERT INTO lorebook_entries (lorebook_id, entry_index, text) VALUES (?, ?, ?)',
+        [lorebook.id, entry.id, entry.encryptedText],
+      );
+    }
+    d.execute('COMMIT');
+  } catch (e) {
+    d.execute('ROLLBACK');
+    throw e;
   }
 }
 
@@ -498,22 +510,30 @@ export async function getAllLorebooksFromDB(): Promise<LorebookState[]> {
   if (!lorebookResult.results) {
     return [];
   }
-  return Promise.all(
+  const settled = await Promise.all(
     lorebookResult.results.map(async row => {
-      const id = row.id as string;
-      const entriesResult = d.execute(
-        'SELECT entry_index, text FROM lorebook_entries WHERE lorebook_id = ? ORDER BY entry_index',
-        [id],
-      );
-      const entries: LorebookEntry[] = await Promise.all(
-        (entriesResult.results || []).map(async e => ({
-          id: e.entry_index as number,
-          text: await decrypt(e.text as string),
-        }))
-      );
-      return {id, fileName: row.file_name as string, entries};
-    })
+      try {
+        const id = row.id as string;
+        const entriesResult = d.execute(
+          'SELECT entry_index, text FROM lorebook_entries WHERE lorebook_id = ? ORDER BY entry_index',
+          [id],
+        );
+        const entrySettled = await Promise.allSettled(
+          (entriesResult.results || []).map(async e => ({
+            id: e.entry_index as number,
+            text: await decrypt(e.text as string),
+          })),
+        );
+        const entries: LorebookEntry[] = entrySettled
+          .filter((r): r is PromiseFulfilledResult<LorebookEntry> => r.status === 'fulfilled')
+          .map(r => r.value);
+        return {id, fileName: row.file_name as string, entries};
+      } catch {
+        return null;
+      }
+    }),
   );
+  return settled.filter((r): r is LorebookState => r !== null);
 }
 
 interface DBCharacter {
