@@ -1,5 +1,5 @@
 import {useEffect, useState, useCallback, useRef, useMemo} from 'react';
-import {Alert, ScrollView, Share, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {Alert, AppState, ScrollView, Share, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import {
   Persona,
@@ -8,6 +8,10 @@ import {
   PLACEHOLDERS,
   loadPromptConfig,
   savePromptConfig,
+  addPersona,
+  updatePersona,
+  deletePersona,
+  activatePersona,
 } from './PromptHandler';
 import {loadLorebook, addLorebook, removeLorebook} from './RAGHandler';
 import {getActiveProviderId} from './SecureStore';
@@ -43,10 +47,12 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
   const [values, setValues] = useState<Settings>(() => toDraft(appSettings));
   const [promptValues, setPromptValues] = useState<PromptConfig>(DEFAULT_PROMPT_CONFIG);
   const [promptSaved, setPromptSaved] = useState<PromptConfig>(DEFAULT_PROMPT_CONFIG);
+  const [promptLoaded, setPromptLoaded] = useState(false);
   const [lorebookLoading, setLorebookLoading] = useState(false);
   const [activeProviderId, setActiveProviderId] = useState('');
   const [editingPersonaIdx, setEditingPersonaIdx] = useState<number | null>(null);
   const promptSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<PromptConfig | null>(null);
   const mountedRef = useRef(false);
 
   const defaults = useMemo(() => {
@@ -64,20 +70,52 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
     loadPromptConfig().then(cfg => {
       setPromptValues(cfg);
       setPromptSaved(cfg);
+      setPromptLoaded(true);
     });
     setActiveProviderId(getActiveProviderId() || '');
   }, [promptConfigVersion]);
 
   useEffect(() => {
     if (!mountedRef.current) return;
-    if (JSON.stringify(promptValues) === JSON.stringify(promptSaved)) return;
+    if (JSON.stringify(promptValues) === JSON.stringify(promptSaved)) {
+      pendingSaveRef.current = null;
+      return;
+    }
+    pendingSaveRef.current = promptValues;
     if (promptSaveTimerRef.current) clearTimeout(promptSaveTimerRef.current);
     promptSaveTimerRef.current = setTimeout(async () => {
-      await savePromptConfig(promptValues);
-      setPromptSaved(promptValues);
+      const cfg = pendingSaveRef.current;
+      if (!cfg) return;
+      pendingSaveRef.current = null;
+      await savePromptConfig(cfg);
+      setPromptSaved(cfg);
     }, 500);
-    return () => { if (promptSaveTimerRef.current) clearTimeout(promptSaveTimerRef.current); };
+    return () => {
+      if (promptSaveTimerRef.current) clearTimeout(promptSaveTimerRef.current);
+    };
   }, [promptValues, promptSaved]);
+
+  useEffect(() => () => {
+    if (promptSaveTimerRef.current) clearTimeout(promptSaveTimerRef.current);
+    const cfg = pendingSaveRef.current;
+    if (cfg) {
+      pendingSaveRef.current = null;
+      savePromptConfig(cfg);
+    }
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state !== 'background' && state !== 'inactive') return;
+      if (promptSaveTimerRef.current) clearTimeout(promptSaveTimerRef.current);
+      const cfg = pendingSaveRef.current;
+      if (cfg) {
+        pendingSaveRef.current = null;
+        savePromptConfig(cfg);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const applyThemeSettings = useCallback((draft: Settings) => {
     const converted: Record<string, unknown> = {...draft};
@@ -444,9 +482,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                           style={[st.settingsInput, {marginBottom: 8, borderColor: 'transparent', padding: 8}]}
                           value={persona.name}
                           onChangeText={text => {
-                            const personas = [...(promptValues.personas ?? [])];
-                            personas[idx] = {...personas[idx], name: text};
-                            setPromptValues(prev => ({...prev, personas}));
+                            setPromptValues(prev => updatePersona(prev, idx, {name: text}));
                           }}
                           placeholder="Persona name"
                           placeholderTextColor={st.textMuted.color}
@@ -455,9 +491,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                           style={[st.settingsInput, st.settingsInputMultiline, {borderColor: 'transparent', padding: 8, minHeight: 80}]}
                           value={persona.description}
                           onChangeText={text => {
-                            const personas = [...(promptValues.personas ?? [])];
-                            personas[idx] = {...personas[idx], description: text};
-                            setPromptValues(prev => ({...prev, personas}));
+                            setPromptValues(prev => updatePersona(prev, idx, {description: text}));
                           }}
                           placeholder="Describe yourself for the AI"
                           placeholderTextColor={st.textMuted.color}
@@ -475,15 +509,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                                 {
                                   text: 'Delete', style: 'destructive',
                                   onPress: () => {
-                                    const personas = promptValues.personas.filter((_, i) => i !== idx);
-                                    const activePersonaId = promptValues.activePersonaId === persona.id
-                                      ? null : promptValues.activePersonaId;
-                                    setPromptValues(prev => ({
-                                      ...prev, personas, activePersonaId,
-                                      userDescription: activePersonaId
-                                        ? prev.userDescription
-                                        : (personas[0]?.description ?? ''),
-                                    }));
+                                    setPromptValues(prev => deletePersona(prev, idx));
                                     setEditingPersonaIdx(null);
                                   },
                                 },
@@ -493,11 +519,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                           </TouchableOpacity>
                           <TouchableOpacity
                             onPress={() => {
-                              setPromptValues(prev => ({
-                                ...prev,
-                                activePersonaId: persona.id,
-                                userDescription: persona.description,
-                              }));
+                              setPromptValues(prev => activatePersona(prev, idx));
                               setEditingPersonaIdx(null);
                             }}>
                             <Text style={{color: values.accentColor, fontSize: 13, fontWeight: '600'}}>
@@ -515,12 +537,14 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                 onPress={() => {
                   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
                   const newPersona: Persona = {id, name: 'New Persona', description: ''};
-                  const personas = [...(promptValues.personas ?? []), newPersona];
-                  setPromptValues(prev => ({...prev, personas}));
-                  setEditingPersonaIdx(personas.length - 1);
+                  setPromptValues(prev => addPersona(prev, newPersona));
+                  setEditingPersonaIdx((promptValues.personas ?? []).length);
                 }}
+                disabled={!promptLoaded}
                 style={[st.settingsToggleButton, {borderStyle: 'dashed', marginTop: 4}]}>
-                <Text style={st.settingsToggleText}>+ Add Persona</Text>
+                <Text style={st.settingsToggleText}>
+                  {promptLoaded ? '+ Add Persona' : 'Loading personas...'}
+                </Text>
               </TouchableOpacity>
             </View>
 

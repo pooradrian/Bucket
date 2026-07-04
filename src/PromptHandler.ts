@@ -128,6 +128,41 @@ export async function savePromptConfig(config: PromptConfig): Promise<void> {
   }
 }
 
+export function addPersona(config: PromptConfig, persona: Persona): PromptConfig {
+  return {...config, personas: [...(config.personas ?? []), persona]};
+}
+
+export function updatePersona(
+  config: PromptConfig,
+  idx: number,
+  patch: Partial<Pick<Persona, 'name' | 'description'>>,
+): PromptConfig {
+  const personas = [...(config.personas ?? [])];
+  if (personas[idx]) {
+    personas[idx] = {...personas[idx], ...patch};
+  }
+  return {...config, personas};
+}
+
+export function deletePersona(config: PromptConfig, idx: number): PromptConfig {
+  const personas = (config.personas ?? []).filter((_, i) => i !== idx);
+  const deleted = config.personas?.[idx];
+  const activePersonaId =
+    deleted && config.activePersonaId === deleted.id ? null : config.activePersonaId;
+  return {
+    ...config,
+    personas,
+    activePersonaId,
+    userDescription: activePersonaId ? config.userDescription : (personas[0]?.description ?? ''),
+  };
+}
+
+export function activatePersona(config: PromptConfig, idx: number): PromptConfig {
+  const persona = config.personas?.[idx];
+  if (!persona) return config;
+  return {...config, activePersonaId: persona.id, userDescription: persona.description};
+}
+
 let cachedEncoder: ReturnType<typeof encodingForModel> | null = null;
 
 function getEncoder() {
