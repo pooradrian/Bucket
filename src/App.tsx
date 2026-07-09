@@ -2,6 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {View, Text, StyleSheet} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {NavigationContainer} from '@react-navigation/native';
+import pkg from '../package.json';
 import {useAppStore} from './store';
 import {ThemeProvider} from './ThemeContext';
 import {installCrashExport, checkPendingCrashExport} from './CrashExport';
@@ -11,6 +12,7 @@ import {setIcon} from './IconModule';
 import SysStatsOverlay from './SysStatsOverlay';
 
 const SPLASH_MIN_MS = 1500;
+const APP_VERSION = pkg.version;
 
 function SplashScreen({bgPrimary, textMuted, textPrimary}: {bgPrimary: string; textMuted: string; textPrimary: string}) {
   return (
@@ -24,6 +26,7 @@ function SplashScreen({bgPrimary, textMuted, textPrimary}: {bgPrimary: string; t
         <Text style={[styles.name, {color: textPrimary}]}>Asphodel</Text>
         <Text style={[styles.name, {color: textPrimary}]}>Sabalan</Text>
       </View>
+      <Text style={[styles.version, {color: textMuted}]}>v{APP_VERSION}</Text>
     </View>
   );
 }
@@ -46,6 +49,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  version: {
+    position: 'absolute',
+    bottom: 32,
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
 
