@@ -725,7 +725,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
                     {lorebook.fileName}
                   </Text>
                   <Text style={st.settingsLorebookItemCount}>
-                    {lorebook.entries.length} entries
+                    {lorebook.entryCount} entries
                   </Text>
                 </View>
                 <TouchableOpacity

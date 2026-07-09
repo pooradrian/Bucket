@@ -377,7 +377,7 @@ export default function CharacterEditor({
                           {lorebook.fileName}
                         </Text>
                         <Text style={st.lorebookEntryCount}>
-                          {lorebook.entries.length} entries
+                          {lorebook.entryCount} entries
                         </Text>
                       </TouchableOpacity>
                     );

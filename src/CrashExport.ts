@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import {
   getAllCharactersFromDB,
   getAllLorebooksFromDB,
+  getLorebookEntriesFromDB,
   getAllSessionsForCharacter,
   getSessionById,
   getKV,
@@ -67,7 +68,8 @@ export async function crashExport(): Promise<string | null> {
     const lorebooks = await getAllLorebooksFromDB();
     const lorebookFolder = zip.folder('lorebooks');
     for (const lorebook of lorebooks) {
-      const content = lorebook.entries.map((e: {text: string}) => e.text).join('\n');
+      const entries = await getLorebookEntriesFromDB(lorebook.id);
+      const content = entries.map(e => e.text).join('\n');
       lorebookFolder?.file(lorebook.fileName, content);
     }
 

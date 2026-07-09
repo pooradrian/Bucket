@@ -27,6 +27,7 @@ import {
   setKV,
   getAllKVKeys,
   getAllLorebooksFromDB,
+  getLorebookEntriesFromDB,
   getAllSessionsForCharacter,
 } from './Database';
 import {
@@ -405,7 +406,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
                 `Scenario:    ${char.scenario || '(none)'}`,
                 `First Msg:   ${char.initialMessage || '(none)'}`,
                 `Examples:    ${char.exampleMessages ? char.exampleMessages.slice(0, 80) + (char.exampleMessages.length > 80 ? '...' : '') : '(none)'}`,
-                `Lorebooks:   ${assignedLorebooks.length > 0 ? assignedLorebooks.map(l => `${l.fileName} (${l.entries.length} entries)`).join(', ') : '(none)'}`,
+                `Lorebooks:   ${assignedLorebooks.length > 0 ? assignedLorebooks.map(l => `${l.fileName} (${l.entryCount} entries)`).join(', ') : '(none)'}`,
                 `Sessions:    ${sessions.length}`,
                 `Last Active: ${sessions.length > 0 ? new Date(sessions[0].updatedAt).toLocaleString() : 'never'}`,
               ].join('\n'),
@@ -669,7 +670,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
               appendLog('info', 'No lorebooks found.');
             } else {
               const lines = lorebooks.map(
-                l => `  [${l.id}] ${l.fileName} — ${l.entries.length} entries`,
+                l => `  [${l.id}] ${l.fileName} — ${l.entryCount} entries`,
               );
               appendLog('output', `Lorebooks (${lorebooks.length}):\n${lines.join('\n')}`);
             }
@@ -688,8 +689,9 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
               appendLog('error', `Lorebook "${id}" not found.`);
               break;
             }
-            const lines = lb.entries.map(e => `  ${e.id + 1}. ${e.text.slice(0, 100)}${e.text.length > 100 ? '...' : ''}`);
-            appendLog('output', `${lb.fileName} (${lb.entries.length} entries):\n${lines.join('\n')}`);
+            const entries = await getLorebookEntriesFromDB(lb.id);
+            const lines = entries.map(e => `  ${e.id + 1}. ${e.text.slice(0, 100)}${e.text.length > 100 ? '...' : ''}`);
+            appendLog('output', `${lb.fileName} (${entries.length} entries):\n${lines.join('\n')}`);
             break;
           }
 

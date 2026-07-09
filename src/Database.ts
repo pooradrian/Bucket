@@ -504,36 +504,39 @@ export function deleteLorebookFromDB(lorebookId: string): void {
   d.execute('DELETE FROM lorebooks WHERE id = ?', [lorebookId]);
 }
 
-export async function getAllLorebooksFromDB(): Promise<LorebookState[]> {
+export function getAllLorebooksFromDB(): LorebookState[] {
   const d = initDB();
-  const lorebookResult = d.execute('SELECT id, file_name FROM lorebooks ORDER BY file_name');
-  if (!lorebookResult.results) {
+  const result = d.execute(
+    `SELECT l.id, l.file_name,
+       (SELECT COUNT(*) FROM lorebook_entries WHERE lorebook_id = l.id) AS entry_count
+     FROM lorebooks l ORDER BY l.file_name`,
+  );
+  if (!result.results) {
     return [];
   }
-  const settled = await Promise.all(
-    lorebookResult.results.map(async row => {
-      try {
-        const id = row.id as string;
-        const entriesResult = d.execute(
-          'SELECT entry_index, text FROM lorebook_entries WHERE lorebook_id = ? ORDER BY entry_index',
-          [id],
-        );
-        const entrySettled = await Promise.allSettled(
-          (entriesResult.results || []).map(async e => ({
-            id: e.entry_index as number,
-            text: await decrypt(e.text as string),
-          })),
-        );
-        const entries: LorebookEntry[] = entrySettled
-          .filter((r): r is PromiseFulfilledResult<LorebookEntry> => r.status === 'fulfilled')
-          .map(r => r.value);
-        return {id, fileName: row.file_name as string, entries};
-      } catch {
-        return null;
-      }
-    }),
+  return result.results.map(row => ({
+    id: row.id as string,
+    fileName: row.file_name as string,
+    entryCount: (row.entry_count as number) ?? 0,
+    entries: [],
+  }));
+}
+
+export async function getLorebookEntriesFromDB(lorebookId: string): Promise<LorebookEntry[]> {
+  const d = initDB();
+  const entriesResult = d.execute(
+    'SELECT entry_index, text FROM lorebook_entries WHERE lorebook_id = ? ORDER BY entry_index',
+    [lorebookId],
   );
-  return settled.filter((r): r is LorebookState => r !== null);
+  const entrySettled = await Promise.allSettled(
+    (entriesResult.results || []).map(async e => ({
+      id: e.entry_index as number,
+      text: await decrypt(e.text as string),
+    })),
+  );
+  return entrySettled
+    .filter((r): r is PromiseFulfilledResult<LorebookEntry> => r.status === 'fulfilled')
+    .map(r => r.value);
 }
 
 interface DBCharacter {

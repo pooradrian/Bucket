@@ -18,6 +18,7 @@ export interface RAGConfig {
 export interface LorebookState {
   id: string;
   entries: LorebookEntry[];
+  entryCount: number;
   fileName: string;
 }
 
@@ -42,7 +43,7 @@ export async function loadLorebook(): Promise<LorebookState | null> {
     if (entries.length === 0) {
       return null;
     }
-    return {id: generateId(), entries, fileName: file.name || 'lorebook.txt'};
+    return {id: generateId(), entries, entryCount: entries.length, fileName: file.name || 'lorebook.txt'};
   } catch (e: unknown) {
     if (e && typeof e === 'object' && 'code' in e && (e as {code: string}).code === 'OPERATION_CANCELED') {
       return null;

@@ -11,6 +11,7 @@ import {
   getAllCharactersFromDB,
   saveLorebookToDB,
   getAllLorebooksFromDB,
+  getLorebookEntriesFromDB,
   setKV,
   getKV,
   createSession,
@@ -73,6 +74,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
           const lorebook: LorebookState = {
             id: generateId(),
             entries,
+            entryCount: entries.length,
             fileName: file.name.split('/').pop() || 'lorebook.txt',
           };
           if (origId) {
@@ -297,7 +299,8 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     const lorebooks = await getAllLorebooksFromDB();
     const lorebookFolder = zip.folder('lorebooks');
     for (const lorebook of lorebooks) {
-      const content = JSON.stringify({id: lorebook.id, entries: lorebook.entries});
+      const entries = await getLorebookEntriesFromDB(lorebook.id);
+      const content = JSON.stringify({id: lorebook.id, entries});
       lorebookFolder?.file(`${lorebook.fileName}`, content);
     }
   }

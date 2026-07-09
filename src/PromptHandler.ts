@@ -346,6 +346,7 @@ export async function sendToLLM(
       const combinedLorebook: LorebookState = {
         id: 'combined',
         entries: combinedEntries,
+        entryCount: combinedEntries.length,
         fileName: 'combined',
       };
 
