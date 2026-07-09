@@ -159,7 +159,7 @@ async function downloadPerchanceLorebook(url: string, charId: string): Promise<L
     const entries = parseLorebook(text);
     if (entries.length === 0) return null;
     const fileName = url.split('/').pop()?.split('?')[0] || `lorebook_${charId}.txt`;
-    return {id: generateId(), entries, fileName};
+    return {id: generateId(), entries, entryCount: entries.length, fileName};
   } catch {
     return null;
   }

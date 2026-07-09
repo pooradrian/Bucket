@@ -14,6 +14,7 @@ import {
   updateSessionTimestamp,
   setLastReplyCharacterId,
   generateId,
+  getLorebookEntriesFromDB,
 } from './Database';
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
 
@@ -162,14 +163,26 @@ export function useChat({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     if (!isGroupChat && activeCharacter?.lorebookIds?.length) {
       const found = activeCharacter.lorebookIds
         .map(id => lorebooks.find(l => l.id === id))
         .filter(Boolean) as LorebookState[];
-      setLorebook(found);
+      (async () => {
+        const withEntries = await Promise.all(
+          found.map(async lb => ({
+            ...lb,
+            entries: await getLorebookEntriesFromDB(lb.id),
+          })),
+        );
+        if (!cancelled) setLorebook(withEntries);
+      })();
     } else {
       setLorebook([]);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [isGroupChat, activeCharacter, lorebooks]);
 
   const loadOrCreateSession = useCallback(async () => {
