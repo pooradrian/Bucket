@@ -164,7 +164,25 @@ export function initDB(): NitroSQLiteConnection {
     migrate(db, currentVersion, CURRENT_VERSION);
   }
 
+  try {
+    db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch {}
+
   return db;
+}
+
+function checkpointWAL(): void {
+  try {
+    initDB().execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch {}
+}
+
+function compactDatabase(): void {
+  const d = initDB();
+  try {
+    d.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    d.execute('VACUUM');
+  } catch {}
 }
 
 async function decryptMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
@@ -332,6 +350,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
 export function deleteSession(sessionId: string): void {
   const d = initDB();
   d.execute('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
+  checkpointWAL();
 }
 
 export async function updateMessage(messageId: string, content: string): Promise<void> {
@@ -444,6 +463,7 @@ export function deleteAllByPrefix(prefix: string): {sessions: number; messages: 
     [like, like],
   );
   const sessResult = d.execute('DELETE FROM chat_sessions WHERE id LIKE ?', [like]);
+  compactDatabase();
   return {
     sessions: sessResult.rowsAffected ?? 0,
     messages: msgResult.rowsAffected ?? 0,
@@ -496,12 +516,14 @@ export async function saveLorebookToDB(lorebook: LorebookState): Promise<void> {
     d.execute('ROLLBACK');
     throw e;
   }
+  checkpointWAL();
 }
 
 export function deleteLorebookFromDB(lorebookId: string): void {
   const d = initDB();
   d.execute('DELETE FROM lorebook_entries WHERE lorebook_id = ?', [lorebookId]);
   d.execute('DELETE FROM lorebooks WHERE id = ?', [lorebookId]);
+  compactDatabase();
 }
 
 export function getAllLorebooksFromDB(): LorebookState[] {
@@ -573,6 +595,7 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
 export function deleteCharacterFromDB(id: string): void {
   const d = initDB();
   d.execute('DELETE FROM characters WHERE id = ?', [id]);
+  checkpointWAL();
 }
 
 export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
@@ -632,6 +655,7 @@ export async function saveGroupChatToDB(group: GroupChatRow): Promise<void> {
     d.execute('ROLLBACK');
     throw e;
   }
+  checkpointWAL();
 }
 
 export function deleteGroupChatFromDB(id: string): void {
@@ -645,6 +669,7 @@ export function deleteGroupChatFromDB(id: string): void {
     d.execute('ROLLBACK');
     throw e;
   }
+  checkpointWAL();
 }
 
 export async function getAllGroupChatsFromDB(): Promise<GroupChatRow[]> {
