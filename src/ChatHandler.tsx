@@ -16,12 +16,13 @@ import {
 import {Character} from './CharacterEditor';
 import {useAppStore, GroupChat} from './store';
 import {useTheme} from './ThemeContext';
-import {useChat, ChatMessage} from './useChat';
+import {useChat, ChatMessage, QuickCharacter} from './useChat';
 
 interface ChatHandlerProps {
   character?: Character | null;
   groupChat?: GroupChat | null;
   activeSessionId: string | null;
+  quickCharacters: QuickCharacter[];
   onHistoryPress: () => void;
   onSessionCreated: (sessionId: string) => void;
   bottomInset: number;
@@ -225,12 +226,11 @@ const MessageBubble = React.memo(function MessageBubble({
   );
 });
 
-export default function ChatHandler({character, groupChat, activeSessionId, onHistoryPress, onSessionCreated, bottomInset}: ChatHandlerProps) {
+export default function ChatHandler({character, groupChat, activeSessionId, quickCharacters, onHistoryPress, onSessionCreated, bottomInset}: ChatHandlerProps) {
   const st = useTheme();
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
   const accentColor = useAppStore(s => s.appSettings.accentColor);
   const bgSecondary = useAppStore(s => s.appSettings.bgSecondary);
-
 
   const {
     session,
@@ -246,6 +246,8 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
     setEditingText,
     selectedReplyCharacter,
     setSelectedReplyCharacter,
+    selectedQC,
+    setSelectedQC,
     groupMembers,
     flatListRef,
     messagesData,
@@ -258,10 +260,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
     handleRegenerate,
     handleRetryError,
     handleStop,
-  } = useChat({character, groupChat, activeSessionId, onSessionCreated});
+  } = useChat({character, groupChat, activeSessionId, onSessionCreated, quickCharacters});
 
   const isGroupChat = !!groupChat;
   const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
+  const showSelectorLine = isGroupChat || quickCharacters.length > 0;
 
   const scrollOffsetRef = useRef(0);
 
@@ -316,7 +319,6 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
       style={st.chatContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}>
-      {/* Header */}
       <View style={st.chatHeader}>
         {isGroupChat ? (
           <>
@@ -347,7 +349,6 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
       <FlatList
         ref={flatListRef}
         data={messagesData}
@@ -379,14 +380,13 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
         }
       />
 
-      {/* Character Selector for Group Chats */}
-      {isGroupChat && (
+      {showSelectorLine && (
         <View style={st.characterSelector}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={st.characterSelectorScroll}>
-            {groupMembers.map(char => {
+            {isGroupChat ? groupMembers.map(char => {
               const isSelected = selectedReplyCharacter?.id === char.id;
               return (
                 <TouchableOpacity
@@ -410,15 +410,53 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
                   </Text>
                 </TouchableOpacity>
               );
-            })}
+            }) : (
+              <>
+                <TouchableOpacity
+                  onPress={() => setSelectedQC(null)}
+                  style={[st.characterSelectorItem, !selectedQC && st.characterSelectorItemActive]}>
+                  {showCharacterIcons && activeCharacter?.icon ? (
+                    <Image
+                      source={{uri: activeCharacter.icon}}
+                      style={[st.characterSelectorAvatar, !selectedQC && st.characterSelectorAvatarActive]}
+                    />
+                  ) : (
+                    <View style={[st.characterSelectorAvatar, !selectedQC && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
+                      <Text style={{color: !selectedQC ? accentColor : st.textMuted.color, fontSize: 14}}>
+                        {activeCharacter?.name?.[0] || '?'}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={[st.characterSelectorName, !selectedQC && st.characterSelectorNameActive]} numberOfLines={1}>
+                    {activeCharacter?.name}
+                  </Text>
+                </TouchableOpacity>
+                {quickCharacters.map(qc => {
+                  const isSelected = selectedQC?.id === qc.id;
+                  return (
+                    <TouchableOpacity
+                      key={qc.id}
+                      onPress={() => setSelectedQC(qc)}
+                      style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
+                      <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
+                        <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
+                          {qc.name[0]}
+                        </Text>
+                      </View>
+                      <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive]} numberOfLines={1}>
+                        {qc.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            )}
           </ScrollView>
         </View>
       )}
 
-      {/* Input bar */}
-      {/* TODO: proper keyboard-aware padding solution */}
       <View style={[st.inputBar, {paddingBottom: bottomInset + 30}]}>
-        {isGroupChat && selectedReplyCharacter && (
+        {(isGroupChat && selectedReplyCharacter) ? (
           <View style={{marginRight: 8}}>
             {showCharacterIcons && selectedReplyCharacter.icon ? (
               <Image
@@ -431,12 +469,18 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
               </View>
             )}
           </View>
-        )}
+        ) : (selectedQC) ? (
+          <View style={{marginRight: 8}}>
+            <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: bgSecondary, justifyContent: 'center', alignItems: 'center'}}>
+              <Text style={{color: st.textMuted.color, fontSize: 12}}>{selectedQC.name[0]}</Text>
+            </View>
+          </View>
+        ) : null}
         <TextInput
           style={st.textInput}
           value={inputText}
           onChangeText={setInputText}
-          placeholder={isGroupChat ? (selectedReplyCharacter ? `Message as ${selectedReplyCharacter.name}...` : 'Select a character to reply') : 'Type a message...'}
+          placeholder={isGroupChat ? (selectedReplyCharacter ? `Message as ${selectedReplyCharacter.name}...` : 'Select a character to reply') : (selectedQC ? `Message as ${selectedQC.name}...` : 'Type a message...')}
           placeholderTextColor="#666"
           editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
           multiline
@@ -453,7 +497,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, onHi
             style={[st.sendBtn, (sending || (isGroupChat && !selectedReplyCharacter)) && st.sendBtnDisabled]}
             onPress={() => handleSend(inputText)}
             disabled={sending || (isGroupChat && !selectedReplyCharacter)}>
-            <Text style={st.sendBtnText}>{'›'}</Text>
+            <Text style={st.sendBtnText}>›</Text>
           </TouchableOpacity>
         )}
       </View>

@@ -13,7 +13,13 @@ import {
   SessionSummary,
   getKV,
   setKV,
+  getQuickCharactersForSession,
+  saveQuickCharacter,
+  deleteQuickCharacter,
+  updateQuickCharacterStarred,
+  generateId,
 } from './Database';
+import {QuickCharacter} from './useChat';
 import ChatHandler from './ChatHandler';
 import SettingsHandler from './SettingsHandler';
 import CharacterEditor from './CharacterEditor';
@@ -58,6 +64,7 @@ function HomeScreen() {
   const groupChatsLoading = useAppStore(s => s.groupChatsLoading);
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
   const deleteCharacter = useAppStore(s => s.deleteCharacter);
+  const saveCharacter = useAppStore(s => s.saveCharacter);
   const deleteGroupChat = useAppStore(s => s.deleteGroupChat);
   const saveGroupChat = useAppStore(s => s.saveGroupChat);
   const loadGroupChats = useAppStore(s => s.loadGroupChats);
@@ -68,6 +75,7 @@ function HomeScreen() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historySessions, setHistorySessions] = useState<SessionSummary[]>([]);
+  const [quickCharacters, setQuickCharacters] = useState<QuickCharacter[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<GroupChat | null>(null);
@@ -78,6 +86,25 @@ function HomeScreen() {
     const v = getKV('welcome_dismissed');
     setWelcomeDismissed(v === 'true');
   }, []);
+
+  const reloadQCs = useCallback(async (sessionId: string | null) => {
+    if (sessionId) {
+      const dbQCs = await getQuickCharactersForSession(sessionId);
+      setQuickCharacters(dbQCs.map(dbQc => ({
+        id: dbQc.id,
+        name: dbQc.name,
+        description: dbQc.description,
+        personality: dbQc.personality,
+        starred: dbQc.starred === 1,
+      })));
+    } else {
+      setQuickCharacters([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    reloadQCs(activeSessionId);
+  }, [activeSessionId, reloadQCs]);
 
   const hasChat = !!(activeChatCharacter || activeGroupChat || showWelcome);
   const isChat = activeTab === 'chat' && hasChat;
@@ -193,6 +220,47 @@ function HomeScreen() {
     setActiveTab('menu');
   }, []);
 
+  const handleCreateQC = useCallback(async (qcData: {name: string; description: string; personality: string}) => {
+    if (!activeSessionId) return;
+    await saveQuickCharacter({
+      id: generateId(),
+      session_id: activeSessionId,
+      name: qcData.name,
+      description: qcData.description,
+      personality: qcData.personality,
+      starred: 0,
+    });
+    reloadQCs(activeSessionId);
+  }, [activeSessionId, reloadQCs]);
+
+  const handleToggleQCStar = useCallback((qcId: string) => {
+    const qc = quickCharacters.find(q => q.id === qcId);
+    if (!qc) return;
+    if (!qc.starred) {
+      const parentChar = activeChatCharacter;
+      saveCharacter({
+        id: generateId(),
+        name: qc.name,
+        description: qc.description,
+        personality: qc.personality,
+        initialMessage: '',
+        writingStyle: parentChar?.writingStyle || '',
+        scenario: parentChar?.scenario || '',
+        exampleMessages: parentChar?.exampleMessages || '',
+        lorebookIds: [],
+      });
+      updateQuickCharacterStarred(qc.id, true);
+    } else {
+      updateQuickCharacterStarred(qc.id, false);
+    }
+    reloadQCs(activeSessionId);
+  }, [quickCharacters, activeSessionId, activeChatCharacter, saveCharacter, reloadQCs]);
+
+  const handleDeleteQC = useCallback((qcId: string) => {
+    deleteQuickCharacter(qcId);
+    reloadQCs(activeSessionId);
+  }, [activeSessionId, reloadQCs]);
+
   const showWelcomeCard = !welcomeDismissed && characters.length === 0;
 
   const menuData = [
@@ -214,6 +282,7 @@ function HomeScreen() {
                   character={activeChatCharacter}
                   groupChat={activeGroupChat}
                   activeSessionId={activeSessionId}
+                  quickCharacters={quickCharacters}
                   onHistoryPress={() => {
                     loadHistorySessions();
                     setShowHistory(true);
@@ -341,10 +410,14 @@ function HomeScreen() {
           visible={showHistory}
           sessions={historySessions}
           activeSessionId={activeSessionId}
+          quickCharacters={quickCharacters}
           onNewChat={handleNewChat}
           onSwitchSession={handleSwitchSession}
           onDeleteSession={handleDeleteSession}
           onClose={() => setShowHistory(false)}
+          onCreateQC={handleCreateQC}
+          onToggleQCStar={handleToggleQCStar}
+          onDeleteQC={handleDeleteQC}
         />
 
         <GroupEditor

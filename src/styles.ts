@@ -1323,5 +1323,81 @@ export function createStyles(s: AppSettings) {
       color: s.textSecondary,
       textAlign: 'center',
     },
+
+    // =========================================================================
+    // Quick Characters
+    // =========================================================================
+    historySectionTitle: {
+      color: s.accentColor,
+      fontSize: 14,
+      fontWeight: '600' as const,
+      marginLeft: 16,
+      marginTop: 10,
+      marginBottom: 4,
+    },
+    historyQCItem: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: s.borderPrimary,
+    },
+    historyQCInfo: {
+      flex: 1,
+    },
+    historyQCName: {
+      color: s.textPrimary,
+      fontSize: 15,
+      fontWeight: '500' as const,
+    },
+    historyQCDesc: {
+      color: s.textMuted,
+      fontSize: 13,
+      marginTop: 2,
+    },
+    historyQCActionBtn: {
+      width: 30,
+      height: 30,
+      justifyContent: 'center' as const,
+      alignItems: 'center' as const,
+      marginLeft: 8,
+    },
+    historyQCActionBtnText: {
+      fontSize: 18,
+    },
+    historyQCForm: {
+      padding: 16,
+      backgroundColor: s.bgSecondary,
+      borderBottomWidth: 1,
+      borderBottomColor: s.borderPrimary,
+    },
+    historyQCInput: {
+      borderWidth: 1,
+      borderColor: s.borderPrimary,
+      borderRadius: s.inputRadius,
+      padding: 10,
+      fontSize: 14,
+      color: s.textPrimary,
+      marginBottom: 8,
+    },
+    historyQCFormActions: {
+      flexDirection: 'row' as const,
+      justifyContent: 'flex-end' as const,
+      marginTop: 4,
+    },
+    historyQCFormBtn: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: s.inputRadius,
+      borderWidth: 1,
+      borderColor: s.accentColor,
+      marginLeft: 8,
+    },
+    historyQCFormBtnText: {
+      color: s.accentColor,
+      fontSize: 13,
+      fontWeight: '500' as const,
+    },
   });
 }
