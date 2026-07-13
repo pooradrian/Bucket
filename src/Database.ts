@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -151,6 +151,31 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
           )
         `);
         conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_session ON quick_characters(session_id)');
+      }
+
+      if (v === 5) {
+        conn.execute('DROP TABLE IF EXISTS quick_characters_old');
+        conn.execute('ALTER TABLE quick_characters RENAME TO quick_characters_old');
+        conn.execute(`
+          CREATE TABLE IF NOT EXISTS quick_characters (
+            id TEXT PRIMARY KEY NOT NULL,
+            session_id TEXT NOT NULL,
+            character_id TEXT NOT NULL DEFAULT '',
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            personality TEXT DEFAULT '',
+            starred INTEGER NOT NULL DEFAULT 0
+          )
+        `);
+        conn.execute(`
+          INSERT INTO quick_characters (id, session_id, character_id, name, description, personality, starred)
+          SELECT q.id, q.session_id, CASE WHEN q.starred = 1 THEN COALESCE(s.character_id, '') ELSE '' END, q.name, q.description, q.personality, q.starred
+          FROM quick_characters_old q
+          LEFT JOIN chat_sessions s ON s.id = q.session_id
+        `);
+        conn.execute('DROP TABLE IF EXISTS quick_characters_old');
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_session ON quick_characters(session_id)');
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_character ON quick_characters(character_id)');
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -364,7 +389,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
 
 export function deleteSession(sessionId: string): void {
   const d = initDB();
-  d.execute('DELETE FROM quick_characters WHERE session_id = ?', [sessionId]);
+  d.execute('DELETE FROM quick_characters WHERE session_id = ? AND starred = 0', [sessionId]);
   d.execute('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
   checkpointWAL();
 }
@@ -645,6 +670,7 @@ export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
 export interface DBQuickCharacter {
   id: string;
   session_id: string;
+  character_id: string;
   name: string;
   description: string;
   personality: string;
@@ -656,15 +682,15 @@ export async function saveQuickCharacter(qc: DBQuickCharacter): Promise<void> {
   const encryptedDesc = await encrypt(qc.description);
   const encryptedPers = await encrypt(qc.personality);
   d.execute(
-    'INSERT OR REPLACE INTO quick_characters (id, session_id, name, description, personality, starred) VALUES (?, ?, ?, ?, ?, ?)',
-    [qc.id, qc.session_id, qc.name, encryptedDesc, encryptedPers, qc.starred],
+    'INSERT OR REPLACE INTO quick_characters (id, session_id, character_id, name, description, personality, starred) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [qc.id, qc.session_id, qc.character_id, qc.name, encryptedDesc, encryptedPers, qc.starred],
   );
 }
 
 export async function getQuickCharactersForSession(sessionId: string): Promise<DBQuickCharacter[]> {
   const d = initDB();
   const result = d.execute(
-    'SELECT id, session_id, name, description, personality, starred FROM quick_characters WHERE session_id = ? ORDER BY rowid',
+    'SELECT id, session_id, character_id, name, description, personality, starred FROM quick_characters WHERE session_id = ? ORDER BY rowid',
     [sessionId],
   );
   if (!result.results) {
@@ -674,6 +700,7 @@ export async function getQuickCharactersForSession(sessionId: string): Promise<D
     result.results.map(async row => ({
       id: row.id as string,
       session_id: row.session_id as string,
+      character_id: row.character_id as string,
       name: row.name as string,
       description: await decrypt((row.description as string) || ''),
       personality: await decrypt((row.personality as string) || ''),
@@ -682,9 +709,26 @@ export async function getQuickCharactersForSession(sessionId: string): Promise<D
   );
 }
 
-export function updateQuickCharacterStarred(id: string, starred: boolean): void {
+export async function getQuickCharactersForCharacter(characterId: string, sessionId: string): Promise<DBQuickCharacter[]> {
   const d = initDB();
-  d.execute('UPDATE quick_characters SET starred = ? WHERE id = ?', [starred ? 1 : 0, id]);
+  const result = d.execute(
+    'SELECT id, session_id, character_id, name, description, personality, starred FROM quick_characters WHERE character_id = ? OR session_id = ? ORDER BY rowid',
+    [characterId, sessionId],
+  );
+  if (!result.results) {
+    return [];
+  }
+  return Promise.all(
+    result.results.map(async row => ({
+      id: row.id as string,
+      session_id: row.session_id as string,
+      character_id: row.character_id as string,
+      name: row.name as string,
+      description: await decrypt((row.description as string) || ''),
+      personality: await decrypt((row.personality as string) || ''),
+      starred: (row.starred as number) ?? 0,
+    }))
+  );
 }
 
 export function deleteQuickCharacter(id: string): void {
