@@ -38,6 +38,7 @@ export interface AppSettings extends ThemePreset {
   inputRadius: number;
   sendBtnSize: number;
   showCharacterIcons: boolean;
+  showGroupCharNames: 'avatar' | 'both' | 'name';
   forceItalic: boolean;
   themeMode: 'dark' | 'light';
   debugLogging: boolean;
@@ -86,6 +87,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   inputRadius: 12,
   sendBtnSize: 38,
   showCharacterIcons: true,
+  showGroupCharNames: 'both',
   forceItalic: false,
   themeMode: 'dark',
   dynamicIcon: false,
@@ -154,6 +156,7 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   }
 
   result.showCharacterIcons = saved.showCharacterIcons === true || saved.showCharacterIcons === 'true';
+  result.showGroupCharNames = (saved.showGroupCharNames === 'avatar' || saved.showGroupCharNames === 'both' || saved.showGroupCharNames === 'name') ? saved.showGroupCharNames as 'avatar' | 'both' | 'name' : 'both';
   result.forceItalic = saved.forceItalic === true || saved.forceItalic === 'true';
   result.dynamicIcon = saved.dynamicIcon === true || saved.dynamicIcon === 'true';
   result.debugLogging = saved.debugLogging === true || saved.debugLogging === 'true';

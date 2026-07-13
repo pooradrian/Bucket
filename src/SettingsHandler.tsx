@@ -333,6 +333,72 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
             </View>
 
             <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>{LABELS.showGroupCharNames}</Text>
+              <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
+                How group members appear in the chat selector bar.
+              </Text>
+              <View style={st.settingsToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.showGroupCharNames === 'avatar' && {
+                      backgroundColor: values.accentColor,
+                    },
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, showGroupCharNames: 'avatar'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.showGroupCharNames === 'avatar' && st.settingsToggleTextActive,
+                    ]}>
+                    Avatar
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.showGroupCharNames === 'both' && {
+                      backgroundColor: values.accentColor,
+                    },
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, showGroupCharNames: 'both'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.showGroupCharNames === 'both' && st.settingsToggleTextActive,
+                    ]}>
+                    Both
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.showGroupCharNames === 'name' && {
+                      backgroundColor: values.accentColor,
+                    },
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, showGroupCharNames: 'name'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.showGroupCharNames === 'name' && st.settingsToggleTextActive,
+                    ]}>
+                    Name
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={st.settingsField}>
               <Text style={st.settingsLabel}>{LABELS.forceItalic}</Text>
               <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
                 Skews *italic* text geometrically for fonts without an italic face.

@@ -229,6 +229,7 @@ const MessageBubble = React.memo(function MessageBubble({
 export default function ChatHandler({character, groupChat, activeSessionId, quickCharacters, onHistoryPress, onSessionCreated, bottomInset}: ChatHandlerProps) {
   const st = useTheme();
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
+  const groupCharDisplay = useAppStore(s => s.appSettings.showGroupCharNames);
   const accentColor = useAppStore(s => s.appSettings.accentColor);
   const bgSecondary = useAppStore(s => s.appSettings.bgSecondary);
 
@@ -265,6 +266,8 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   const isGroupChat = !!groupChat;
   const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
   const showSelectorLine = isGroupChat || quickCharacters.length > 0;
+  const showAvatar = groupCharDisplay === 'avatar' || groupCharDisplay === 'both';
+  const showName = groupCharDisplay === 'name' || groupCharDisplay === 'both';
 
   const scrollOffsetRef = useRef(0);
 
@@ -393,21 +396,23 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
                   key={char.id}
                   onPress={() => setSelectedReplyCharacter(char)}
                   style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
-                  {showCharacterIcons && char.icon ? (
+                  {showAvatar && showCharacterIcons && char.icon ? (
                     <Image
                       source={{uri: char.icon}}
                       style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive]}
                     />
-                  ) : (
+                  ) : showAvatar ? (
                     <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
                       <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
                         {char.name[0]}
                       </Text>
                     </View>
+                  ) : null}
+                  {showName && (
+                    <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive, showAvatar && {marginLeft: 6}]} numberOfLines={1}>
+                      {char.name}
+                    </Text>
                   )}
-                  <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive]} numberOfLines={1}>
-                    {char.name}
-                  </Text>
                 </TouchableOpacity>
               );
             }) : (
@@ -415,21 +420,23 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
                 <TouchableOpacity
                   onPress={() => setSelectedQC(null)}
                   style={[st.characterSelectorItem, !selectedQC && st.characterSelectorItemActive]}>
-                  {showCharacterIcons && activeCharacter?.icon ? (
+                  {showAvatar && showCharacterIcons && activeCharacter?.icon ? (
                     <Image
                       source={{uri: activeCharacter.icon}}
                       style={[st.characterSelectorAvatar, !selectedQC && st.characterSelectorAvatarActive]}
                     />
-                  ) : (
+                  ) : showAvatar ? (
                     <View style={[st.characterSelectorAvatar, !selectedQC && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
                       <Text style={{color: !selectedQC ? accentColor : st.textMuted.color, fontSize: 14}}>
                         {activeCharacter?.name?.[0] || '?'}
                       </Text>
                     </View>
+                  ) : null}
+                  {showName && (
+                    <Text style={[st.characterSelectorName, !selectedQC && st.characterSelectorNameActive, showAvatar && {marginLeft: 6}]} numberOfLines={1}>
+                      {activeCharacter?.name}
+                    </Text>
                   )}
-                  <Text style={[st.characterSelectorName, !selectedQC && st.characterSelectorNameActive]} numberOfLines={1}>
-                    {activeCharacter?.name}
-                  </Text>
                 </TouchableOpacity>
                 {quickCharacters.map(qc => {
                   const isSelected = selectedQC?.id === qc.id;
@@ -438,14 +445,18 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
                       key={qc.id}
                       onPress={() => setSelectedQC(qc)}
                       style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
-                      <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
-                        <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
-                          {qc.name[0]}
+                      {showAvatar ? (
+                        <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
+                          <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
+                            {qc.name[0]}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {showName && (
+                        <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive, showAvatar && {marginLeft: 6}]} numberOfLines={1}>
+                          {qc.name}
                         </Text>
-                      </View>
-                      <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive]} numberOfLines={1}>
-                        {qc.name}
-                      </Text>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
