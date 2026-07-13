@@ -86,8 +86,8 @@ android {
         applicationId "com.bucket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10100
-        versionName "1.1"
+        versionCode 10400
+        versionName "1.4.0"
     }
     signingConfigs {
         debug {
