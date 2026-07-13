@@ -1,8 +1,13 @@
+import RNFS from 'react-native-fs';
 import {getKV, setKV} from './Database';
 
 const EVENTS_KEY = 'activity_log';
 const MAX_MEMORY_EVENTS = 50;
 const PERSIST_BATCH_SIZE = 20;
+
+const LOG_FILE = `${RNFS.DocumentDirectoryPath}/event_log.txt`;
+const MAX_LOG_FILE_SIZE = 512 * 1024;
+const TRUNC_CHECK_INTERVAL = 100;
 
 export interface ActivityEvent {
   id: string;
@@ -30,18 +35,60 @@ let enabled = false;
 const originalConsoleWarn = console.warn.bind(console);
 const originalConsoleError = console.error.bind(console);
 
+function extractErrorInfo(args: unknown[]): {errorMsg: string; errorName: string; errorStack: string; fullMsg: string} {
+  let errorMsg = '';
+  let errorName = '';
+  let errorStack = '';
+  const stringParts: string[] = [];
+
+  for (const a of args) {
+    if (a instanceof Error) {
+      errorMsg = a.message || '';
+      errorName = a.name || 'Error';
+      errorStack = a.stack || '';
+      stringParts.push(`${errorName}: ${errorMsg}`);
+    } else if (typeof a === 'object' && a !== null) {
+      try {
+        stringParts.push(JSON.stringify(a));
+      } catch {
+        stringParts.push(String(a));
+      }
+    } else {
+      stringParts.push(String(a));
+    }
+  }
+
+  if (!errorName) {
+    errorName = 'Warning';
+  }
+
+  return {errorMsg, errorName, errorStack, fullMsg: stringParts.join(' ')};
+}
+
 function overrideWarn(...args: unknown[]): void {
   originalConsoleWarn(...args);
   if (!enabled) return;
-  const msg = args.map(a => (a instanceof Error ? a.message : String(a))).join(' ');
-  logEvent('runtime_warn', {msgLen: msg.length});
+  const info = extractErrorInfo(args);
+  logEvent('runtime_warn', {
+    errorName: info.errorName,
+    errorMsg: info.errorMsg,
+    errorStack: info.errorStack,
+    fullMsg: info.fullMsg,
+    msgLen: info.fullMsg.length,
+  });
 }
 
 function overrideError(...args: unknown[]): void {
   originalConsoleError(...args);
   if (!enabled) return;
-  const msg = args.map(a => (a instanceof Error ? a.message : String(a))).join(' ');
-  logEvent('runtime_error', {msgLen: msg.length});
+  const info = extractErrorInfo(args);
+  logEvent('runtime_error', {
+    errorName: info.errorName,
+    errorMsg: info.errorMsg,
+    errorStack: info.errorStack,
+    fullMsg: info.fullMsg,
+    msgLen: info.fullMsg.length,
+  });
 }
 
 export function setLoggingEnabled(on: boolean): void {
@@ -62,6 +109,55 @@ export function isLoggingEnabled(): boolean {
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+let writeCount = 0;
+let initialTruncDone = false;
+
+function truncateLogFileIfNeeded(): void {
+  RNFS.stat(LOG_FILE)
+    .then(stat => {
+      if ((stat as any).size <= MAX_LOG_FILE_SIZE) return;
+      const keepBytes = Math.floor(MAX_LOG_FILE_SIZE / 3);
+      return RNFS.readFile(LOG_FILE, 'utf8').then(content => {
+        const truncated = content.slice(-keepBytes);
+        const nlIdx = truncated.indexOf('\n');
+        const clean = nlIdx >= 0 ? truncated.slice(nlIdx + 1) : truncated;
+        return RNFS.writeFile(LOG_FILE, clean, 'utf8');
+      });
+    })
+    .catch(() => {});
+}
+
+function appendToLogFile(event: ActivityEvent): void {
+  if (!initialTruncDone) {
+    initialTruncDone = true;
+    truncateLogFileIfNeeded();
+  }
+
+  try {
+    const line = JSON.stringify({
+      id: event.id,
+      type: event.type,
+      timestamp: event.timestamp,
+      stats: event.stats,
+      summary: event.summary,
+    }) + '\n';
+    RNFS.appendFile(LOG_FILE, line, 'utf8').catch(() => {});
+  } catch {}
+
+  writeCount++;
+  if (writeCount % TRUNC_CHECK_INTERVAL === 0) {
+    truncateLogFileIfNeeded();
+  }
+}
+
+export async function readLogFile(): Promise<string> {
+  try {
+    return await RNFS.readFile(LOG_FILE, 'utf8');
+  } catch {
+    return '';
+  }
 }
 
 function buildSummary(type: string, stats: Record<string, number | string | boolean>): string {
@@ -140,12 +236,23 @@ function buildSummary(type: string, stats: Record<string, number | string | bool
       return `Switched to provider "${stats.providerName}"`;
     case 'character_imported':
       return `Imported character from ${stats.source || 'file'} [name(${stats.nameLen}c), desc(${stats.descLen}c)]`;
-    case 'runtime_warn':
-      return `Warning [${stats.msgLen}c msg]`;
-    case 'runtime_error':
-      return `Runtime error [${stats.msgLen}c msg]`;
-    case 'fatal_error':
-      return `FATAL: ${stats.errorName || 'Error'} [${stats.msgLen}c msg]`;
+    case 'runtime_warn': {
+      const wName = stats.errorName || 'Warning';
+      const wMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? stats.errorMsg.slice(0, 120) : '';
+      return wMsg ? `${wName}: ${wMsg}` : `Warning [${stats.msgLen}c msg]`;
+    }
+    case 'runtime_error': {
+      const eName = stats.errorName || 'Error';
+      const eMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? stats.errorMsg.slice(0, 200) : '';
+      const hasStack = typeof stats.errorStack === 'string' && (stats.errorStack as string).length > 0;
+      return `${eName}${eMsg ? `: ${eMsg}` : ''}${hasStack ? ' (+stack)' : ''}`;
+    }
+    case 'fatal_error': {
+      const fName = stats.errorName || 'Error';
+      const fMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 200) : '';
+      const fStack = typeof stats.errorStack === 'string' && (stats.errorStack as string).length > 0;
+      return `FATAL ${fName}${fMsg ? `: ${fMsg}` : ''}${fStack ? ' (+stack)' : ''}`;
+    }
     default:
       return `${type} [${Object.entries(stats).map(([k, v]) => `${k}=${v}`).join(', ')}]`;
   }
@@ -174,6 +281,14 @@ function flushPersist(): void {
     setKV(EVENTS_KEY, JSON.stringify({events: merged}));
   } catch {
   }
+
+  for (const e of pendingPersist) {
+    const isError = e.type === 'runtime_error' || e.type === 'runtime_warn' || e.type === 'fatal_error';
+    if (!isError) {
+      appendToLogFile(e);
+    }
+  }
+
   pendingPersist = [];
 }
 
@@ -206,6 +321,11 @@ export function logEvent(
     flushPersist();
   } else {
     schedulePersist();
+  }
+
+  const isError = type === 'runtime_error' || type === 'runtime_warn' || type === 'fatal_error';
+  if (isError) {
+    appendToLogFile(event);
   }
 }
 
