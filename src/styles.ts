@@ -196,8 +196,8 @@ export function createStyles(s: AppSettings) {
     },
     pillIndicator: {
       position: 'absolute',
-      top: 0,
-      bottom: 0,
+      top: 3,
+      bottom: 3,
       left: 4,
       backgroundColor: s.bgPill,
       borderRadius: s.pillRadius,
