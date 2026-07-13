@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList} from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import {Character} from './CharacterEditor';
-import {loadPromptConfig, sendToLLM, sendToGroupLLM, PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
+import {loadPromptConfig, sendToLLM, sendToGroupLLM, sendToQCLLM, PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
 import {LorebookState} from './RAGHandler';
 import {useAppStore, GroupChat} from './store';
 import {
@@ -36,16 +36,26 @@ export interface ChatSession {
   updatedAt: number;
 }
 
+export interface QuickCharacter {
+  id: string;
+  name: string;
+  description: string;
+  personality: string;
+  starred: boolean;
+}
+
 export function useChat({
   character,
   groupChat,
   activeSessionId,
   onSessionCreated,
+  quickCharacters,
 }: {
   character?: Character | null;
   groupChat?: GroupChat | null;
   activeSessionId: string | null;
   onSessionCreated: (sessionId: string) => void;
+  quickCharacters: QuickCharacter[];
 }): {
   session: ChatSession | null;
   inputText: string;
@@ -61,6 +71,8 @@ export function useChat({
   error: string | null;
   selectedReplyCharacter: Character | null;
   setSelectedReplyCharacter: (char: Character | null) => void;
+  selectedQC: QuickCharacter | null;
+  setSelectedQC: (qc: QuickCharacter | null) => void;
   groupMembers: Character[];
   flatListRef: React.RefObject<FlatList<ChatMessage> | null>;
   messagesData: (ChatMessage & {id: string})[];
@@ -89,6 +101,7 @@ export function useChat({
   const [editingText, setEditingText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [selectedReplyCharacter, setSelectedReplyCharacter] = useState<Character | null>(null);
+  const [selectedQC, setSelectedQC] = useState<QuickCharacter | null>(null);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef('');
@@ -261,6 +274,16 @@ export function useChat({
     loadOrCreateSession();
   }, [activeSessionId, loadOrCreateSession]);
 
+  useEffect(() => {
+    setSelectedQC(null);
+  }, [activeSessionId]);
+
+  useEffect(() => {
+    if (selectedQC && !quickCharacters.find(q => q.id === selectedQC.id)) {
+      setSelectedQC(null);
+    }
+  }, [quickCharacters, selectedQC]);
+
   // Shared send/retry/regenerate engine. `messages` is the conversation
   // history handed to the model; `userText` is the latest user turn. Cancel
   // saves append the partial stream to the *current* session's messages (which,
@@ -295,6 +318,17 @@ export function useChat({
             flushStreamingContent,
             ctrl,
           );
+        } else if (selectedQC && activeCharacter) {
+          result = await sendToQCLLM(
+            selectedQC,
+            activeCharacter,
+            quickCharacters,
+            userText,
+            messages,
+            promptConfig,
+            flushStreamingContent,
+            ctrl,
+          );
         } else if (activeCharacter) {
           result = await sendToLLM(
             activeCharacter,
@@ -309,12 +343,17 @@ export function useChat({
           return;
         }
 
+        const replyCharId = (isGroupChat && selectedReplyCharacter)
+          ? selectedReplyCharacter.id
+          : selectedQC
+            ? selectedQC.id
+            : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
         const assistantMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
           content: result.content,
           timestamp: Date.now(),
-          ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
+          ...(replyCharId ? {characterId: replyCharId} : {}),
         };
         const assistantUpdatedAt = Date.now();
         updateSessionIfCurrent(startSessionId, prev => ({
@@ -349,12 +388,17 @@ export function useChat({
         if (isCancelled) {
           const partial = streamingContentRef.current;
           if (partial.length > 0) {
+            const cancelReplyCharId = (isGroupChat && selectedReplyCharacter)
+              ? selectedReplyCharacter.id
+              : selectedQC
+                ? selectedQC.id
+                : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
             const assistantMessage: ChatMessage = {
               id: generateId(),
               role: 'assistant',
               content: partial,
               timestamp: Date.now(),
-              ...(isGroupChat && selectedReplyCharacter ? {characterId: selectedReplyCharacter.id} : {}),
+              ...(cancelReplyCharId ? {characterId: cancelReplyCharId} : {}),
             };
             const cancelUpdatedAt = Date.now();
             updateSessionIfCurrent(startSessionId, prev => ({
@@ -374,7 +418,7 @@ export function useChat({
         setSending(false);
       }
     },
-    [isGroupChat, selectedReplyCharacter, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
+    [isGroupChat, selectedReplyCharacter, selectedQC, quickCharacters, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
   );
 
   const handleSend = useCallback(
@@ -536,6 +580,8 @@ export function useChat({
     error,
     selectedReplyCharacter,
     setSelectedReplyCharacter,
+    selectedQC,
+    setSelectedQC,
     groupMembers,
     flatListRef,
     messagesData,

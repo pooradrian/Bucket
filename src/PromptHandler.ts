@@ -393,3 +393,50 @@ export async function sendToGroupLLM(
   result.metrics.promptBuildMs = promptBuildMs;
   return result;
 }
+
+export async function sendToQCLLM(
+  qc: {id: string; name: string; description: string; personality: string},
+  parentChar: Character,
+  allQCs: {id: string; name: string; description: string; personality: string}[],
+  userMessage: string,
+  history: ChatMessage[],
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG,
+  onToken?: (token: string) => void,
+  controller?: AbortController,
+): Promise<{content: string; metrics: TimingMetrics}> {
+  const buildStart = performance.now();
+  const resolved = await resolveProvider(config);
+
+  const qcAsCharacter: Character = {
+    id: qc.id,
+    name: qc.name,
+    description: qc.description,
+    personality: qc.personality,
+    writingStyle: parentChar.writingStyle,
+    scenario: parentChar.scenario,
+    exampleMessages: parentChar.exampleMessages,
+    initialMessage: '',
+    lorebookIds: [],
+  };
+
+  const allChars: Character[] = [
+    parentChar,
+    ...allQCs.map(q => ({
+      id: q.id,
+      name: q.name,
+      description: q.description,
+      personality: q.personality,
+      writingStyle: parentChar.writingStyle,
+      scenario: parentChar.scenario,
+      exampleMessages: parentChar.exampleMessages,
+      initialMessage: '',
+      lorebookIds: [],
+    })),
+  ];
+
+  const messages = buildGroupPrompt(allChars, qcAsCharacter, userMessage, history, resolved);
+  const promptBuildMs = performance.now() - buildStart;
+  const result = await getAIResponse(messages, resolved, onToken, true, controller);
+  result.metrics.promptBuildMs = promptBuildMs;
+  return result;
+}
