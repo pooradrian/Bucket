@@ -17,6 +17,7 @@ import {
   getLorebookEntriesFromDB,
 } from './Database';
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
+import {logEvent} from './EventLogger';
 
 export interface ChatMessage {
   id: string;
@@ -42,6 +43,7 @@ export interface QuickCharacter {
   description: string;
   personality: string;
   starred: boolean;
+  session_id?: string;
 }
 
 export function useChat({
@@ -367,6 +369,11 @@ export function useChat({
         }
         setIsStreaming(false);
         resetStreamingContent();
+        logEvent('message_streamed', {
+          charCount: result.content.length,
+          durationMs: result.metrics.totalMs,
+          sessionMsgCount: messages.length + 1,
+        });
 
         if (opts.summarize && opts.summaryBase) {
           const sumConfig = getSummarizationConfig(promptConfig);
@@ -448,6 +455,12 @@ export function useChat({
       setSession(withUser);
       persistMessage(startSessionId, userMessage, withUser.updatedAt);
       setInputText('');
+      logEvent('message_sent', {
+        charCount: userMessage.content.length,
+        sessionMsgCount: withUser.messages.length,
+        isGroupChat,
+        isQC: !!selectedQC,
+      });
       setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
 
       await runLLMRequest(startSessionId, withUser.messages, trimmed, {
@@ -475,6 +488,7 @@ export function useChat({
     setSession({...session, messages: updated, updatedAt: Date.now()});
     await updateMessage(msg.id, trimmed);
     updateSessionTimestamp(session.id, Date.now());
+    logEvent('message_edited', {oldCharCount: msg.content.length, newCharCount: trimmed.length});
     setEditingMessageId(null);
     setEditingText('');
   }, [session]);
@@ -495,6 +509,7 @@ export function useChat({
     setSession({...session, messages: updated, updatedAt: Date.now()});
     deleteMessage(msg.id);
     updateSessionTimestamp(session.id, Date.now());
+    logEvent('message_deleted', {charCount: msg.content.length});
     setSelectedMessageId(null);
   }, [session]);
 
@@ -520,6 +535,7 @@ export function useChat({
     }
 
     await runLLMRequest(startSessionId, updated, lastUserMsg.content);
+    logEvent('message_regenerated', {sessionMsgCount: updated.length});
   }, [session, sending, updateSessionIfCurrent, runLLMRequest]);
 
   const handleStop = useCallback(() => {

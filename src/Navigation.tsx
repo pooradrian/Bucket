@@ -14,12 +14,13 @@ import {
   getKV,
   setKV,
   getQuickCharactersForSession,
+  getQuickCharactersForCharacter,
   saveQuickCharacter,
   deleteQuickCharacter,
-  updateQuickCharacterStarred,
   generateId,
 } from './Database';
 import {QuickCharacter} from './useChat';
+import {logEvent} from './EventLogger';
 import ChatHandler from './ChatHandler';
 import SettingsHandler from './SettingsHandler';
 import CharacterEditor from './CharacterEditor';
@@ -64,7 +65,6 @@ function HomeScreen() {
   const groupChatsLoading = useAppStore(s => s.groupChatsLoading);
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
   const deleteCharacter = useAppStore(s => s.deleteCharacter);
-  const saveCharacter = useAppStore(s => s.saveCharacter);
   const deleteGroupChat = useAppStore(s => s.deleteGroupChat);
   const saveGroupChat = useAppStore(s => s.saveGroupChat);
   const loadGroupChats = useAppStore(s => s.loadGroupChats);
@@ -88,10 +88,21 @@ function HomeScreen() {
   }, []);
 
   const reloadQCs = useCallback(async (sessionId: string | null) => {
-    if (sessionId) {
+    if (sessionId && activeChatCharacter) {
+      const dbQCs = await getQuickCharactersForCharacter(activeChatCharacter.id, sessionId);
+      setQuickCharacters(dbQCs.map(dbQc => ({
+        id: dbQc.id,
+        session_id: dbQc.session_id,
+        name: dbQc.name,
+        description: dbQc.description,
+        personality: dbQc.personality,
+        starred: dbQc.starred === 1,
+      })));
+    } else if (sessionId) {
       const dbQCs = await getQuickCharactersForSession(sessionId);
       setQuickCharacters(dbQCs.map(dbQc => ({
         id: dbQc.id,
+        session_id: dbQc.session_id,
         name: dbQc.name,
         description: dbQc.description,
         personality: dbQc.personality,
@@ -100,7 +111,7 @@ function HomeScreen() {
     } else {
       setQuickCharacters([]);
     }
-  }, []);
+  }, [activeChatCharacter]);
 
   useEffect(() => {
     reloadQCs(activeSessionId);
@@ -128,16 +139,21 @@ function HomeScreen() {
   const handleNewChat = useCallback(() => {
     setShowHistory(false);
     setActiveSessionId(null);
+    logEvent('session_created', {msgCount: 0});
   }, []);
 
   const handleSwitchSession = useCallback((sessionId: string) => {
     setShowHistory(false);
     setActiveSessionId(sessionId);
-  }, []);
+    const session = historySessions.find(s => s.id === sessionId);
+    logEvent('session_switched', {msgCount: session?.messageCount ?? 0});
+  }, [historySessions]);
 
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
+      const session = historySessions.find(s => s.id === sessionId);
       deleteSession(sessionId);
+      logEvent('session_deleted', {msgCount: session?.messageCount ?? 0});
       if (sessionId === activeSessionId) {
         const remaining = historySessions.filter(s => s.id !== sessionId);
         if (remaining.length > 0) {
@@ -225,41 +241,58 @@ function HomeScreen() {
     await saveQuickCharacter({
       id: generateId(),
       session_id: activeSessionId,
+      character_id: '',
       name: qcData.name,
       description: qcData.description,
       personality: qcData.personality,
       starred: 0,
     });
+    logEvent('qc_created', {
+      nameLen: qcData.name.length,
+      descLen: qcData.description?.length || 0,
+      hasPersonality: !!qcData.personality,
+    });
     reloadQCs(activeSessionId);
   }, [activeSessionId, reloadQCs]);
 
-  const handleToggleQCStar = useCallback((qcId: string) => {
+  const handleToggleQCStar = useCallback(async (qcId: string) => {
     const qc = quickCharacters.find(q => q.id === qcId);
     if (!qc) return;
     if (!qc.starred) {
-      const parentChar = activeChatCharacter;
-      saveCharacter({
-        id: generateId(),
+      await saveQuickCharacter({
+        id: qc.id,
+        session_id: qc.session_id || '',
+        character_id: activeChatCharacter?.id || '',
         name: qc.name,
         description: qc.description,
         personality: qc.personality,
-        initialMessage: '',
-        writingStyle: parentChar?.writingStyle || '',
-        scenario: parentChar?.scenario || '',
-        exampleMessages: parentChar?.exampleMessages || '',
-        lorebookIds: [],
+        starred: 1,
       });
-      updateQuickCharacterStarred(qc.id, true);
+    } else if (activeSessionId) {
+      await saveQuickCharacter({
+        id: qc.id,
+        session_id: activeSessionId,
+        character_id: '',
+        name: qc.name,
+        description: qc.description,
+        personality: qc.personality,
+        starred: 0,
+      });
     } else {
-      updateQuickCharacterStarred(qc.id, false);
+      deleteQuickCharacter(qc.id);
+    }
+    logEvent(qc.starred ? 'qc_unstarred' : 'qc_starred', {nameLen: qc.name.length});
+    reloadQCs(activeSessionId);
+  }, [quickCharacters, activeSessionId, activeChatCharacter, reloadQCs]);
+
+  const handleDeleteQC = useCallback(async (qcId: string) => {
+    const qc = quickCharacters.find(q => q.id === qcId);
+    await deleteQuickCharacter(qcId);
+    if (qc) {
+      logEvent('qc_deleted', {nameLen: qc.name.length});
     }
     reloadQCs(activeSessionId);
-  }, [quickCharacters, activeSessionId, activeChatCharacter, saveCharacter, reloadQCs]);
-
-  const handleDeleteQC = useCallback((qcId: string) => {
-    deleteQuickCharacter(qcId);
-    reloadQCs(activeSessionId);
-  }, [activeSessionId, reloadQCs]);
+  }, [activeSessionId, reloadQCs, quickCharacters]);
 
   const showWelcomeCard = !welcomeDismissed && characters.length === 0;
 

@@ -9,6 +9,7 @@ import {
   getKV,
 } from './Database';
 import {saveToDisk} from './ImportExport';
+import {logEvent} from './EventLogger';
 
 const CRASH_EXPORT_DIR = `${RNFS.DocumentDirectoryPath}/crash_recovery`;
 const CRASH_MARKER_PATH = `${CRASH_EXPORT_DIR}/crash_marker.txt`;
@@ -173,6 +174,10 @@ export function installCrashExport(): void {
   ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
     if (isFatal) {
       writeCrashMarker();
+      logEvent('fatal_error', {
+        errorName: error.name || 'Error',
+        msgLen: error.message?.length || 0,
+      });
     }
     if (originalHandler) {
       originalHandler(error, isFatal);
