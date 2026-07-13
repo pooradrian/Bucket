@@ -59,7 +59,7 @@ export default function TabBar({
     indicatorW.value = withTiming(isChat ? chatTabWidth : menuTabWidth, {
       duration: 300,
     });
-    indicatorX.value = withTiming(isChat ? 0 : chatTabWidth + 4, {
+    indicatorX.value = withTiming(isChat ? 0 : chatTabWidth, {
       duration: 300,
     });
     chatTextOpacity.value = withTiming(1, {duration: 200});
