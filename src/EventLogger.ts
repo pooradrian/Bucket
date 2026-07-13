@@ -62,7 +62,12 @@ function extractErrorInfo(args: unknown[]): {errorMsg: string; errorName: string
     errorName = 'Warning';
   }
 
-  return {errorMsg, errorName, errorStack, fullMsg: stringParts.join(' ')};
+  const fullMsg = stringParts.join(' ');
+  if (!errorMsg) {
+    errorMsg = fullMsg;
+  }
+
+  return {errorMsg, errorName, errorStack, fullMsg};
 }
 
 function overrideWarn(...args: unknown[]): void {
