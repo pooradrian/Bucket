@@ -58,10 +58,6 @@ function extractErrorInfo(args: unknown[]): {errorMsg: string; errorName: string
     }
   }
 
-  if (!errorName) {
-    errorName = 'Warning';
-  }
-
   const fullMsg = stringParts.join(' ');
   if (!errorMsg) {
     errorMsg = fullMsg;
@@ -75,7 +71,7 @@ function overrideWarn(...args: unknown[]): void {
   if (!enabled) return;
   const info = extractErrorInfo(args);
   logEvent('runtime_warn', {
-    errorName: info.errorName,
+    errorName: info.errorName || 'Warning',
     errorMsg: info.errorMsg,
     errorStack: info.errorStack,
     fullMsg: info.fullMsg,
@@ -88,7 +84,7 @@ function overrideError(...args: unknown[]): void {
   if (!enabled) return;
   const info = extractErrorInfo(args);
   logEvent('runtime_error', {
-    errorName: info.errorName,
+    errorName: info.errorName || 'Error',
     errorMsg: info.errorMsg,
     errorStack: info.errorStack,
     fullMsg: info.fullMsg,
@@ -242,18 +238,26 @@ function buildSummary(type: string, stats: Record<string, number | string | bool
     case 'character_imported':
       return `Imported character from ${stats.source || 'file'} [name(${stats.nameLen}c), desc(${stats.descLen}c)]`;
     case 'runtime_warn': {
-      const wName = stats.errorName || 'Warning';
-      const wMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? stats.errorMsg.slice(0, 120) : '';
-      return wMsg ? `${wName}: ${wMsg}` : `Warning [${stats.msgLen}c msg]`;
+      const wName = (stats.errorName as string) || 'Warning';
+      const wMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 120) : '';
+      if (!wMsg) {
+        const fallback = typeof stats.fullMsg === 'string' ? (stats.fullMsg as string).slice(0, 120) : '';
+        return fallback ? `${wName}: ${fallback}` : wName;
+      }
+      return `${wName}: ${wMsg}`;
     }
     case 'runtime_error': {
-      const eName = stats.errorName || 'Error';
-      const eMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? stats.errorMsg.slice(0, 200) : '';
+      const eName = (stats.errorName as string) || 'Error';
+      const eMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 200) : '';
       const hasStack = typeof stats.errorStack === 'string' && (stats.errorStack as string).length > 0;
-      return `${eName}${eMsg ? `: ${eMsg}` : ''}${hasStack ? ' (+stack)' : ''}`;
+      if (!eMsg) {
+        const fallback = typeof stats.fullMsg === 'string' ? (stats.fullMsg as string).slice(0, 200) : '';
+        return `${eName}${fallback ? `: ${fallback}` : ''}${hasStack ? ' (+stack)' : ''}`;
+      }
+      return `${eName}: ${eMsg}${hasStack ? ' (+stack)' : ''}`;
     }
     case 'fatal_error': {
-      const fName = stats.errorName || 'Error';
+      const fName = (stats.errorName as string) || 'Error';
       const fMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 200) : '';
       const fStack = typeof stats.errorStack === 'string' && (stats.errorStack as string).length > 0;
       return `FATAL ${fName}${fMsg ? `: ${fMsg}` : ''}${fStack ? ' (+stack)' : ''}`;
@@ -345,7 +349,7 @@ export function loadPersistedEvents(): ActivityEvent[] {
     const parsed: PersistedLog = JSON.parse(stored);
     return parsed.events.map(e => ({
       ...e,
-      summary: e.summary || buildSummary(e.type, e.stats),
+      summary: buildSummary(e.type, e.stats),
     }));
   } catch {
     return [];
