@@ -18,6 +18,7 @@ import {getActiveProviderId} from './SecureStore';
 import ProvidersHandler from './ProvidersHandler';
 import ImportExportHandler from './ImportExportHandler';
 import {useAppStore, AppSettings, DEFAULT_APP_SETTINGS, getThemePreset} from './store';
+import {logEvent} from './EventLogger';
 import {setIcon} from './IconModule';
 import {useTheme} from './ThemeContext';
 import {
@@ -41,6 +42,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
   const setLorebooks = useAppStore(sto => sto.setLorebooks);
   const appSettings = useAppStore(sto => sto.appSettings);
   const setAppSettings = useAppStore(sto => sto.setAppSettings);
+  const toggleDebugLogging = useAppStore(sto => sto.toggleDebugLogging);
   const applyThemeMode = useAppStore(sto => sto.applyThemeMode);
   const promptConfigVersion = useAppStore(sto => sto.promptConfigVersion);
   const [settingsView, setSettingsView] = useState<'main' | 'customization'>('main');
@@ -150,6 +152,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
   const handleShareTheme = useCallback(async () => {
     const url = encodeThemeURL(appSettings);
     Clipboard.setString(url);
+    logEvent('theme_shared', {});
     try {
       await Share.share({message: url});
     } catch {
@@ -171,6 +174,7 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
       if (updated.dynamicIcon) {
         setIcon(updated.themeMode);
       }
+      logEvent('theme_imported', {themeName: theme.name || ''});
       Alert.alert('Theme imported', theme.name ? `Applied "${theme.name}".` : 'Theme applied.');
     } catch (e) {
       console.warn('Failed to import theme:', e);
@@ -185,6 +189,10 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
       if (loaded) {
         const updated = await addLorebook(loaded);
         setLorebooks(updated);
+        logEvent('lorebook_imported', {
+          entryCount: loaded.entries.length,
+          fileNameLen: loaded.fileName.length,
+        });
       }
     } catch (e) {
       console.warn('Failed to load lorebook:', e);
@@ -194,9 +202,13 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
   }, [setLorebooks]);
 
   const handleRemoveLorebook = useCallback(async (id: string) => {
+    const lb = lorebooks.find(l => l.id === id);
     const updated = await removeLorebook(id);
     setLorebooks(updated);
-  }, [setLorebooks]);
+    if (lb) {
+      logEvent('lorebook_removed', {entryCount: lb.entryCount, fileNameLen: lb.fileName.length});
+    }
+  }, [setLorebooks, lorebooks]);
 
   return (
     <View style={st.settingsContainer}>
@@ -835,9 +847,31 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
 
             <ImportExportHandler bottomInset={bottomInset} />
 
-            {/* Debugger */}
             <View style={st.settingsSectionHeader}>
               <Text style={st.settingsSectionHeaderText}>Developer</Text>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>Activity logging</Text>
+              <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
+                Logs user actions (no personal data). View in the debugger with the 'activity' command.
+              </Text>
+              <View style={st.settingsToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.debugLogging && {backgroundColor: values.accentColor},
+                  ]}
+                  onPress={() => toggleDebugLogging()}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.debugLogging && st.settingsToggleTextActive,
+                    ]}>
+                    {appSettings.debugLogging ? 'On' : 'Off'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity

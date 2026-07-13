@@ -41,6 +41,7 @@ import {useTheme} from './ThemeContext';
 import {crashExport} from './CrashExport';
 import {encrypt, decrypt} from './Crypto';
 import {LogEntry, parseArgs, findCharacter} from './debuggerUtils';
+import {getEvents, loadPersistedEvents, clearEvents, isLoggingEnabled} from './EventLogger';
 
 const encryptText = encrypt;
 const decryptText = decrypt;
@@ -256,6 +257,10 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
               '  crash                             Trigger crash export (test)',
               '  encrypt <text>                   Test encryption',
               '  encrypt test                      Run encryption test suite',
+              '',
+              '  activity [N]                      Show recent activity log (default 20)',
+              '  activity clear                    Clear activity log',
+              '  activity status                   Show if logging is enabled',
               '',
               'DB (type "help db" for more):',
               '  db                                Show DB info',
@@ -791,6 +796,34 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
               appendLog('output', 'System stats overlay toggled.');
             } else {
               appendLog('error', 'Usage: unlock sysstats');
+            }
+            break;
+          }
+
+          case 'activity': {
+            const sub = rest[0]?.toLowerCase();
+            if (sub === 'clear') {
+              clearEvents();
+              appendLog('output', 'Activity log cleared.');
+              break;
+            }
+            if (sub === 'status') {
+              appendLog('output', isLoggingEnabled() ? 'Activity logging is ON (toggle in Settings > Developer).' : 'Activity logging is OFF (toggle in Settings > Developer).');
+              break;
+            }
+            const limit = sub ? parseInt(sub, 10) : 20;
+            const count = isNaN(limit) || limit < 1 ? 20 : Math.min(limit, 200);
+            const events = getEvents(count);
+            const persisted = loadPersistedEvents();
+            const all = events.length > 0 ? events : persisted.slice(-count).reverse();
+            if (all.length === 0) {
+              appendLog('info', isLoggingEnabled() ? 'No activity yet. Perform some actions and they will appear here.' : 'Activity logging is disabled. Enable it in Settings > Developer first.');
+            } else {
+              const lines = all.map(e => {
+                const ts = new Date(e.timestamp).toLocaleTimeString();
+                return `  ${ts}  ${e.summary}`;
+              });
+              appendLog('output', `Activity (last ${all.length}):\n${lines.join('\n')}`);
             }
             break;
           }

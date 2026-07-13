@@ -2,6 +2,7 @@ import {create} from 'zustand';
 import {Character} from './CharacterEditor';
 import {LorebookState, loadAllLorebooks as loadAllLorebooksFromStorage} from './RAGHandler';
 import {getKV, setKV, getAllCharactersFromDB, saveCharacterToDB, deleteCharacterFromDB, getAllGroupChatsFromDB, saveGroupChatToDB, deleteGroupChatFromDB} from './Database';
+import {setLoggingEnabled, logEvent} from './EventLogger';
 
 export interface GroupChat {
   id: string;
@@ -39,6 +40,7 @@ export interface AppSettings extends ThemePreset {
   showCharacterIcons: boolean;
   forceItalic: boolean;
   themeMode: 'dark' | 'light';
+  debugLogging: boolean;
 }
 
 const SETTINGS_KEY = 'settings';
@@ -87,6 +89,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   forceItalic: false,
   themeMode: 'dark',
   dynamicIcon: false,
+  debugLogging: false,
 };
 
 interface AppStore {
@@ -116,6 +119,8 @@ interface AppStore {
 
   showSysStats: boolean;
   toggleSysStats: () => void;
+
+  toggleDebugLogging: () => void;
 }
 
 export function getThemePreset(mode: 'dark' | 'light'): ThemePreset {
@@ -151,6 +156,7 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   result.showCharacterIcons = saved.showCharacterIcons === true || saved.showCharacterIcons === 'true';
   result.forceItalic = saved.forceItalic === true || saved.forceItalic === 'true';
   result.dynamicIcon = saved.dynamicIcon === true || saved.dynamicIcon === 'true';
+  result.debugLogging = saved.debugLogging === true || saved.debugLogging === 'true';
   result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
 
   for (const key of THEME_COLOR_KEYS) {
@@ -172,7 +178,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const stored = getKV(SETTINGS_KEY);
       if (stored) {
-        set({appSettings: parseSavedSettings(JSON.parse(stored))});
+        const settings = parseSavedSettings(JSON.parse(stored));
+        set({appSettings: settings});
+        setLoggingEnabled(settings.debugLogging);
       }
     } catch (e) {
       console.warn('Failed to load settings:', e);
@@ -233,14 +241,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
         lorebook_id: (char.lorebookIds || []).join(','),
       });
       set({characters: updated});
+      logEvent('character_saved', {
+        nameLen: char.name.length,
+        descLen: char.description?.length || 0,
+        hasPersonality: !!char.personality,
+        hasInitialMsg: !!char.initialMessage,
+        hasWritingStyle: !!char.writingStyle,
+        hasScenario: !!char.scenario,
+        hasExamples: !!char.exampleMessages,
+        lorebookCount: (char.lorebookIds || []).length,
+        iconSize: char.icon?.length || 0,
+        isNew: exists === -1,
+      });
     } catch (e) {
       console.warn('Failed to save character:', e);
     }
   },
   deleteCharacter: (id) => {
     try {
+      const char = get().characters.find(c => c.id === id);
       deleteCharacterFromDB(id);
       set({characters: get().characters.filter(c => c.id !== id)});
+      if (char) {
+        logEvent('character_deleted', {nameLen: char.name.length});
+      }
     } catch (e) {
       console.warn('Failed to delete character:', e);
     }
@@ -279,14 +303,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
         characterIds: group.characterIds,
       });
       set({groupChats: updated});
+      logEvent('group_saved', {
+        nameLen: group.name.length,
+        memberCount: group.characterIds.length,
+        descLen: group.description?.length || 0,
+        isNew: exists === -1,
+      });
     } catch (e) {
       console.warn('Failed to save group chat:', e);
     }
   },
   deleteGroupChat: (id) => {
     try {
+      const group = get().groupChats.find(g => g.id === id);
       deleteGroupChatFromDB(id);
       set({groupChats: get().groupChats.filter(g => g.id !== id)});
+      if (group) {
+        logEvent('group_deleted', {
+          nameLen: group.name.length,
+          memberCount: group.characterIds.length,
+        });
+      }
     } catch (e) {
       console.warn('Failed to delete group chat:', e);
     }
@@ -307,8 +344,23 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   promptConfigVersion: 0,
-  bumpPromptConfigVersion: () => set(s => ({promptConfigVersion: s.promptConfigVersion + 1})),
+  bumpPromptConfigVersion: () => {
+    set(s => ({promptConfigVersion: s.promptConfigVersion + 1}));
+    logEvent('prompt_config_saved', {changedKeys: 1});
+  },
 
   showSysStats: false,
   toggleSysStats: () => set(s => ({showSysStats: !s.showSysStats})),
+
+  toggleDebugLogging: () => {
+    const {appSettings} = get();
+    const next = !appSettings.debugLogging;
+    const updated: AppSettings = {...appSettings, debugLogging: next};
+    setLoggingEnabled(next);
+    if (next) {
+      logEvent('settings_changed', {changedKeys: 1});
+    }
+    set({appSettings: updated});
+    setKV(SETTINGS_KEY, JSON.stringify(updated));
+  },
 }));
