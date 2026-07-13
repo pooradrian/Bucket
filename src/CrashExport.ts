@@ -176,6 +176,8 @@ export function installCrashExport(): void {
       writeCrashMarker();
       logEvent('fatal_error', {
         errorName: error.name || 'Error',
+        errorMsg: error.message || '',
+        errorStack: error.stack || '',
         msgLen: error.message?.length || 0,
       });
     }
