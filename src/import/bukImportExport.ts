@@ -173,6 +173,14 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
               const mapped = origIdToNewId.get(msg.characterId);
               if (mapped) msg.characterId = mapped;
             }
+            if (msg.variants) {
+              for (const variant of msg.variants) {
+                if (variant.characterId) {
+                  const mapped = origIdToNewId.get(variant.characterId);
+                  if (mapped) variant.characterId = mapped;
+                }
+              }
+            }
           }
         }
         result.sessions.push(session);

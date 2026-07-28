@@ -438,6 +438,32 @@ export function createStyles(s: AppSettings) {
     actionBtnDisabled: {
       opacity: 0.4,
     },
+    variantRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 6,
+      gap: 8,
+      alignSelf: 'flex-start',
+    },
+    variantBtn: {
+      width: 26,
+      height: 26,
+      borderRadius: s.inputRadius,
+      borderWidth: 1,
+      borderColor: s.accentColor,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    variantBtnText: {
+      color: s.accentColor,
+      fontSize: 16,
+      fontWeight: '600',
+      lineHeight: 18,
+    },
+    variantCounter: {
+      color: s.textMuted,
+      fontSize: 12,
+    },
 
     // =========================================================================
     // ChatHandler — input bar
