@@ -914,6 +914,87 @@ export default function SettingsHandler({onApply, onOpenDebugger, bottomInset}: 
             <ImportExportHandler bottomInset={bottomInset} />
 
             <View style={st.settingsSectionHeader}>
+              <Text style={st.settingsSectionHeaderText}>Notifications</Text>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>Chat completion alert</Text>
+              <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
+                Notify when a message finishes generating.
+              </Text>
+              <View style={st.settingsToggleRow}>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.notificationMode === 'off' && {backgroundColor: values.accentColor},
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, notificationMode: 'off'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.notificationMode === 'off' && st.settingsToggleTextActive,
+                    ]}>
+                    Off
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.notificationMode === 'vibrate' && {backgroundColor: values.accentColor},
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, notificationMode: 'vibrate'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.notificationMode === 'vibrate' && st.settingsToggleTextActive,
+                    ]}>
+                    Vibrate
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.notificationMode === 'sound' && {backgroundColor: values.accentColor},
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, notificationMode: 'sound'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.notificationMode === 'sound' && st.settingsToggleTextActive,
+                    ]}>
+                    Sound
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    appSettings.notificationMode === 'both' && {backgroundColor: values.accentColor},
+                  ]}
+                  onPress={() => {
+                    const updated: AppSettings = {...appSettings, notificationMode: 'both'};
+                    setAppSettings(updated);
+                  }}>
+                  <Text
+                    style={[
+                      st.settingsToggleText,
+                      appSettings.notificationMode === 'both' && st.settingsToggleTextActive,
+                    ]}>
+                    Both
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={st.settingsSectionHeader}>
               <Text style={st.settingsSectionHeaderText}>Developer</Text>
             </View>
 
