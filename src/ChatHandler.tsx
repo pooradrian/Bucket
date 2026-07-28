@@ -33,7 +33,9 @@ interface MessageBubbleProps {
   isSelected: boolean;
   isLastAssistant: boolean;
   sending: boolean;
+  isLiveStreaming: boolean;
   st: ReturnType<typeof useTheme>;
+  variantIndexMap: Record<string, number>;
   onSelect: (id: string | null) => void;
   onEdit: (msg: ChatMessage) => void;
   onEditSave: (msg: ChatMessage, newText: string) => void;
@@ -44,6 +46,7 @@ interface MessageBubbleProps {
   onCopy: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
   onRegenerate: () => void;
+  onSwitchVariant: (msgId: string, direction: 1 | -1) => void;
   onRetry: () => void;
 }
 
@@ -112,13 +115,13 @@ function renderFormattedText(text: string, baseStyle: object, forceItalic: boole
 }
 
 const MessageBubble = React.memo(function MessageBubble({
-  item, isSelected, isLastAssistant, sending, st,
+  item, isSelected, isLastAssistant, sending, isLiveStreaming, st, variantIndexMap,
   onSelect, onEdit, onEditSave, onEditCancel, editingMessageId, editingText, onEditingTextChange,
-  onCopy, onDelete, onRegenerate, onRetry,
+  onCopy, onDelete, onRegenerate, onSwitchVariant, onRetry,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const isUser = item.role === 'user';
-  const isStreamingMsg = item.id === '__streaming__';
+  const isStreamingMsg = item.id === '__streaming__' || isLiveStreaming;
   const isError = item.id === '__error__';
   const isTyping = item.id === '__typing__';
   const isEditing = editingMessageId === item.id;
@@ -192,6 +195,25 @@ const MessageBubble = React.memo(function MessageBubble({
                 {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
               </Text>
             )}
+            {!isStreamingMsg && !isUser && item.variants && item.variants.length > 0 && (
+              <View style={st.variantRow}>
+                <TouchableOpacity
+                  onPress={() => onSwitchVariant(item.id, -1)}
+                  disabled={sending}
+                  style={[st.variantBtn, sending && st.actionBtnDisabled]}>
+                  <Text style={st.variantBtnText}>‹</Text>
+                </TouchableOpacity>
+                <Text style={st.variantCounter}>
+                  {(variantIndexMap[item.id] ?? item.variants.length) + 1}/{item.variants.length + 1}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => onSwitchVariant(item.id, 1)}
+                  disabled={sending}
+                  style={[st.variantBtn, sending && st.actionBtnDisabled]}>
+                  <Text style={st.variantBtnText}>›</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {isSelected && !isStreamingMsg && (
               <View style={[st.actionRow, isUser ? st.actionRowUser : st.actionRowAssistant]}>
                 <TouchableOpacity
@@ -252,6 +274,8 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     groupMembers,
     flatListRef,
     messagesData,
+    replacingMessageId,
+    variantIndexMap,
     handleSend,
     handleEditMessage,
     handleEditSave,
@@ -259,6 +283,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     handleCopyMessage,
     handleDeleteMessage,
     handleRegenerate,
+    handleSwitchVariant,
     handleRetryError,
     handleStop,
   } = useChat({character, groupChat, activeSessionId, onSessionCreated, quickCharacters});
@@ -301,7 +326,9 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         isSelected={selectedMessageId === item.id}
         isLastAssistant={!!isLastAssistant}
         sending={sending}
+        isLiveStreaming={item.id === replacingMessageId && isStreaming}
         st={st}
+        variantIndexMap={variantIndexMap}
         onSelect={setSelectedMessageId}
         onEdit={handleEditMessage}
         onEditSave={handleEditSave}
@@ -312,10 +339,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         onCopy={handleCopyMessage}
         onDelete={handleDeleteMessage}
         onRegenerate={handleRegenerate}
+        onSwitchVariant={handleSwitchVariant}
         onRetry={handleRetryError}
       />
     );
-  }, [session, selectedMessageId, sending, st, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleRetryError]);
+  }, [session, selectedMessageId, sending, isStreaming, replacingMessageId, st, variantIndexMap, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleSwitchVariant, handleRetryError]);
 
   return (
     <KeyboardAvoidingView

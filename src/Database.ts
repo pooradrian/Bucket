@@ -1,10 +1,10 @@
 import {open, NitroSQLiteConnection} from 'react-native-nitro-sqlite';
-import {ChatSession, ChatMessage} from './useChat';
+import {ChatSession, ChatMessage, ReplyVariant} from './useChat';
 import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -178,6 +178,10 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_character ON quick_characters(character_id)');
       }
 
+      if (v === 6) {
+        addColumnIfMissing(conn, 'chat_messages', 'variants', 'TEXT DEFAULT ""');
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -225,13 +229,35 @@ function compactDatabase(): void {
   } catch {}
 }
 
-async function decryptMessages(messages: ChatMessage[]): Promise<ChatMessage[]> {
+async function decryptMessages(messages: Array<Omit<ChatMessage, 'variants'> & {variants?: string}>): Promise<ChatMessage[]> {
   return Promise.all(
     messages.map(async msg => ({
       ...msg,
       content: await decrypt(msg.content),
+      variants: msg.variants ? await decryptVariants(msg.variants) : undefined,
     }))
   );
+}
+
+async function encryptVariants(variants: ReplyVariant[]): Promise<string> {
+  const encrypted = await Promise.all(
+    variants.map(async v => ({...v, content: await encrypt(v.content)})),
+  );
+  return JSON.stringify(encrypted);
+}
+
+async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw) as ReplyVariant[];
+    return Promise.all(
+      parsed.map(async v => ({...v, content: await decrypt(v.content)})),
+    );
+  } catch {
+    return [];
+  }
 }
 
 export async function getSessionForCharacter(characterId: string): Promise<ChatSession | null> {
@@ -250,7 +276,7 @@ export async function getSessionForCharacter(characterId: string): Promise<ChatS
   const sessionId = row.id as string;
 
   const messagesResult = d.execute(
-    'SELECT id, role, content, timestamp FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    'SELECT id, role, content, timestamp, variants FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
     [sessionId],
   );
 
@@ -262,6 +288,7 @@ export async function getSessionForCharacter(characterId: string): Promise<ChatS
         role: msg.role as 'user' | 'assistant',
         content: msg.content as string,
         timestamp: msg.timestamp as number,
+        variants: msg.variants ? (msg.variants as string) : undefined,
       }))
     );
   }
@@ -287,9 +314,12 @@ export async function createSession(session: ChatSession): Promise<void> {
 
     for (const msg of session.messages) {
       const encryptedContent = await encrypt(msg.content);
+      const encryptedVariants = msg.variants && msg.variants.length > 0
+        ? await encryptVariants(msg.variants)
+        : '';
       d.execute(
-        'INSERT INTO chat_messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp],
+        'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants) VALUES (?, ?, ?, ?, ?, ?)',
+        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, encryptedVariants],
       );
     }
     d.execute('COMMIT');
@@ -312,9 +342,12 @@ export function setLastReplyCharacterId(sessionId: string, characterId: string):
 export async function addMessage(sessionId: string, message: ChatMessage): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(message.content);
+  const encryptedVariants = message.variants && message.variants.length > 0
+    ? await encryptVariants(message.variants)
+    : '';
   d.execute(
-    'INSERT INTO chat_messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp],
+    'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants) VALUES (?, ?, ?, ?, ?, ?)',
+    [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants],
   );
 }
 
@@ -362,7 +395,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
   }
   const row = sessionResult.results[0];
   const messagesResult = d.execute(
-    'SELECT id, role, content, timestamp FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    'SELECT id, role, content, timestamp, variants FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
     [sessionId],
   );
   let messages: ChatMessage[] = [];
@@ -373,6 +406,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
         role: msg.role as 'user' | 'assistant',
         content: msg.content as string,
         timestamp: msg.timestamp as number,
+        variants: msg.variants ? (msg.variants as string) : undefined,
       }))
     );
   }
@@ -398,6 +432,21 @@ export async function updateMessage(messageId: string, content: string): Promise
   const d = initDB();
   const encryptedContent = await encrypt(content);
   d.execute('UPDATE chat_messages SET content = ? WHERE id = ?', [encryptedContent, messageId]);
+}
+
+export async function updateMessageWithVariants(
+  messageId: string,
+  content: string,
+  timestamp: number,
+  variants: ReplyVariant[],
+): Promise<void> {
+  const d = initDB();
+  const encryptedContent = await encrypt(content);
+  const encryptedVariants = variants.length > 0 ? await encryptVariants(variants) : '';
+  d.execute(
+    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ? WHERE id = ?',
+    [encryptedContent, timestamp, encryptedVariants, messageId],
+  );
 }
 
 export function deleteMessage(messageId: string): void {

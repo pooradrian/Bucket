@@ -11,6 +11,7 @@ import {
   addMessage,
   deleteMessage,
   updateMessage,
+  updateMessageWithVariants,
   updateSessionTimestamp,
   setLastReplyCharacterId,
   generateId,
@@ -19,12 +20,20 @@ import {
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
 import {logEvent} from './EventLogger';
 
+export interface ReplyVariant {
+  id: string;
+  content: string;
+  timestamp: number;
+  characterId?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   characterId?: string;
+  variants?: ReplyVariant[];
 }
 
 export interface ChatSession {
@@ -78,6 +87,8 @@ export function useChat({
   groupMembers: Character[];
   flatListRef: React.RefObject<FlatList<ChatMessage> | null>;
   messagesData: (ChatMessage & {id: string})[];
+  replacingMessageId: string | null;
+  variantIndexMap: Record<string, number>;
   handleSend: (text: string) => Promise<void>;
   handleEditMessage: (msg: ChatMessage) => void;
   handleEditSave: (msg: ChatMessage, newText: string) => void;
@@ -85,6 +96,7 @@ export function useChat({
   handleCopyMessage: (msg: ChatMessage) => void;
   handleDeleteMessage: (msg: ChatMessage) => void;
   handleRegenerate: () => Promise<void>;
+  handleSwitchVariant: (msgId: string, direction: 1 | -1) => Promise<void>;
   handleRetryError: () => Promise<void>;
   handleStop: () => void;
 } {
@@ -104,10 +116,15 @@ export function useChat({
   const [error, setError] = useState<string | null>(null);
   const [selectedReplyCharacter, setSelectedReplyCharacter] = useState<Character | null>(null);
   const [selectedQC, setSelectedQC] = useState<QuickCharacter | null>(null);
+  const [variantIndexMap, setVariantIndexMap] = useState<Record<string, number>>({});
+  const variantIndexMapRef = useRef(variantIndexMap);
+  variantIndexMapRef.current = variantIndexMap;
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef('');
   const streamingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replacingMessageIdRef = useRef<string | null>(null);
+  const [replacingMessageId, setReplacingMessageId] = useState<string | null>(null);
   // Always tracks the id of the session currently shown in the UI. Used to
   // detect when the active session changes mid-stream so that streamed results
   // are not applied to (or persisted into) the wrong session.
@@ -299,10 +316,14 @@ export function useChat({
         setLastReplyCharacter?: boolean;
         summarize?: boolean;
         summaryBase?: ChatSession;
+        replaceMessageId?: string;
+        existingVariants?: ReplyVariant[];
       } = {},
     ) => {
       setSending(true);
       setError(null);
+      replacingMessageIdRef.current = opts.replaceMessageId ?? null;
+      setReplacingMessageId(opts.replaceMessageId ?? null);
       try {
         streamingContentRef.current = '';
         setIsStreaming(true);
@@ -350,20 +371,46 @@ export function useChat({
           : selectedQC
             ? selectedQC.id
             : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
-        const assistantMessage: ChatMessage = {
-          id: generateId(),
-          role: 'assistant',
-          content: result.content,
-          timestamp: Date.now(),
-          ...(replyCharId ? {characterId: replyCharId} : {}),
-        };
         const assistantUpdatedAt = Date.now();
-        updateSessionIfCurrent(startSessionId, prev => ({
-          ...prev,
-          messages: [...prev.messages, assistantMessage],
-          updatedAt: assistantUpdatedAt,
-        }));
-        persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
+        if (opts.replaceMessageId) {
+          const replaceId = opts.replaceMessageId;
+          updateSessionIfCurrent(startSessionId, prev => ({
+            ...prev,
+            messages: prev.messages.map(m =>
+              m.id === replaceId
+                ? {
+                    ...m,
+                    content: result.content,
+                    timestamp: assistantUpdatedAt,
+                    characterId: replyCharId ?? m.characterId,
+                    variants: opts.existingVariants ?? m.variants,
+                  }
+                : m,
+            ),
+            updatedAt: assistantUpdatedAt,
+          }));
+          updateMessageWithVariants(
+            replaceId,
+            result.content,
+            assistantUpdatedAt,
+            opts.existingVariants ?? [],
+          );
+          updateSessionTimestamp(startSessionId, assistantUpdatedAt);
+        } else {
+          const assistantMessage: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: result.content,
+            timestamp: assistantUpdatedAt,
+            ...(replyCharId ? {characterId: replyCharId} : {}),
+          };
+          updateSessionIfCurrent(startSessionId, prev => ({
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
+            updatedAt: assistantUpdatedAt,
+          }));
+          persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
+        }
         if (opts.setLastReplyCharacter && isGroupChat && selectedReplyCharacter) {
           setLastReplyCharacterId(startSessionId, selectedReplyCharacter.id);
         }
@@ -378,9 +425,20 @@ export function useChat({
         if (opts.summarize && opts.summaryBase) {
           const sumConfig = getSummarizationConfig(promptConfig);
           if (sumConfig.enabled) {
+            const finalAssistantMessage: ChatMessage = {
+              id: opts.replaceMessageId ?? '',
+              role: 'assistant',
+              content: result.content,
+              timestamp: assistantUpdatedAt,
+              ...(replyCharId ? {characterId: replyCharId} : {}),
+            };
             const withAssistant: ChatSession = {
               ...opts.summaryBase,
-              messages: [...messages, assistantMessage],
+              messages: opts.replaceMessageId
+                ? opts.summaryBase.messages.map(m =>
+                    m.id === opts.replaceMessageId ? finalAssistantMessage : m,
+                  )
+                : [...messages, finalAssistantMessage],
               updatedAt: assistantUpdatedAt,
             };
             const summarized = await checkAndSummarize(withAssistant, sumConfig, promptConfig);
@@ -394,7 +452,24 @@ export function useChat({
         const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
         if (isCancelled) {
           const partial = streamingContentRef.current;
-          if (partial.length > 0) {
+          if (opts.replaceMessageId) {
+            const replaceId = opts.replaceMessageId;
+            const existingVariants = opts.existingVariants ?? [];
+            if (partial.length > 0) {
+              const cancelUpdatedAt = Date.now();
+              updateSessionIfCurrent(startSessionId, prev => ({
+                ...prev,
+                messages: prev.messages.map(m =>
+                  m.id === replaceId
+                    ? {...m, content: partial, timestamp: cancelUpdatedAt, variants: existingVariants}
+                    : m,
+                ),
+                updatedAt: cancelUpdatedAt,
+              }));
+              updateMessageWithVariants(replaceId, partial, cancelUpdatedAt, existingVariants);
+              updateSessionTimestamp(startSessionId, cancelUpdatedAt);
+            }
+          } else if (partial.length > 0) {
             const cancelReplyCharId = (isGroupChat && selectedReplyCharacter)
               ? selectedReplyCharacter.id
               : selectedQC
@@ -422,6 +497,8 @@ export function useChat({
         }
       } finally {
         abortControllerRef.current = null;
+        replacingMessageIdRef.current = null;
+        setReplacingMessageId(null);
         setSending(false);
       }
     },
@@ -523,20 +600,90 @@ export function useChat({
     }
 
     const startSessionId = session.id;
-    const updated = session.messages.slice(0, -1);
-    updateSessionIfCurrent(startSessionId, prev => ({...prev, messages: updated, updatedAt: Date.now()}));
-    deleteMessage(lastMsg.id);
-    updateSessionTimestamp(startSessionId, Date.now());
-    setSelectedMessageId(null);
-
-    const lastUserMsg = [...updated].reverse().find(m => m.role === 'user');
+    const baseMessages = session.messages.slice(0, -1);
+    const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user');
     if (!lastUserMsg) {
       return;
     }
 
-    await runLLMRequest(startSessionId, updated, lastUserMsg.content);
-    logEvent('message_regenerated', {sessionMsgCount: updated.length});
+    const archivedVariant: ReplyVariant = {
+      id: generateId(),
+      content: lastMsg.content,
+      timestamp: lastMsg.timestamp,
+      ...(lastMsg.characterId ? {characterId: lastMsg.characterId} : {}),
+    };
+    const existingVariants = [...(lastMsg.variants ?? []), archivedVariant];
+
+    updateSessionIfCurrent(startSessionId, prev => ({
+      ...prev,
+      messages: prev.messages.map(m =>
+        m.id === lastMsg.id ? {...m, variants: existingVariants} : m,
+      ),
+      updatedAt: Date.now(),
+    }));
+    updateSessionTimestamp(startSessionId, Date.now());
+    setSelectedMessageId(null);
+    setVariantIndexMap(prev => ({...prev, [lastMsg.id]: existingVariants.length}));
+
+    await runLLMRequest(startSessionId, baseMessages, lastUserMsg.content, {
+      replaceMessageId: lastMsg.id,
+      existingVariants,
+    });
+    logEvent('message_regenerated', {sessionMsgCount: baseMessages.length});
   }, [session, sending, updateSessionIfCurrent, runLLMRequest]);
+
+  const handleSwitchVariant = useCallback(async (msgId: string, direction: 1 | -1) => {
+    if (!session) {
+      return;
+    }
+    const msg = session.messages.find(m => m.id === msgId);
+    if (!msg || !msg.variants || msg.variants.length === 0) {
+      return;
+    }
+    const n = msg.variants.length;
+    const currentIdx = variantIndexMapRef.current[msgId] ?? n;
+    const newIdx = currentIdx + direction;
+    if (newIdx < 0 || newIdx > n) {
+      return;
+    }
+
+    const oldEntry: ReplyVariant = {
+      id: generateId(),
+      content: msg.content,
+      timestamp: msg.timestamp,
+      ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    };
+
+    let newContent: ReplyVariant;
+    let newVariants: ReplyVariant[];
+    if (newIdx < currentIdx) {
+      newContent = msg.variants[newIdx];
+      newVariants = [...msg.variants];
+      newVariants.splice(newIdx, 1, oldEntry);
+    } else {
+      newContent = msg.variants[newIdx - 1];
+      newVariants = [...msg.variants];
+      newVariants.splice(newIdx - 1, 1, oldEntry);
+    }
+
+    const updatedMsg: ChatMessage = {
+      ...msg,
+      content: newContent.content,
+      timestamp: newContent.timestamp,
+      characterId: newContent.characterId ?? msg.characterId,
+      variants: newVariants,
+    };
+    const updatedMessages = session.messages.map(m => (m.id === msgId ? updatedMsg : m));
+    setSession({...session, messages: updatedMessages, updatedAt: Date.now()});
+    setVariantIndexMap(prev => ({...prev, [msgId]: newIdx}));
+    await updateMessageWithVariants(
+      msgId,
+      updatedMsg.content,
+      updatedMsg.timestamp,
+      updatedMsg.variants ?? [],
+    );
+    updateSessionTimestamp(session.id, Date.now());
+  }, [session]);
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -556,6 +703,17 @@ export function useChat({
 
   const messagesData = useMemo(() => {
     const base = [...(session?.messages ?? [])].reverse();
+    const replaceId = replacingMessageId;
+    const showInlineStream = isStreaming && replaceId && streamingContent.length > 0;
+    const showInlineTyping = sending && streamingContent.length === 0 && !error && replaceId;
+    if (showInlineStream || showInlineTyping) {
+      const streamContent = showInlineStream ? streamingContent : '';
+      return base.map(m =>
+        m.id === replaceId
+          ? {...m, content: streamContent, timestamp: Date.now()}
+          : m,
+      );
+    }
     if (isStreaming && streamingContent.length > 0) {
       base.unshift({
         id: '__streaming__',
@@ -579,7 +737,7 @@ export function useChat({
       });
     }
     return base;
-  }, [session?.messages, isStreaming, streamingContent, sending, error]);
+  }, [session?.messages, isStreaming, streamingContent, sending, error, replacingMessageId]);
 
   return {
     session,
@@ -601,6 +759,8 @@ export function useChat({
     groupMembers,
     flatListRef,
     messagesData,
+    replacingMessageId,
+    variantIndexMap,
     handleSend,
     handleEditMessage,
     handleEditSave,
@@ -608,6 +768,7 @@ export function useChat({
     handleCopyMessage,
     handleDeleteMessage,
     handleRegenerate,
+    handleSwitchVariant,
     handleRetryError,
     handleStop,
   };
