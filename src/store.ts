@@ -42,6 +42,7 @@ export interface AppSettings extends ThemePreset {
   forceItalic: boolean;
   themeMode: 'dark' | 'light';
   debugLogging: boolean;
+  notificationMode: 'off' | 'vibrate' | 'sound' | 'both';
 }
 
 const SETTINGS_KEY = 'settings';
@@ -92,6 +93,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   themeMode: 'dark',
   dynamicIcon: false,
   debugLogging: false,
+  notificationMode: 'off',
 };
 
 interface AppStore {
@@ -160,6 +162,7 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   result.forceItalic = saved.forceItalic === true || saved.forceItalic === 'true';
   result.dynamicIcon = saved.dynamicIcon === true || saved.dynamicIcon === 'true';
   result.debugLogging = saved.debugLogging === true || saved.debugLogging === 'true';
+  result.notificationMode = (saved.notificationMode === 'vibrate' || saved.notificationMode === 'sound' || saved.notificationMode === 'both') ? saved.notificationMode : 'off';
   result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
 
   for (const key of THEME_COLOR_KEYS) {

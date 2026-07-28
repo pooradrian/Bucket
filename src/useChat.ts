@@ -19,6 +19,7 @@ import {
 } from './Database';
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
 import {logEvent} from './EventLogger';
+import {playNotificationSound, vibrateDevice} from './NotificationModule';
 
 export interface ReplyVariant {
   id: string;
@@ -413,6 +414,13 @@ export function useChat({
         }
         if (opts.setLastReplyCharacter && isGroupChat && selectedReplyCharacter) {
           setLastReplyCharacterId(startSessionId, selectedReplyCharacter.id);
+        }
+        const notifMode = useAppStore.getState().appSettings.notificationMode;
+        if (notifMode === 'vibrate' || notifMode === 'both') {
+          vibrateDevice();
+        }
+        if (notifMode === 'sound' || notifMode === 'both') {
+          playNotificationSound();
         }
         setIsStreaming(false);
         resetStreamingContent();
