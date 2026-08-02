@@ -618,11 +618,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
           style={st.textInput}
           value={inputText}
           onChangeText={setInputText}
-          placeholder={isGroupChat ? (selectedReplyCharacter ? `Message as ${selectedReplyCharacter.name}...` : 'Select a character to reply') : (selectedQC ? `Message as ${selectedQC.name}...` : 'Type a message...')}
+          placeholder="Message..."
           placeholderTextColor="#666"
           editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
           multiline
-          textAlignVertical="center"
+          textAlignVertical="top"
         />
         {isStreaming ? (
           <TouchableOpacity
