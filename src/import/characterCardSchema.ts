@@ -1,9 +1,13 @@
 import {Character} from '../CharacterEditor';
+import {CustomFieldValue} from '../CustomFields';
 import {generateId} from '../Database';
 
 interface CharacterCardExtensions {
   lorebookIds?: string[];
   lorebookId?: string;
+  bucket?: {
+    customFields?: CustomFieldValue[];
+  };
 }
 
 interface CharacterCardData {
@@ -30,7 +34,7 @@ export function parseV1Json(json: CharacterCardJson, id?: string): Character {
     scenario: json.scenario || '',
     initialMessage: json.first_mes || '',
     exampleMessages: json.mes_example || '',
-    writingStyle: '',
+    customFields: [],
     lorebookIds: [],
   };
 }
@@ -43,6 +47,10 @@ export function parseV2Json(json: CharacterCardJson, id?: string): Character {
   } else if (data.extensions?.lorebookId) {
     lorebookIds = [data.extensions.lorebookId];
   }
+  const bucketCustomFields = data.extensions?.bucket?.customFields;
+  const customFields: CustomFieldValue[] = Array.isArray(bucketCustomFields)
+    ? bucketCustomFields
+    : [];
   return {
     id: id || generateId(),
     name: data.name || '',
@@ -51,7 +59,7 @@ export function parseV2Json(json: CharacterCardJson, id?: string): Character {
     scenario: data.scenario || '',
     initialMessage: data.first_mes || '',
     exampleMessages: data.mes_example || '',
-    writingStyle: '',
+    customFields,
     lorebookIds,
   };
 }
@@ -94,6 +102,9 @@ interface CCV2Card {
     character_version: string;
     extensions: {
       lorebookIds?: string[];
+      bucket?: {
+        customFields?: CustomFieldValue[];
+      };
     };
   };
 }

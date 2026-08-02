@@ -3,6 +3,7 @@ import {Character} from './CharacterEditor';
 import {LorebookState, loadAllLorebooks as loadAllLorebooksFromStorage} from './RAGHandler';
 import {getKV, setKV, getAllCharactersFromDB, saveCharacterToDB, deleteCharacterFromDB, getAllGroupChatsFromDB, saveGroupChatToDB, deleteGroupChatFromDB} from './Database';
 import {setLoggingEnabled, logEvent} from './EventLogger';
+import {parseCustomFields, getCustomField} from './CustomFields';
 
 export interface GroupChat {
   id: string;
@@ -210,18 +211,24 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       set({charactersLoading: true});
       const chars = await getAllCharactersFromDB();
-      set({characters: chars.map(c => ({
-        id: c.id,
-        name: c.name,
-        description: c.description,
-        initialMessage: c.initial_message,
-        writingStyle: c.writing_style,
-        personality: c.personality,
-        scenario: c.scenario,
-        exampleMessages: c.example_messages || undefined,
-        lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [],
-        icon: c.icon || undefined,
-      })), charactersLoading: false});
+      set({characters: chars.map(c => {
+        let customFields = parseCustomFields(c.custom_fields);
+        if (c.writing_style && !customFields.some(f => f.id === 'writingStyle')) {
+          customFields = [{id: 'writingStyle', value: c.writing_style}, ...customFields];
+        }
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          initialMessage: c.initial_message,
+          customFields,
+          personality: c.personality,
+          scenario: c.scenario,
+          exampleMessages: c.example_messages || undefined,
+          lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [],
+          icon: c.icon || undefined,
+        };
+      }), charactersLoading: false});
     } catch (e) {
       console.warn('Failed to load characters:', e);
       set({charactersLoading: false});
@@ -239,12 +246,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
         name: char.name,
         description: char.description,
         initial_message: char.initialMessage,
-        writing_style: char.writingStyle,
+        writing_style: getCustomField(char, 'writingStyle'),
         personality: char.personality,
         scenario: char.scenario,
         example_messages: char.exampleMessages || '',
         icon: char.icon || '',
         lorebook_id: (char.lorebookIds || []).join(','),
+        custom_fields: JSON.stringify(char.customFields || []),
       });
       set({characters: updated});
       logEvent('character_saved', {
@@ -252,7 +260,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         descLen: char.description?.length || 0,
         hasPersonality: !!char.personality,
         hasInitialMsg: !!char.initialMessage,
-        hasWritingStyle: !!char.writingStyle,
+        hasWritingStyle: !!getCustomField(char, 'writingStyle'),
         hasScenario: !!char.scenario,
         hasExamples: !!char.exampleMessages,
         lorebookCount: (char.lorebookIds || []).length,

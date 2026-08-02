@@ -1,5 +1,6 @@
 import {getKV, setKV} from './Database';
 import {Character} from './CharacterEditor';
+import {getCustomField} from './CustomFields';
 import {ChatMessage} from './useChat';
 import {LorebookState, RAGConfig, retrieveRelevantLorebook, buildRAGInjection} from './RAGHandler';
 import {getActiveProviderId, getProviderKey, getProviders} from './SecureStore';
@@ -187,7 +188,8 @@ function buildCharBlock(character: Character): string {
   parts.push(`Name: ${character.name}`);
   if (character.description) parts.push(`Description: ${character.description}`);
   if (character.personality) parts.push(`Personality: ${character.personality}`);
-  if (character.writingStyle) parts.push(`Writing style: ${character.writingStyle}`);
+  const writingStyle = getCustomField(character, 'writingStyle');
+  if (writingStyle) parts.push(`Writing style: ${writingStyle}`);
   if (character.scenario) parts.push(`Scenario: ${character.scenario}`);
   if (character.exampleMessages) parts.push(`Example messages:\n${character.exampleMessages}`);
   return parts.join('\n');
@@ -202,7 +204,7 @@ function resolvePlaceholders(
     ['$CHARNAME$', character.name],
     ['$CHARDESC$', character.description || ''],
     ['$PERSONALITY$', character.personality || ''],
-    ['$WRITINGSTYLE$', character.writingStyle || ''],
+    ['$WRITINGSTYLE$', getCustomField(character, 'writingStyle')],
     ['$SCENARIO$', character.scenario || ''],
     ['$EXAMPLES$', character.exampleMessages || ''],
     ['$USRDESC$', userDescription],
@@ -494,7 +496,7 @@ export async function sendToQCLLM(
     name: qc.name,
     description: qc.description,
     personality: qc.personality,
-    writingStyle: parentChar.writingStyle,
+    customFields: parentChar.customFields,
     scenario: parentChar.scenario,
     exampleMessages: parentChar.exampleMessages,
     initialMessage: '',
@@ -508,7 +510,7 @@ export async function sendToQCLLM(
       name: q.name,
       description: q.description,
       personality: q.personality,
-      writingStyle: parentChar.writingStyle,
+      customFields: parentChar.customFields,
       scenario: parentChar.scenario,
       exampleMessages: parentChar.exampleMessages,
       initialMessage: '',

@@ -12,7 +12,7 @@ const fullChar: Character = {
   scenario: 'in a forest',
   initialMessage: 'Hello there!',
   exampleMessages: 'user: hi',
-  writingStyle: 'concise',
+  customFields: [{id: 'writingStyle', value: 'concise'}],
   lorebookIds: ['lb-1', 'lb-2'],
   icon: 'file:///icon.png',
 };
@@ -34,7 +34,7 @@ describe('parseV1Json', () => {
       scenario: 'sc',
       initialMessage: 'hi',
       exampleMessages: 'ex',
-      writingStyle: '',
+      customFields: [],
       lorebookIds: [],
     });
   });
@@ -77,6 +77,21 @@ describe('parseV2Json', () => {
       data: {name: 'X', extensions: {lorebookId: 'solo'}},
     });
     expect(char.lorebookIds).toEqual(['solo']);
+  });
+
+  it('reads Bucket custom fields from extensions.bucket.customFields', () => {
+    const char = parseV2Json({
+      data: {
+        name: 'X',
+        extensions: {bucket: {customFields: [{id: 'writingStyle', value: 'poetic'}]}},
+      },
+    });
+    expect(char.customFields).toEqual([{id: 'writingStyle', value: 'poetic'}]);
+  });
+
+  it('defaults customFields to empty when bucket extension is absent', () => {
+    const char = parseV2Json({data: {name: 'X'}});
+    expect(char.customFields).toEqual([]);
   });
 });
 

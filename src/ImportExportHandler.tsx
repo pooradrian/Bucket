@@ -11,6 +11,7 @@ import {pick, types} from '@react-native-documents/picker';
 import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
 import {useAppStore} from './store';
+import {parseCustomFields} from './CustomFields';
 import {useTheme} from './ThemeContext';
 import {
   detectImportFormat,
@@ -41,7 +42,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
   const [includeSettings, setIncludeSettings] = useState(true);
   const [includeLorebooks, setIncludeLorebooks] = useState(true);
   const [includeChats, setIncludeChats] = useState(true);
-  const [chars, setChars] = useState<Array<{id: string; name: string}>>([]);
+  const [chars, setChars] = useState<Array<{id: string; name: string; hasCustomFields: boolean}>>([]);
 
   const handleImport = useCallback(async () => {
     try {
@@ -131,7 +132,11 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
 
   const handleShowExport = useCallback(async () => {
     const allChars = await getAllCharactersFromDB();
-    setChars(allChars.map(c => ({id: c.id, name: c.name})));
+    setChars(allChars.map(c => ({
+      id: c.id,
+      name: c.name,
+      hasCustomFields: parseCustomFields(c.custom_fields).length > 0,
+    })));
     setSelectedChars(allChars.map(c => c.id));
     setSelectedFormat(null);
     setIncludeSettings(true);
@@ -150,7 +155,8 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
           .filter(c => selectedChars.includes(c.id))
           .map(c => ({
             id: c.id, name: c.name, description: c.description,
-            initialMessage: c.initial_message, writingStyle: c.writing_style,
+            initialMessage: c.initial_message,
+            customFields: parseCustomFields(c.custom_fields),
             personality: c.personality, scenario: c.scenario,
             exampleMessages: c.example_messages || undefined,
             lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [], icon: c.icon || undefined,
@@ -162,7 +168,8 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
           .filter(c => selectedChars.includes(c.id))
           .map(c => ({
             id: c.id, name: c.name, description: c.description,
-            initialMessage: c.initial_message, writingStyle: c.writing_style,
+            initialMessage: c.initial_message,
+            customFields: parseCustomFields(c.custom_fields),
             personality: c.personality, scenario: c.scenario,
             exampleMessages: c.example_messages || undefined,
             lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [], icon: c.icon || undefined,
@@ -238,6 +245,10 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
     {color: selectedChars.includes(id) ? bg : ac},
   ];
 
+  const hasCustomFieldChars = selectedChars.some(id =>
+    chars.find(c => c.id === id)?.hasCustomFields,
+  );
+
   return (
     <>
       <TouchableOpacity
@@ -312,8 +323,33 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
                 </TouchableOpacity>
               ))}
 
+              {hasCustomFieldChars && selectedFormat !== 'buk' && (
+                <View style={{
+                  backgroundColor: appSettings.bgSecondary,
+                  borderRadius: 8,
+                  padding: 12,
+                  marginTop: 12,
+                }}>
+                  <Text style={{color: appSettings.textMuted, fontSize: 13, lineHeight: 18}}>
+                    Custom fields (e.g. Writing Style) are not saved in this format and will be lost.
+                  </Text>
+                </View>
+              )}
+
               {selectedFormat === 'buk' && (
                 <>
+                  <View style={{
+                    backgroundColor: appSettings.bgSecondary,
+                    borderRadius: 8,
+                    padding: 12,
+                    marginTop: 12,
+                  }}>
+                    <Text style={{color: appSettings.textMuted, fontSize: 13, lineHeight: 18}}>
+                      Custom fields (e.g. Writing Style) are stored in this .buk file but can only be
+                      read by Bucket. Importing this file into any other app will lose them.
+                    </Text>
+                  </View>
+
                   <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 10}}>
                     Include
                   </Text>

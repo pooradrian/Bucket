@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import pako from 'pako';
 import {Character} from '../CharacterEditor';
+import {getCustomField} from '../CustomFields';
 import {generateId, saveCharacterToDB} from '../Database';
 import {readPngCharaMetadata, isPngSignature} from '../PngMetadata';
 import {parseV1Json, parseV2Json} from './characterCardSchema';
@@ -62,10 +63,10 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
         const json = JSON.parse(metadata);
         char = parseV2Json(json);
       } else {
-        char = {id: generateId(), name: 'Unknown Character', description: '', personality: '', scenario: '', initialMessage: '', writingStyle: '', lorebookIds: []};
+        char = {id: generateId(), name: 'Unknown Character', description: '', personality: '', scenario: '', initialMessage: '', customFields: [], lorebookIds: []};
       }
     } else {
-      char = {id: generateId(), name: 'Unknown Character', description: '', personality: '', scenario: '', initialMessage: '', writingStyle: '', lorebookIds: []};
+      char = {id: generateId(), name: 'Unknown Character', description: '', personality: '', scenario: '', initialMessage: '', customFields: [], lorebookIds: []};
     }
   } else {
     const text = new TextDecoder().decode(buffer);
@@ -85,12 +86,13 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
     name: char.name,
     description: char.description,
     initial_message: char.initialMessage,
-    writing_style: char.writingStyle,
+    writing_style: getCustomField(char, 'writingStyle'),
     personality: char.personality,
     scenario: char.scenario,
     example_messages: char.exampleMessages || '',
     icon: char.icon || '',
     lorebook_id: '',
+    custom_fields: JSON.stringify(char.customFields || []),
   });
 
   return {character: char, format};

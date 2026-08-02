@@ -41,6 +41,7 @@ import {useTheme} from './ThemeContext';
 import {crashExport} from './CrashExport';
 import {encrypt, decrypt} from './Crypto';
 import {LogEntry, parseArgs, findCharacter} from './debuggerUtils';
+import {getCustomField} from './CustomFields';
 import {getEvents, loadPersistedEvents, clearEvents, isLoggingEnabled} from './EventLogger';
 
 const encryptText = encrypt;
@@ -407,7 +408,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
                 `Name:        ${char.name}`,
                 `Description: ${char.description || '(none)'}`,
                 `Personality: ${char.personality || '(none)'}`,
-                `Writing:     ${char.writingStyle || '(none)'}`,
+                `Writing:     ${getCustomField(char, 'writingStyle') || '(none)'}`,
                 `Scenario:    ${char.scenario || '(none)'}`,
                 `First Msg:   ${char.initialMessage || '(none)'}`,
                 `Examples:    ${char.exampleMessages ? char.exampleMessages.slice(0, 80) + (char.exampleMessages.length > 80 ? '...' : '') : '(none)'}`,

@@ -20,18 +20,19 @@ import {useAppStore, GroupChat} from './store';
 import {generateId} from './Database';
 import {useTheme} from './ThemeContext';
 import {estimateTokens} from './PromptHandler';
+import {CUSTOM_FIELDS, CustomFieldValue, getCustomField} from './CustomFields';
 
 export interface Character {
   id: string;
   name: string;
   description: string;
   initialMessage: string;
-  writingStyle: string;
   personality: string;
   scenario: string;
   exampleMessages?: string;
   lorebookIds: string[];
   icon?: string;
+  customFields?: CustomFieldValue[];
 }
 
 interface CharacterEditorProps {
@@ -54,7 +55,7 @@ export default function CharacterEditor({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [initialMessage, setInitialMessage] = useState('');
-  const [writingStyle, setWritingStyle] = useState('');
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
   const [personality, setPersonality] = useState('');
   const [scenario, setScenario] = useState('');
   const [exampleMessages, setExampleMessages] = useState('');
@@ -98,7 +99,11 @@ export default function CharacterEditor({
       setName(character.name);
       setDescription(character.description || '');
       setInitialMessage(character.initialMessage || '');
-      setWritingStyle(character.writingStyle || '');
+      const values: Record<string, string> = {};
+      for (const def of CUSTOM_FIELDS) {
+        values[def.id] = getCustomField(character, def.id);
+      }
+      setCustomFieldValues(values);
       setPersonality(character.personality || '');
       setScenario(character.scenario || '');
       setExampleMessages(character.exampleMessages || '');
@@ -108,7 +113,7 @@ export default function CharacterEditor({
       setName('');
       setDescription('');
       setInitialMessage('');
-      setWritingStyle('');
+      setCustomFieldValues({});
       setPersonality('');
       setScenario('');
       setExampleMessages('');
@@ -119,16 +124,20 @@ export default function CharacterEditor({
 
   const handleSave = () => {
     if (!name.trim()) return;
+    const customFields: CustomFieldValue[] = CUSTOM_FIELDS.map(def => ({
+      id: def.id,
+      value: (customFieldValues[def.id] || '').trim(),
+    })).filter(f => f.value.length > 0);
     const newCharacter: Character = {
       id: character ? character.id : generateId(),
       name: name.trim(),
       description: description.trim(),
       initialMessage: initialMessage.trim(),
-      writingStyle: writingStyle.trim(),
       personality: personality.trim(),
       scenario: scenario.trim(),
       lorebookIds,
       icon,
+      customFields,
     };
     if (exampleMessages.trim()) {
       newCharacter.exampleMessages = exampleMessages.trim();
@@ -174,7 +183,10 @@ export default function CharacterEditor({
     estimateTokens(name) +
     estimateTokens(description) +
     estimateTokens(initialMessage) +
-    estimateTokens(writingStyle) +
+    CUSTOM_FIELDS.reduce(
+      (sum, def) => sum + estimateTokens(customFieldValues[def.id] || ''),
+      0,
+    ) +
     estimateTokens(personality) +
     estimateTokens(scenario) +
     estimateTokens(exampleMessages);
@@ -262,19 +274,22 @@ export default function CharacterEditor({
             />
           </View>
 
-          {/* Writing Style */}
-          <View style={st.card}>
-            <Text style={st.cardTitle}>Writing Style</Text>
-            <TextInput
-              style={st.cardInputMultiline}
-              value={writingStyle}
-              onChangeText={setWritingStyle}
-              placeholder="How do they write? Formal, casual, verbose, terse, poetic..."
-              placeholderTextColor={st.textMuted.color}
-              multiline
-              numberOfLines={4}
-            />
-          </View>
+          {CUSTOM_FIELDS.map(def => (
+            <View style={st.card} key={def.id}>
+              <Text style={st.cardTitle}>{def.label}</Text>
+              <TextInput
+                style={def.multiline ? st.cardInputMultiline : st.cardInput}
+                value={customFieldValues[def.id] || ''}
+                onChangeText={text =>
+                  setCustomFieldValues(prev => ({...prev, [def.id]: text}))
+                }
+                placeholder={def.placeholder}
+                placeholderTextColor={st.textMuted.color}
+                multiline={def.multiline}
+                numberOfLines={def.lines ?? 1}
+              />
+            </View>
+          ))}
 
           {/* Scenario */}
           <View style={st.card}>

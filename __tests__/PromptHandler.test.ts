@@ -25,7 +25,7 @@ const char: Character = {
   scenario: 's',
   initialMessage: 'hi',
   exampleMessages: '',
-  writingStyle: '',
+  customFields: [],
   lorebookIds: [],
 };
 
