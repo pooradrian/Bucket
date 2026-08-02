@@ -56,6 +56,16 @@ export interface QuickCharacter {
   session_id?: string;
 }
 
+function liveDeckIndex(msg: ChatMessage): number {
+  const liveEntry: ReplyVariant = {
+    id: 'live',
+    content: msg.content,
+    timestamp: msg.timestamp,
+  };
+  const deck = [...(msg.variants ?? []), liveEntry].sort((a, b) => a.timestamp - b.timestamp);
+  return deck.findIndex(d => d.id === 'live');
+}
+
 export function useChat({
   character,
   groupChat,
@@ -98,6 +108,11 @@ export function useChat({
   handleDeleteMessage: (msg: ChatMessage) => void;
   handleRegenerate: () => Promise<void>;
   handleSwitchVariant: (msgId: string, direction: 1 | -1) => Promise<void>;
+  handleSelectVariant: (msgId: string, targetSlotIndex: number) => Promise<void>;
+  handleStudioEditEntry: (msgId: string, entryKey: string, newText: string) => Promise<void>;
+  handleStudioFork: (msgId: string, sourceKey: string) => Promise<string | null>;
+  handleStudioFresh: (msgId: string) => Promise<string | null>;
+  handleStudioDeleteEntry: (msgId: string, entryKey: string) => Promise<void>;
   handleRetryError: () => Promise<void>;
   handleStop: () => void;
 } {
@@ -693,6 +708,238 @@ export function useChat({
     updateSessionTimestamp(session.id, Date.now());
   }, [session]);
 
+  const handleSelectVariant = useCallback(async (msgId: string, targetDeckIndex: number) => {
+    if (!session) {
+      return;
+    }
+    const msg = session.messages.find(m => m.id === msgId);
+    if (!msg || !msg.variants || msg.variants.length === 0) {
+      return;
+    }
+
+    const liveEntry: ReplyVariant = {
+      id: 'live',
+      content: msg.content,
+      timestamp: msg.timestamp,
+      ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    };
+    const deck = [...msg.variants, liveEntry].sort((a, b) => a.timestamp - b.timestamp);
+    const livePos = deck.findIndex(d => d.id === 'live');
+    const clamped = Math.min(Math.max(targetDeckIndex, 0), deck.length - 1);
+    if (clamped === livePos || clamped < 0 || deck[clamped].id === 'live') {
+      return;
+    }
+
+    const chosen = deck[clamped];
+    const variantIdx = msg.variants.findIndex(v => v.id === chosen.id);
+    if (variantIdx < 0) {
+      return;
+    }
+
+    const oldEntry: ReplyVariant = {
+      id: generateId(),
+      content: msg.content,
+      timestamp: msg.timestamp,
+      ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    };
+
+    const newContent = msg.variants[variantIdx];
+    const newVariants = [...msg.variants];
+    newVariants.splice(variantIdx, 1, oldEntry);
+
+    const updatedMsg: ChatMessage = {
+      ...msg,
+      content: newContent.content,
+      timestamp: newContent.timestamp,
+      characterId: newContent.characterId ?? msg.characterId,
+      variants: newVariants,
+    };
+    const updatedMessages = session.messages.map(m => (m.id === msgId ? updatedMsg : m));
+    setSession({...session, messages: updatedMessages, updatedAt: Date.now()});
+    setVariantIndexMap(prev => ({...prev, [msgId]: clamped}));
+    await updateMessageWithVariants(
+      msgId,
+      updatedMsg.content,
+      updatedMsg.timestamp,
+      updatedMsg.variants ?? [],
+    );
+    updateSessionTimestamp(session.id, Date.now());
+  }, [session]);
+
+  const handleStudioEditEntry = useCallback(async (msgId: string, entryKey: string, newText: string) => {
+    if (!session) {
+      return;
+    }
+    const msg = session.messages.find(m => m.id === msgId);
+    if (!msg) {
+      return;
+    }
+    const trimmed = newText.trim();
+    if (!trimmed) {
+      return;
+    }
+    let updatedMsg: ChatMessage;
+    if (entryKey === 'live') {
+      updatedMsg = {...msg, content: trimmed, timestamp: Date.now()};
+    } else {
+      updatedMsg = {
+        ...msg,
+        variants: (msg.variants ?? []).map(v =>
+          v.id === entryKey ? {...v, content: trimmed, timestamp: Date.now()} : v,
+        ),
+      };
+    }
+    const updatedMessages = session.messages.map(m => (m.id === msgId ? updatedMsg : m));
+    setSession({...session, messages: updatedMessages, updatedAt: Date.now()});
+    setVariantIndexMap(prev => ({...prev, [msgId]: liveDeckIndex(updatedMsg)}));
+    await updateMessageWithVariants(
+      msgId,
+      updatedMsg.content,
+      updatedMsg.timestamp,
+      updatedMsg.variants ?? [],
+    );
+    updateSessionTimestamp(session.id, Date.now());
+    logEvent('variant_edited', {role: updatedMsg.role});
+  }, [session]);
+
+  const handleStudioFork = useCallback(async (msgId: string, sourceKey: string): Promise<string | null> => {
+    if (!session) {
+      return null;
+    }
+    const msg = session.messages.find(m => m.id === msgId);
+    if (!msg) {
+      return null;
+    }
+    const sourceVariant = sourceKey === 'live' ? null : (msg.variants ?? []).find(v => v.id === sourceKey);
+    const sourceContent = sourceKey === 'live' ? msg.content : (sourceVariant?.content ?? msg.content);
+    const sourceCharId = sourceKey === 'live' ? msg.characterId : (sourceVariant?.characterId ?? msg.characterId);
+    const newVariant: ReplyVariant = {
+      id: generateId(),
+      content: sourceContent,
+      timestamp: Date.now(),
+      ...(sourceCharId ? {characterId: sourceCharId} : {}),
+    };
+    const oldEntry: ReplyVariant = {
+      id: generateId(),
+      content: msg.content,
+      timestamp: msg.timestamp,
+      ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    };
+    const newVariants = [...(msg.variants ?? []), oldEntry];
+    const updatedMsg: ChatMessage = {
+      ...msg,
+      content: newVariant.content,
+      timestamp: newVariant.timestamp,
+      characterId: newVariant.characterId ?? msg.characterId,
+      variants: newVariants,
+    };
+    const updatedMessages = session.messages.map(m => (m.id === msgId ? updatedMsg : m));
+    setSession({...session, messages: updatedMessages, updatedAt: Date.now()});
+    setVariantIndexMap(prev => ({...prev, [msgId]: liveDeckIndex(updatedMsg)}));
+    await updateMessageWithVariants(
+      msgId,
+      updatedMsg.content,
+      updatedMsg.timestamp,
+      updatedMsg.variants ?? [],
+    );
+    updateSessionTimestamp(session.id, Date.now());
+    logEvent('variant_forked', {role: updatedMsg.role});
+    return 'live';
+  }, [session]);
+
+  const handleStudioFresh = useCallback(async (msgId: string): Promise<string | null> => {
+    if (!session) {
+      return null;
+    }
+    const msg = session.messages.find(m => m.id === msgId);
+    if (!msg) {
+      return null;
+    }
+    const newVariant: ReplyVariant = {
+      id: generateId(),
+      content: '',
+      timestamp: Date.now(),
+      ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    };
+    const oldEntry: ReplyVariant = {
+      id: generateId(),
+      content: msg.content,
+      timestamp: msg.timestamp,
+      ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    };
+    const newVariants = [...(msg.variants ?? []), oldEntry];
+    const updatedMsg: ChatMessage = {
+      ...msg,
+      content: '',
+      timestamp: Date.now(),
+      characterId: newVariant.characterId ?? msg.characterId,
+      variants: newVariants,
+    };
+    const updatedMessages = session.messages.map(m => (m.id === msgId ? updatedMsg : m));
+    setSession({...session, messages: updatedMessages, updatedAt: Date.now()});
+    setVariantIndexMap(prev => ({...prev, [msgId]: liveDeckIndex(updatedMsg)}));
+    await updateMessageWithVariants(
+      msgId,
+      updatedMsg.content,
+      updatedMsg.timestamp,
+      updatedMsg.variants ?? [],
+    );
+    updateSessionTimestamp(session.id, Date.now());
+    logEvent('variant_fresh', {role: updatedMsg.role});
+    return 'live';
+  }, [session]);
+
+  const handleStudioDeleteEntry = useCallback(async (msgId: string, entryKey: string) => {
+    if (!session) {
+      return;
+    }
+    const msg = session.messages.find(m => m.id === msgId);
+    if (!msg) {
+      return;
+    }
+    const deckCount = (msg.variants?.length ?? 0) + 1;
+    if (deckCount <= 1) {
+      handleDeleteMessage(msg);
+      return;
+    }
+    let updatedMsg: ChatMessage;
+    if (entryKey === 'live') {
+      const liveEntry: ReplyVariant = {
+        id: 'live',
+        content: msg.content,
+        timestamp: msg.timestamp,
+      };
+      const deck = [...(msg.variants ?? []), liveEntry].sort((a, b) => a.timestamp - b.timestamp);
+      const livePos = deck.findIndex(d => d.id === 'live');
+      const remaining = deck.filter(d => d.id !== 'live');
+      const promoteIdx = Math.min(livePos, remaining.length - 1);
+      const promoted = remaining[promoteIdx];
+      updatedMsg = {
+        ...msg,
+        content: promoted.content,
+        timestamp: promoted.timestamp,
+        characterId: promoted.characterId ?? msg.characterId,
+        variants: remaining.filter(v => v.id !== promoted.id),
+      };
+    } else {
+      updatedMsg = {
+        ...msg,
+        variants: (msg.variants ?? []).filter(v => v.id !== entryKey),
+      };
+    }
+    const updatedMessages = session.messages.map(m => (m.id === msgId ? updatedMsg : m));
+    setSession({...session, messages: updatedMessages, updatedAt: Date.now()});
+    setVariantIndexMap(prev => ({...prev, [msgId]: liveDeckIndex(updatedMsg)}));
+    await updateMessageWithVariants(
+      msgId,
+      updatedMsg.content,
+      updatedMsg.timestamp,
+      updatedMsg.variants ?? [],
+    );
+    updateSessionTimestamp(session.id, Date.now());
+    logEvent('variant_deleted', {role: updatedMsg.role});
+  }, [session, handleDeleteMessage]);
+
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
@@ -777,6 +1024,11 @@ export function useChat({
     handleDeleteMessage,
     handleRegenerate,
     handleSwitchVariant,
+    handleSelectVariant,
+    handleStudioEditEntry,
+    handleStudioFork,
+    handleStudioFresh,
+    handleStudioDeleteEntry,
     handleRetryError,
     handleStop,
   };

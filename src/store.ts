@@ -79,7 +79,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   cardRadius: 12,
   pillRadius: 50,
   bubbleRadius: 16,
-  chatMaxWidth: 78,
+  chatMaxWidth: 100,
   fontSizeBody: 15,
   fontSizeHeader: 17,
   fontSizeTab: 15,
