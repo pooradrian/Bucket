@@ -101,6 +101,7 @@ export function useChat({
   replacingMessageId: string | null;
   variantIndexMap: Record<string, number>;
   handleSend: (text: string) => Promise<void>;
+  handleContinue: (target?: {character?: Character | null; qc?: QuickCharacter | null}) => Promise<void>;
   handleEditMessage: (msg: ChatMessage) => void;
   handleEditSave: (msg: ChatMessage, newText: string) => void;
   handleEditCancel: () => void;
@@ -334,12 +335,20 @@ export function useChat({
         summaryBase?: ChatSession;
         replaceMessageId?: string;
         existingVariants?: ReplyVariant[];
+        continueMode?: boolean;
+        continueTarget?: {character?: Character | null; qc?: QuickCharacter | null};
       } = {},
     ) => {
       setSending(true);
       setError(null);
       replacingMessageIdRef.current = opts.replaceMessageId ?? null;
       setReplacingMessageId(opts.replaceMessageId ?? null);
+      const targetReplyCharacter = opts.continueTarget
+        ? (opts.continueTarget.character ?? null)
+        : (isGroupChat ? selectedReplyCharacter : null);
+      const targetQC = opts.continueTarget
+        ? (opts.continueTarget.qc ?? null)
+        : selectedQC;
       try {
         streamingContentRef.current = '';
         setIsStreaming(true);
@@ -347,19 +356,20 @@ export function useChat({
         abortControllerRef.current = ctrl;
 
         let result;
-        if (isGroupChat && selectedReplyCharacter) {
+        if (isGroupChat && targetReplyCharacter) {
           result = await sendToGroupLLM(
             groupMembers,
-            selectedReplyCharacter,
+            targetReplyCharacter,
             userText,
             messages,
             promptConfig,
             flushStreamingContent,
             ctrl,
+            opts.continueMode,
           );
-        } else if (selectedQC && activeCharacter) {
+        } else if (targetQC && activeCharacter) {
           result = await sendToQCLLM(
-            selectedQC,
+            targetQC,
             activeCharacter,
             quickCharacters,
             userText,
@@ -367,6 +377,7 @@ export function useChat({
             promptConfig,
             flushStreamingContent,
             ctrl,
+            opts.continueMode,
           );
         } else if (activeCharacter) {
           result = await sendToLLM(
@@ -377,15 +388,16 @@ export function useChat({
             flushStreamingContent,
             lorebook,
             ctrl,
+            opts.continueMode,
           );
         } else {
           return;
         }
 
-        const replyCharId = (isGroupChat && selectedReplyCharacter)
-          ? selectedReplyCharacter.id
-          : selectedQC
-            ? selectedQC.id
+        const replyCharId = (isGroupChat && targetReplyCharacter)
+          ? targetReplyCharacter.id
+          : targetQC
+            ? targetQC.id
             : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
         const assistantUpdatedAt = Date.now();
         if (opts.replaceMessageId) {
@@ -427,8 +439,8 @@ export function useChat({
           }));
           persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
         }
-        if (opts.setLastReplyCharacter && isGroupChat && selectedReplyCharacter) {
-          setLastReplyCharacterId(startSessionId, selectedReplyCharacter.id);
+        if (opts.setLastReplyCharacter && isGroupChat && targetReplyCharacter) {
+          setLastReplyCharacterId(startSessionId, targetReplyCharacter.id);
         }
         const notifMode = useAppStore.getState().appSettings.notificationMode;
         if (notifMode === 'vibrate' || notifMode === 'both') {
@@ -493,10 +505,10 @@ export function useChat({
               updateSessionTimestamp(startSessionId, cancelUpdatedAt);
             }
           } else if (partial.length > 0) {
-            const cancelReplyCharId = (isGroupChat && selectedReplyCharacter)
-              ? selectedReplyCharacter.id
-              : selectedQC
-                ? selectedQC.id
+            const cancelReplyCharId = (isGroupChat && targetReplyCharacter)
+              ? targetReplyCharacter.id
+              : targetQC
+                ? targetQC.id
                 : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
             const assistantMessage: ChatMessage = {
               id: generateId(),
@@ -569,7 +581,41 @@ export function useChat({
         summaryBase: withUser,
       });
     },
-    [session, sending, isGroupChat, selectedReplyCharacter, persistMessage, runLLMRequest],
+    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, persistMessage, runLLMRequest],
+  );
+
+  const handleContinue = useCallback(
+    async (target?: {character?: Character | null; qc?: QuickCharacter | null}) => {
+      if (!session || sending) {
+        return;
+      }
+      if (session.messages.length === 0) {
+        return;
+      }
+
+      const continueTarget = target ?? {
+        character: isGroupChat ? selectedReplyCharacter : undefined,
+        qc: isGroupChat ? undefined : selectedQC,
+      };
+
+      if (isGroupChat && !continueTarget.character) {
+        return;
+      }
+
+      const startSessionId = session.id;
+      logEvent('message_continue', {
+        sessionMsgCount: session.messages.length,
+        isGroupChat,
+        isQC: !!continueTarget.qc,
+      });
+
+      await runLLMRequest(startSessionId, session.messages, '', {
+        setLastReplyCharacter: true,
+        continueMode: true,
+        continueTarget,
+      });
+    },
+    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, runLLMRequest],
   );
 
   const handleEditMessage = useCallback((msg: ChatMessage) => {
@@ -1017,6 +1063,7 @@ export function useChat({
     replacingMessageId,
     variantIndexMap,
     handleSend,
+    handleContinue,
     handleEditMessage,
     handleEditSave,
     handleEditCancel,
