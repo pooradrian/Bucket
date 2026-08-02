@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   Animated,
   FlatList,
@@ -17,6 +17,8 @@ import {Character} from './CharacterEditor';
 import {useAppStore, GroupChat} from './store';
 import {useTheme} from './ThemeContext';
 import {useChat, ChatMessage, QuickCharacter} from './useChat';
+import {renderFormattedText} from './textFormat';
+import Carousel from './components/Carousel';
 
 interface ChatHandlerProps {
   character?: Character | null;
@@ -30,6 +32,7 @@ interface ChatHandlerProps {
 
 interface MessageBubbleProps {
   item: ChatMessage;
+  hidden: boolean;
   isSelected: boolean;
   isLastAssistant: boolean;
   sending: boolean;
@@ -37,6 +40,9 @@ interface MessageBubbleProps {
   st: ReturnType<typeof useTheme>;
   variantIndexMap: Record<string, number>;
   onSelect: (id: string | null) => void;
+  onOpenCarousel: (id: string) => void;
+  registerBubble: (id: string, ref: View | null) => void;
+  onBubbleLayout: (id: string, width: number, height: number) => void;
   onEdit: (msg: ChatMessage) => void;
   onEditSave: (msg: ChatMessage, newText: string) => void;
   onEditCancel: () => void;
@@ -46,7 +52,6 @@ interface MessageBubbleProps {
   onCopy: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
   onRegenerate: () => void;
-  onSwitchVariant: (msgId: string, direction: 1 | -1) => void;
   onRetry: () => void;
 }
 
@@ -81,43 +86,10 @@ function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
   );
 }
 
-function renderFormattedText(text: string, baseStyle: object, forceItalic: boolean = false) {
-  const parts: {text: string; italic: boolean}[] = [];
-  const regex = /\*([^*]+)\*/g;
-  let lastIndex = 0;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({text: text.slice(lastIndex, match.index), italic: false});
-    }
-    parts.push({text: match[1], italic: true});
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < text.length) {
-    parts.push({text: text.slice(lastIndex), italic: false});
-  }
-  if (parts.length === 0) {
-    parts.push({text, italic: false});
-  }
-  return parts.map((p, i) => (
-    <Text
-      key={i}
-      style={[
-        baseStyle,
-        p.italic &&
-          (forceItalic
-            ? {transform: [{skewX: '-10deg'}]}
-            : {fontStyle: 'italic' as const}),
-      ]}>
-      {p.text}
-    </Text>
-  ));
-}
-
 const MessageBubble = React.memo(function MessageBubble({
-  item, isSelected, isLastAssistant, sending, isLiveStreaming, st, variantIndexMap,
-  onSelect, onEdit, onEditSave, onEditCancel, editingMessageId, editingText, onEditingTextChange,
-  onCopy, onDelete, onRegenerate, onSwitchVariant, onRetry,
+  item, hidden, isSelected, isLastAssistant, sending, isLiveStreaming, st, variantIndexMap,
+  onSelect, onOpenCarousel, registerBubble, onBubbleLayout, onEdit, onEditSave, onEditCancel, editingMessageId, editingText, onEditingTextChange,
+  onCopy, onDelete, onRegenerate, onRetry,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const isUser = item.role === 'user';
@@ -149,10 +121,18 @@ const MessageBubble = React.memo(function MessageBubble({
     <View style={[
       st.messageContainer,
       isUser ? st.messageContainerUser : st.messageContainerAssistant,
+      hidden && {opacity: 0},
     ]}>
       <TouchableOpacity
         activeOpacity={0.8}
+        ref={ref => registerBubble(item.id, ref)}
+        onLayout={e => onBubbleLayout(item.id, e.nativeEvent.layout.width, e.nativeEvent.layout.height)}
         onPress={() => {
+          if (!isStreamingMsg && !isEditing) {
+            onOpenCarousel(item.id);
+          }
+        }}
+        onLongPress={() => {
           if (!isStreamingMsg && !isEditing) {
             onSelect(isSelected ? null : item.id);
           }
@@ -191,27 +171,15 @@ const MessageBubble = React.memo(function MessageBubble({
               {renderFormattedText(item.content, st.bubbleText, forceItalic)}
             </Text>
             {!isStreamingMsg && (
-              <Text style={[st.timestampText, isUser ? st.timestampUser : st.timestampAssistant]}>
-                {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-              </Text>
-            )}
-            {!isStreamingMsg && !isUser && item.variants && item.variants.length > 0 && (
-              <View style={st.variantRow}>
-                <TouchableOpacity
-                  onPress={() => onSwitchVariant(item.id, -1)}
-                  disabled={sending}
-                  style={[st.variantBtn, sending && st.actionBtnDisabled]}>
-                  <Text style={st.variantBtnText}>‹</Text>
-                </TouchableOpacity>
-                <Text style={st.variantCounter}>
-                  {(variantIndexMap[item.id] ?? item.variants.length) + 1}/{item.variants.length + 1}
+              <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'space-between'}}>
+                <Text style={[st.timestampText, isUser ? st.timestampUser : st.timestampAssistant, {marginTop: 0, flexShrink: 1}]}>
+                  {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => onSwitchVariant(item.id, 1)}
-                  disabled={sending}
-                  style={[st.variantBtn, sending && st.actionBtnDisabled]}>
-                  <Text style={st.variantBtnText}>›</Text>
-                </TouchableOpacity>
+                {!isUser && item.variants && item.variants.length > 0 && (
+                  <Text style={[st.variantCounter, {marginTop: 0, marginLeft: 8}]}>
+                    {(variantIndexMap[item.id] ?? item.variants.length) + 1}/{item.variants.length + 1}
+                  </Text>
+                )}
               </View>
             )}
             {isSelected && !isStreamingMsg && (
@@ -283,10 +251,75 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     handleCopyMessage,
     handleDeleteMessage,
     handleRegenerate,
-    handleSwitchVariant,
+    handleSelectVariant,
+    handleStudioEditEntry,
+    handleStudioFork,
+    handleStudioFresh,
+    handleStudioDeleteEntry,
     handleRetryError,
     handleStop,
   } = useChat({character, groupChat, activeSessionId, onSessionCreated, quickCharacters});
+
+  const [carouselMessageId, setCarouselMessageIdInner] = useState<string | null>(null);
+  const [carouselOrigin, setCarouselOrigin] = useState<{x: number; y: number; width: number; height: number} | null | undefined>(undefined);
+  const [carouselReady, setCarouselReady] = useState(false);
+  const bubbleRefs = useRef<Record<string, View | null>>({}).current;
+  const bubbleLayouts = useRef<Record<string, {width: number; height: number}>>({}).current;
+
+  const handleCarouselReady = useCallback(() => setCarouselReady(true), []);
+
+  const handleCloseCarousel = useCallback(() => {
+    setCarouselMessageIdInner(null);
+    setCarouselOrigin(null);
+    setCarouselReady(false);
+  }, []);
+
+  const registerBubble = useCallback((id: string, ref: View | null) => {
+    if (ref) {
+      bubbleRefs[id] = ref;
+    } else {
+      delete bubbleRefs[id];
+    }
+  }, [bubbleRefs]);
+
+  const handleBubbleLayout = useCallback((id: string, width: number, height: number) => {
+    bubbleLayouts[id] = {width, height};
+  }, [bubbleLayouts]);
+
+  const openCarousel = useCallback((id: string) => {
+    setCarouselReady(false);
+    setCarouselOrigin(undefined);
+    setCarouselMessageIdInner(id);
+    const ref = bubbleRefs[id];
+    if (!ref) {
+      setCarouselOrigin(null);
+      return;
+    }
+    ref.measureInWindow((x, y, width, height) => {
+      const layout = bubbleLayouts[id];
+      if (layout) {
+        width = layout.width;
+        height = layout.height;
+      }
+      if (width > 0 && height > 0 && x >= -100 && x <= 5000 && y >= -100 && y <= 5000) {
+        setCarouselOrigin({x, y, width, height});
+      } else {
+        setCarouselOrigin(null);
+      }
+    });
+  }, [bubbleRefs, bubbleLayouts]);
+
+  const handleCarouselDelete = useCallback((msg: ChatMessage) => {
+    handleDeleteMessage(msg);
+    handleCloseCarousel();
+  }, [handleDeleteMessage, handleCloseCarousel]);
+
+  const carouselMessage = carouselMessageId && session
+    ? session.messages.find(m => m.id === carouselMessageId) ?? null
+    : null;
+  const carouselCanRegen = !!carouselMessage && !!session && session.messages.length > 0 &&
+    session.messages[session.messages.length - 1].id === carouselMessage.id &&
+    carouselMessage.role === 'assistant';
 
   const isGroupChat = !!groupChat;
   const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
@@ -323,6 +356,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     return (
       <MessageBubble
         item={item}
+        hidden={carouselMessageId === item.id && carouselReady}
         isSelected={selectedMessageId === item.id}
         isLastAssistant={!!isLastAssistant}
         sending={sending}
@@ -330,6 +364,9 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         st={st}
         variantIndexMap={variantIndexMap}
         onSelect={setSelectedMessageId}
+        onOpenCarousel={openCarousel}
+        registerBubble={registerBubble}
+        onBubbleLayout={handleBubbleLayout}
         onEdit={handleEditMessage}
         onEditSave={handleEditSave}
         onEditCancel={handleEditCancel}
@@ -339,13 +376,13 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         onCopy={handleCopyMessage}
         onDelete={handleDeleteMessage}
         onRegenerate={handleRegenerate}
-        onSwitchVariant={handleSwitchVariant}
         onRetry={handleRetryError}
       />
     );
-  }, [session, selectedMessageId, sending, isStreaming, replacingMessageId, st, variantIndexMap, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleSwitchVariant, handleRetryError]);
+  }, [session, selectedMessageId, sending, isStreaming, replacingMessageId, st, variantIndexMap, carouselMessageId, carouselReady, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, openCarousel, registerBubble, handleBubbleLayout, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleRetryError]);
 
   return (
+    <>
     <KeyboardAvoidingView
       style={st.chatContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -392,6 +429,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         onScroll={handleScroll}
         onScrollBeginDrag={() => {
           if (selectedMessageId) {setSelectedMessageId(null);}
+          if (carouselMessageId) {setCarouselMessageIdInner(null);}
         }}
         ListHeaderComponent={null}
         ListEmptyComponent={
@@ -541,5 +579,28 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         )}
       </View>
     </KeyboardAvoidingView>
+    {carouselMessage && (
+      <Carousel
+        message={carouselMessage}
+        origin={carouselOrigin}
+        onReady={handleCarouselReady}
+        onClose={handleCloseCarousel}
+        onSelectVariant={handleSelectVariant}
+        onEditEntry={handleStudioEditEntry}
+        onFork={handleStudioFork}
+        onFresh={handleStudioFresh}
+        onDeleteEntry={handleStudioDeleteEntry}
+        onDeleteMessage={handleCarouselDelete}
+        onCopy={handleCopyMessage}
+        onRegenerate={handleRegenerate}
+        canRegenerate={carouselCanRegen}
+        sending={sending}
+        isStreaming={isStreaming}
+        streamingContent={streamingContent}
+        replacingMessageId={replacingMessageId}
+        onStop={handleStop}
+      />
+    )}
+    </>
   );
 }

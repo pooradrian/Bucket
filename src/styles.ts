@@ -366,13 +366,15 @@ export function createStyles(s: AppSettings) {
     // =========================================================================
     messageContainer: {
       marginBottom: 8,
-      maxWidth: `${s.chatMaxWidth}%` as DimensionValue,
+      maxWidth: '72%' as DimensionValue,
     },
     messageContainerUser: {
       alignSelf: 'flex-end',
+      alignItems: 'flex-end',
     },
     messageContainerAssistant: {
       alignSelf: 'flex-start',
+      alignItems: 'flex-start',
     },
     bubble: {
       borderRadius: s.bubbleRadius,
