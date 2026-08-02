@@ -33,6 +33,7 @@ export interface PerchanceMessage {
 
 export function parsePerchanceCharacter(pChar: PerchanceCharacter): Character {
   const initialMessage = pChar.initialMessages?.find(m => m.author === 'ai')?.content || '';
+  const writingInstructions = pChar.generalWritingInstructions || '';
   return {
     id: generateId(),
     name: pChar.name || '',
@@ -41,7 +42,7 @@ export function parsePerchanceCharacter(pChar: PerchanceCharacter): Character {
     scenario: '',
     initialMessage,
     exampleMessages: '',
-    writingStyle: pChar.generalWritingInstructions || '',
+    customFields: writingInstructions ? [{id: 'writingStyle', value: writingInstructions}] : [],
     lorebookIds: [],
   };
 }

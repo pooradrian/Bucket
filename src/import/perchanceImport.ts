@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import pako from 'pako';
 import {Character} from '../CharacterEditor';
+import {getCustomField} from '../CustomFields';
 import {LorebookState, parseLorebook} from '../RAGHandler';
 import {ChatSession, ChatMessage} from '../useChat';
 import {generateId, saveCharacterToDB, saveLorebookToDB, getAllCharactersFromDB, createSession} from '../Database';
@@ -83,12 +84,13 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
       name: char.name,
       description: char.description,
       initial_message: char.initialMessage,
-      writing_style: char.writingStyle,
+      writing_style: getCustomField(char, 'writingStyle'),
       personality: char.personality,
       scenario: char.scenario,
       example_messages: char.exampleMessages || '',
       icon: char.icon || '',
       lorebook_id: (char.lorebookIds || []).join(','),
+      custom_fields: JSON.stringify(char.customFields || []),
     });
   }
 

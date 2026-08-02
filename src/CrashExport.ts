@@ -8,6 +8,7 @@ import {
   getSessionById,
   getKV,
 } from './Database';
+import {parseCustomFields} from './CustomFields';
 import {saveToDisk} from './ImportExport';
 import {logEvent} from './EventLogger';
 
@@ -32,6 +33,7 @@ export async function crashExport(): Promise<string | null> {
     const characters = await getAllCharactersFromDB();
     const charFolder = zip.folder('characters');
     for (const char of characters) {
+      const customFields = parseCustomFields(char.custom_fields);
       const cc = {
         spec: 'chara_card_v2',
         data: {
@@ -44,11 +46,11 @@ export async function crashExport(): Promise<string | null> {
           alternate_greetings: [],
           system_prompt: '',
           post_history_instructions: '',
-          creator_notes: char.writing_style || '',
+          creator_notes: 'Exported from Bucket',
           tags: [],
           creator: '',
           character_version: '1.0',
-          extensions: {},
+          extensions: customFields.length > 0 ? {bucket: {customFields}} : {},
         },
       };
       charFolder?.file(`${char.id}.json`, JSON.stringify(cc, null, 2));

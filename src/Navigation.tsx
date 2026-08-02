@@ -49,7 +49,6 @@ const WELCOME_CHARACTER: Character = {
   name: 'Welcome to Bucket!',
   description: 'Click on me for a quick guide!',
   initialMessage: '',
-  writingStyle: '',
   personality: '',
   scenario: '',
   lorebookIds: [],

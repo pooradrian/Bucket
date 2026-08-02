@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 6;
+const CURRENT_VERSION = 7;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -180,6 +180,10 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
 
       if (v === 6) {
         addColumnIfMissing(conn, 'chat_messages', 'variants', 'TEXT DEFAULT ""');
+      }
+
+      if (v === 7) {
+        addColumnIfMissing(conn, 'characters', 'custom_fields', 'TEXT DEFAULT ""');
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -662,6 +666,7 @@ interface DBCharacter {
   example_messages: string;
   icon: string;
   lorebook_id: string;
+  custom_fields: string;
 }
 
 export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
@@ -673,12 +678,13 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
     personality: await encrypt(char.personality),
     scenario: await encrypt(char.scenario),
     example_messages: await encrypt(char.example_messages),
+    custom_fields: await encrypt(char.custom_fields || ''),
   };
   d.execute(
     `INSERT OR REPLACE INTO characters
-      (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [char.id, char.name, encrypted.description, encrypted.initial_message, encrypted.writing_style, encrypted.personality, encrypted.scenario, encrypted.example_messages, char.icon, char.lorebook_id],
+      (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [char.id, char.name, encrypted.description, encrypted.initial_message, encrypted.writing_style, encrypted.personality, encrypted.scenario, encrypted.example_messages, char.icon, char.lorebook_id, encrypted.custom_fields],
   );
 }
 
@@ -691,7 +697,7 @@ export function deleteCharacterFromDB(id: string): void {
 export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
   const d = initDB();
   const result = d.execute(
-    'SELECT id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id FROM characters ORDER BY name',
+    'SELECT id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields FROM characters ORDER BY name',
   );
   if (!result.results) {
     return [];
@@ -708,6 +714,7 @@ export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
       example_messages: await decrypt((row.example_messages as string) || ''),
       icon: (row.icon as string) || '',
       lorebook_id: (row.lorebook_id as string) || '',
+      custom_fields: await decrypt((row.custom_fields as string) || ''),
     }))
   );
 }

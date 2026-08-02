@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
 import {Character} from '../CharacterEditor';
+import {parseCustomFields, getCustomField} from '../CustomFields';
 import {LorebookState} from '../RAGHandler';
 import {ChatSession} from '../useChat';
 import {DEFAULT_PROMPT_CONFIG} from '../PromptHandler';
@@ -198,12 +199,13 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       name: char.name,
       description: char.description,
       initial_message: char.initialMessage,
-      writing_style: char.writingStyle,
+      writing_style: getCustomField(char, 'writingStyle'),
       personality: char.personality,
       scenario: char.scenario,
       example_messages: char.exampleMessages || '',
       icon: char.icon || '',
       lorebook_id: (char.lorebookIds || []).join(','),
+      custom_fields: JSON.stringify(char.customFields || []),
     });
   }
 
@@ -244,7 +246,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       name: c.name,
       description: c.description,
       initialMessage: c.initial_message,
-      writingStyle: c.writing_style,
+      customFields: parseCustomFields(c.custom_fields),
       personality: c.personality,
       scenario: c.scenario,
       exampleMessages: c.example_messages,
@@ -274,16 +276,19 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       name: char.name,
       description: char.description,
       initialMessage: char.initialMessage,
-      writingStyle: char.writingStyle,
       personality: char.personality,
       scenario: char.scenario,
       exampleMessages: char.exampleMessages || undefined,
       lorebookIds: char.lorebookIds || [],
       icon: char.icon || undefined,
+      customFields: char.customFields,
     };
     const json = serializeV2(cc);
     if (cc.lorebookIds && cc.lorebookIds.length > 0) {
       json.data.extensions.lorebookIds = cc.lorebookIds;
+    }
+    if (cc.customFields && cc.customFields.length > 0) {
+      json.data.extensions.bucket = {customFields: cc.customFields};
     }
     charFolder?.file(`${char.id}.json`, JSON.stringify(json, null, 2));
   }

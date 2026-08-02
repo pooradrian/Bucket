@@ -8,7 +8,7 @@ const char = (id: string, name: string): Character => ({
   personality: '',
   scenario: '',
   initialMessage: '',
-  writingStyle: '',
+  customFields: [],
   lorebookIds: [],
 });
 
