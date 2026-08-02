@@ -20,6 +20,8 @@ import {useChat, ChatMessage, QuickCharacter} from './useChat';
 import {renderFormattedText} from './textFormat';
 import Carousel from './components/Carousel';
 
+const DOUBLE_TAP_DELAY_MS = 300;
+
 interface ChatHandlerProps {
   character?: Character | null;
   groupChat?: GroupChat | null;
@@ -245,6 +247,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     replacingMessageId,
     variantIndexMap,
     handleSend,
+    handleContinue,
     handleEditMessage,
     handleEditSave,
     handleEditCancel,
@@ -265,6 +268,60 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   const [carouselReady, setCarouselReady] = useState(false);
   const bubbleRefs = useRef<Record<string, View | null>>({}).current;
   const bubbleLayouts = useRef<Record<string, {width: number; height: number}>>({}).current;
+
+  const lastSendTapRef = useRef(0);
+  const sendTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSelectorTapRef = useRef<{id: string; time: number}>({id: '', time: 0});
+
+  const handleSendPress = useCallback(() => {
+    const now = Date.now();
+    if (now - lastSendTapRef.current < DOUBLE_TAP_DELAY_MS) {
+      lastSendTapRef.current = 0;
+      if (sendTapTimerRef.current) {
+        clearTimeout(sendTapTimerRef.current);
+        sendTapTimerRef.current = null;
+      }
+      handleContinue();
+      return;
+    }
+    lastSendTapRef.current = now;
+    if (sendTapTimerRef.current) {
+      clearTimeout(sendTapTimerRef.current);
+    }
+    sendTapTimerRef.current = setTimeout(() => {
+      sendTapTimerRef.current = null;
+      handleSend(inputText);
+    }, DOUBLE_TAP_DELAY_MS);
+  }, [handleSend, handleContinue, inputText]);
+
+  useEffect(() => {
+    return () => {
+      if (sendTapTimerRef.current) {
+        clearTimeout(sendTapTimerRef.current);
+      }
+    };
+  }, []);
+
+  const makeSelectorPress = useCallback(
+    (
+      id: string,
+      onSelect: () => void,
+      continueTarget: {character?: Character | null; qc?: QuickCharacter | null},
+    ) => {
+      return () => {
+        const now = Date.now();
+        if (lastSelectorTapRef.current.id === id && now - lastSelectorTapRef.current.time < DOUBLE_TAP_DELAY_MS) {
+          lastSelectorTapRef.current = {id: '', time: 0};
+          onSelect();
+          handleContinue(continueTarget);
+          return;
+        }
+        lastSelectorTapRef.current = {id, time: now};
+        onSelect();
+      };
+    },
+    [handleContinue],
+  );
 
   const handleCarouselReady = useCallback(() => setCarouselReady(true), []);
 
@@ -460,7 +517,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
               return (
                 <TouchableOpacity
                   key={char.id}
-                  onPress={() => setSelectedReplyCharacter(char)}
+                  onPress={makeSelectorPress(char.id, () => setSelectedReplyCharacter(char), {character: char})}
                   style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
                   {showAvatar && showCharacterIcons && char.icon ? (
                     <Image
@@ -484,7 +541,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
             }) : (
               <>
                 <TouchableOpacity
-                  onPress={() => setSelectedQC(null)}
+                  onPress={makeSelectorPress(
+                    activeCharacter?.id ?? 'base',
+                    () => setSelectedQC(null),
+                    {qc: null},
+                  )}
                   style={[st.characterSelectorItem, !selectedQC && st.characterSelectorItemActive]}>
                   {showAvatar && showCharacterIcons && activeCharacter?.icon ? (
                     <Image
@@ -509,7 +570,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
                   return (
                     <TouchableOpacity
                       key={qc.id}
-                      onPress={() => setSelectedQC(qc)}
+                      onPress={makeSelectorPress(qc.id, () => setSelectedQC(qc), {qc})}
                       style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
                       {showAvatar ? (
                         <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
@@ -572,7 +633,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         ) : (
           <TouchableOpacity
             style={[st.sendBtn, (sending || (isGroupChat && !selectedReplyCharacter)) && st.sendBtnDisabled]}
-            onPress={() => handleSend(inputText)}
+            onPress={handleSendPress}
             disabled={sending || (isGroupChat && !selectedReplyCharacter)}>
             <Text style={st.sendBtnText}>›</Text>
           </TouchableOpacity>

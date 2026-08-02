@@ -12,7 +12,7 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {estimateTokens, buildPrompt, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, buildContinuePrompt, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona} from '../src/PromptHandler';
 import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
 import type {ChatMessage} from '../src/useChat';
@@ -74,6 +74,30 @@ describe('buildPrompt', () => {
     const cfg = {...DEFAULT_PROMPT_CONFIG, historyCutoffAmount: '1'};
     const msgs = buildPrompt(char, 'hello', history, cfg);
     expect(msgs.length).toBe(3);
+    expect(msgs[1].content).toBe('u2');
+  });
+});
+
+describe('buildContinuePrompt', () => {
+  test('starts with a system message containing the character name', () => {
+    const msgs = buildContinuePrompt(char, history, DEFAULT_PROMPT_CONFIG);
+    expect(msgs[0].role).toBe('system');
+    expect(msgs[0].content).toContain('Bob');
+  });
+
+  test('includes the full history without appending a user message', () => {
+    const msgs = buildContinuePrompt(char, history, DEFAULT_PROMPT_CONFIG);
+    expect(msgs.length).toBe(4);
+    expect(msgs[1].role).toBe('user');
+    expect(msgs[1].content).toBe('u1');
+    expect(msgs[msgs.length - 1]).toEqual({role: 'user', content: 'u2'});
+    expect(msgs.filter(m => m.role === 'assistant').length).toBe(1);
+  });
+
+  test('respects the history cutoff amount', () => {
+    const cfg = {...DEFAULT_PROMPT_CONFIG, historyCutoffAmount: '1'};
+    const msgs = buildContinuePrompt(char, history, cfg);
+    expect(msgs.length).toBe(2);
     expect(msgs[1].content).toBe('u2');
   });
 });

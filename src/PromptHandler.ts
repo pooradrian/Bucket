@@ -320,6 +320,79 @@ export function buildGroupPrompt(
   return messages;
 }
 
+export function buildContinuePrompt(
+  character: Character,
+  history: ChatMessage[],
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG,
+  lorebookContext?: string,
+): ChatMessageObject[] {
+  const resolvedPrefix = resolvePlaceholders(config.prefix, character, config.userDescription);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, character, config.userDescription);
+  const charBlock = buildCharBlock(character);
+
+  const systemParts = [resolvedPrefix, charBlock];
+  if (lorebookContext) {
+    systemParts.push(lorebookContext);
+  }
+  systemParts.push(resolvedSuffix);
+
+  const systemContent = systemParts.filter(Boolean).join('\n\n');
+
+  const messages: ChatMessageObject[] = [
+    {role: 'system', content: systemContent},
+  ];
+
+  const cutoffAmount = Number(config.historyCutoffAmount) || 20;
+  const slicedHistory = sliceHistory(history, config.historyCutoffMode, cutoffAmount);
+
+  for (const msg of slicedHistory) {
+    messages.push({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content,
+    });
+  }
+
+  return messages;
+}
+
+export function buildGroupContinuePrompt(
+  characters: Character[],
+  selectedCharacter: Character,
+  history: ChatMessage[],
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG,
+): ChatMessageObject[] {
+  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, config.userDescription);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, config.userDescription);
+
+  const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
+
+  const groupInstruction = `You are roleplaying as multiple characters in a group conversation. The characters are:\n${characters.map(c => `- ${c.name}`).join('\n')}\n\nThe user has selected **${selectedCharacter.name}** to respond next. Write ONLY as ${selectedCharacter.name}. Stay in character and respond naturally to the conversation.\n\nIMPORTANT: In the conversation history below, messages from each character are prefixed with their name in brackets, like [CharacterName]: message. Use this to understand who said what.`;
+
+  const systemParts = [resolvedPrefix, charBlocks, groupInstruction];
+  systemParts.push(resolvedSuffix);
+
+  const systemContent = systemParts.filter(Boolean).join('\n\n');
+
+  const messages: ChatMessageObject[] = [
+    {role: 'system', content: systemContent},
+  ];
+
+  const cutoffAmount = Number(config.historyCutoffAmount) || 20;
+  const slicedHistory = sliceHistory(history, config.historyCutoffMode, cutoffAmount);
+
+  for (const msg of slicedHistory) {
+    if (msg.role === 'user') {
+      messages.push({role: 'user', content: msg.content});
+    } else {
+      const charName = characters.find(c => c.id === msg.characterId)?.name;
+      const prefixed = charName ? `[${charName}]: ${msg.content}` : msg.content;
+      messages.push({role: 'assistant', content: prefixed});
+    }
+  }
+
+  return messages;
+}
+
 export async function sendToLLM(
   character: Character,
   userMessage: string,
@@ -328,6 +401,7 @@ export async function sendToLLM(
   onToken?: (token: string) => void,
   lorebooks?: LorebookState[],
   controller?: AbortController,
+  continueMode: boolean = false,
 ): Promise<{content: string; metrics: TimingMetrics}> {
   const buildStart = performance.now();
 
@@ -361,14 +435,18 @@ export async function sendToLLM(
         role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
         content: msg.content,
       }));
-      historyMessages.push({role: 'user', content: userMessage});
+      if (!continueMode) {
+        historyMessages.push({role: 'user', content: userMessage});
+      }
 
       const relevant = await retrieveRelevantLorebook(historyMessages, combinedLorebook, ragConfig, resolved);
       lorebookContext = buildRAGInjection(relevant);
     }
   }
 
-  const messages = buildPrompt(character, userMessage, history, resolved, lorebookContext);
+  const messages = continueMode
+    ? buildContinuePrompt(character, history, resolved, lorebookContext)
+    : buildPrompt(character, userMessage, history, resolved, lorebookContext);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
   result.metrics.promptBuildMs = promptBuildMs;
@@ -383,11 +461,14 @@ export async function sendToGroupLLM(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   onToken?: (token: string) => void,
   controller?: AbortController,
+  continueMode: boolean = false,
 ): Promise<{content: string; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
 
-  const messages = buildGroupPrompt(allCharacters, selectedCharacter, userMessage, history, resolved);
+  const messages = continueMode
+    ? buildGroupContinuePrompt(allCharacters, selectedCharacter, history, resolved)
+    : buildGroupPrompt(allCharacters, selectedCharacter, userMessage, history, resolved);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
   result.metrics.promptBuildMs = promptBuildMs;
@@ -403,6 +484,7 @@ export async function sendToQCLLM(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   onToken?: (token: string) => void,
   controller?: AbortController,
+  continueMode: boolean = false,
 ): Promise<{content: string; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
@@ -434,7 +516,9 @@ export async function sendToQCLLM(
     })),
   ];
 
-  const messages = buildGroupPrompt(allChars, qcAsCharacter, userMessage, history, resolved);
+  const messages = continueMode
+    ? buildGroupContinuePrompt(allChars, qcAsCharacter, history, resolved)
+    : buildGroupPrompt(allChars, qcAsCharacter, userMessage, history, resolved);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
   result.metrics.promptBuildMs = promptBuildMs;
