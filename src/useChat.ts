@@ -459,7 +459,7 @@ export function useChat({
           vibrateDevice();
         }
         if (notifMode === 'sound' || notifMode === 'both') {
-          playNotificationSound();
+          playNotificationSound(useAppStore.getState().appSettings.notificationSound);
         }
         setIsStreaming(false);
         resetStreamingContent();

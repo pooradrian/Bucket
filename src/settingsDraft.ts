@@ -8,7 +8,7 @@ export const SETTINGS_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
   'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
   'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-  'accentColor', 'userBubbleBg', 'showCharacterIcons', 'showGroupCharNames', 'dynamicIcon', 'forceItalic', 'debugLogging', 'notificationMode',
+  'accentColor', 'userBubbleBg', 'showCharacterIcons', 'showGroupCharNames', 'dynamicIcon', 'forceItalic', 'debugLogging', 'notificationMode', 'notificationSound', 'carouselAnimMs',
 ];
 
 export function toDraft(s: AppSettings): Settings {
@@ -47,6 +47,8 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   forceItalic: 'Force italic (font fallback)',
   debugLogging: 'Activity logging',
   notificationMode: 'Notification on completion',
+  notificationSound: 'Notification sound',
+  carouselAnimMs: 'Carousel animation (ms)',
 };
 
 export const CUSTOMIZATION_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
@@ -58,8 +60,8 @@ export const CUSTOMIZATION_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'accentColor', 'userBubbleBg',
 ];
 
-export const NUMERIC_KEYS: Exclude<keyof Settings, 'themeMode' | 'showCharacterIcons' | 'showGroupCharNames' | 'forceItalic' | 'debugLogging'>[] = [
+export const NUMERIC_KEYS: Exclude<keyof Settings, 'themeMode' | 'showCharacterIcons' | 'showGroupCharNames' | 'forceItalic' | 'debugLogging' | 'notificationSound'>[] = [
   'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
   'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
+  'bottomBarPad', 'sideBtnSize', 'sendBtnSize', 'carouselAnimMs',
 ];

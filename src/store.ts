@@ -44,6 +44,8 @@ export interface AppSettings extends ThemePreset {
   themeMode: 'dark' | 'light';
   debugLogging: boolean;
   notificationMode: 'off' | 'vibrate' | 'sound' | 'both';
+  notificationSound: string;
+  carouselAnimMs: number;
 }
 
 const SETTINGS_KEY = 'settings';
@@ -95,6 +97,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   dynamicIcon: false,
   debugLogging: false,
   notificationMode: 'off',
+  notificationSound: '',
+  carouselAnimMs: 1000,
 };
 
 interface AppStore {
@@ -136,6 +140,7 @@ const NUMERIC_SETTING_KEYS = [
   'cardRadius', 'pillRadius', 'bubbleRadius', 'chatMaxWidth',
   'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
   'bottomBarPad', 'sideBtnSize', 'inputRadius', 'sendBtnSize',
+  'carouselAnimMs',
 ] as const;
 
 const THEME_COLOR_KEYS = [
@@ -164,6 +169,7 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   result.dynamicIcon = saved.dynamicIcon === true || saved.dynamicIcon === 'true';
   result.debugLogging = saved.debugLogging === true || saved.debugLogging === 'true';
   result.notificationMode = (saved.notificationMode === 'vibrate' || saved.notificationMode === 'sound' || saved.notificationMode === 'both') ? saved.notificationMode : 'off';
+  result.notificationSound = typeof saved.notificationSound === 'string' ? saved.notificationSound : '';
   result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
 
   for (const key of THEME_COLOR_KEYS) {
