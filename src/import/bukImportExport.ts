@@ -206,6 +206,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       icon: char.icon || '',
       lorebook_id: (char.lorebookIds || []).join(','),
       custom_fields: JSON.stringify(char.customFields || []),
+      persona_id: char.personaId || '',
     });
   }
 
@@ -252,6 +253,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       exampleMessages: c.example_messages,
       icon: c.icon,
       lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [],
+      personaId: c.persona_id || undefined,
     }));
 
   if (options.includeSettings) {
@@ -282,6 +284,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       lorebookIds: char.lorebookIds || [],
       icon: char.icon || undefined,
       customFields: char.customFields,
+      personaId: char.personaId,
     };
     const json = serializeV2(cc);
     if (cc.lorebookIds && cc.lorebookIds.length > 0) {
@@ -289,6 +292,10 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     }
     if (cc.customFields && cc.customFields.length > 0) {
       json.data.extensions.bucket = {customFields: cc.customFields};
+    }
+    if (cc.personaId) {
+      const bucket = json.data.extensions.bucket ?? {};
+      json.data.extensions.bucket = {...bucket, personaId: cc.personaId};
     }
     charFolder?.file(`${char.id}.json`, JSON.stringify(json, null, 2));
   }

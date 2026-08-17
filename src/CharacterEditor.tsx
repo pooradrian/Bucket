@@ -19,7 +19,7 @@ import Animated, {
 import {useAppStore, GroupChat} from './store';
 import {generateId} from './Database';
 import {useTheme} from './ThemeContext';
-import {estimateTokens} from './PromptHandler';
+import {estimateTokens, loadPromptConfig, Persona} from './PromptHandler';
 import {CUSTOM_FIELDS, CustomFieldValue, getCustomField} from './CustomFields';
 
 export interface Character {
@@ -33,6 +33,7 @@ export interface Character {
   lorebookIds: string[];
   icon?: string;
   customFields?: CustomFieldValue[];
+  personaId?: string;
 }
 
 interface CharacterEditorProps {
@@ -66,10 +67,17 @@ export default function CharacterEditor({
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
+  const [personas, setPersonas] = useState<Persona[]>([]);
+  const [personaId, setPersonaId] = useState('');
+  const [showPersonaPicker, setShowPersonaPicker] = useState(false);
 
   const lorebookSlide = useSharedValue(300);
   const lorebookContentStyle = useAnimatedStyle(() => ({
     transform: [{translateY: lorebookSlide.value}],
+  }));
+  const personaSlide = useSharedValue(300);
+  const personaContentStyle = useAnimatedStyle(() => ({
+    transform: [{translateY: personaSlide.value}],
   }));
   const groupSlide = useSharedValue(300);
   const groupContentStyle = useAnimatedStyle(() => ({
@@ -84,6 +92,19 @@ export default function CharacterEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLorebookPicker]);
+
+  useEffect(() => {
+    if (showPersonaPicker) {
+      personaSlide.value = withTiming(0, {duration: 250});
+    } else {
+      personaSlide.value = 300;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPersonaPicker]);
+
+  useEffect(() => {
+    loadPromptConfig().then(cfg => setPersonas(cfg.personas ?? []));
+  }, []);
 
   useEffect(() => {
     if (showGroupEditor) {
@@ -109,6 +130,7 @@ export default function CharacterEditor({
       setExampleMessages(character.exampleMessages || '');
       setLorebookIds(character.lorebookIds || []);
       setIcon(character.icon || '');
+      setPersonaId(character.personaId || '');
     } else {
       setName('');
       setDescription('');
@@ -119,6 +141,7 @@ export default function CharacterEditor({
       setExampleMessages('');
       setLorebookIds([]);
       setIcon('');
+      setPersonaId('');
     }
   }, [character]);
 
@@ -138,6 +161,7 @@ export default function CharacterEditor({
       lorebookIds,
       icon,
       customFields,
+      personaId: personaId || undefined,
     };
     if (exampleMessages.trim()) {
       newCharacter.exampleMessages = exampleMessages.trim();
@@ -355,6 +379,25 @@ export default function CharacterEditor({
             )}
           </View>
 
+          {/* Persona */}
+          <View style={st.card}>
+            <Text style={st.cardTitle}>Persona</Text>
+            <TouchableOpacity onPress={() => setShowPersonaPicker(true)}>
+              <Text style={st.cardDescription}>
+                {personaId
+                  ? (personas.find(p => p.id === personaId)?.name || 'Unknown persona')
+                  : 'No persona assigned (follows global settings)'}
+              </Text>
+            </TouchableOpacity>
+            {personaId && (
+              <TouchableOpacity
+                onPress={() => setPersonaId('')}
+                style={st.removeAssignment}>
+                <Text style={st.removeAssignmentText}>Remove assignment</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Lorebook Picker Modal */}
           <Modal
             visible={showLorebookPicker}
@@ -401,6 +444,69 @@ export default function CharacterEditor({
                   {lorebooks.length === 0 && (
                     <Text style={st.lorebookEmptyText}>
                       No lorebooks imported yet.{'\n'}Import one in Settings.
+                    </Text>
+                  )}
+                </ScrollView>
+              </Animated.View>
+            </View>
+          </Modal>
+
+          {/* Persona Picker Modal */}
+          <Modal
+            visible={showPersonaPicker}
+            animationType="none"
+            transparent
+            onRequestClose={() => setShowPersonaPicker(false)}>
+            <View style={st.lorebookModalOverlay}>
+              <Animated.View style={[st.lorebookModalContent, personaContentStyle]}>
+                <View style={st.lorebookModalHeader}>
+                  <Text style={st.lorebookModalTitle}>
+                    Choose Persona
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowPersonaPicker(false)}
+                    style={st.lorebookCloseBtn}>
+                    <Text style={st.lorebookCloseBtnText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setPersonaId('');
+                      setShowPersonaPicker(false);
+                    }}
+                    style={[st.lorebookOption, !personaId && st.lorebookOptionActive]}>
+                    <Text style={!personaId ? st.lorebookOptionTextActive : st.lorebookOptionText}>
+                      None (follow global settings)
+                    </Text>
+                  </TouchableOpacity>
+
+                  {personas.map(persona => {
+                    const isSelected = personaId === persona.id;
+                    return (
+                      <TouchableOpacity
+                        key={persona.id}
+                        onPress={() => {
+                          setPersonaId(persona.id);
+                          setShowPersonaPicker(false);
+                        }}
+                        style={[st.lorebookOption, isSelected && st.lorebookOptionActive]}>
+                        <Text style={isSelected ? st.lorebookOptionTextActive : st.lorebookOptionText}>
+                          {persona.name}
+                        </Text>
+                        {persona.description ? (
+                          <Text style={st.lorebookEntryCount} numberOfLines={1}>
+                            {persona.description}
+                          </Text>
+                        ) : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+
+                  {personas.length === 0 && (
+                    <Text style={st.lorebookEmptyText}>
+                      No personas defined yet.{'\n'}Create them in Settings → System Prompt.
                     </Text>
                   )}
                 </ScrollView>

@@ -3,6 +3,7 @@ import {FlatList} from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import {Character} from './CharacterEditor';
 import {loadPromptConfig, sendToLLM, sendToGroupLLM, sendToQCLLM, PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
+import {RawRequest} from './Endpoint';
 import {LorebookState} from './RAGHandler';
 import {useAppStore, GroupChat} from './store';
 import {
@@ -28,6 +29,12 @@ export interface ReplyVariant {
   characterId?: string;
 }
 
+function serializeRequest(request: RawRequest): string {
+  const strippedBody = {...request.body};
+  delete (strippedBody as Record<string, unknown>).stream;
+  return JSON.stringify({url: request.url, body: strippedBody});
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -35,6 +42,7 @@ export interface ChatMessage {
   timestamp: number;
   characterId?: string;
   variants?: ReplyVariant[];
+  requestInfo?: string;
 }
 
 export interface ChatSession {
@@ -400,6 +408,7 @@ export function useChat({
             ? targetQC.id
             : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
         const assistantUpdatedAt = Date.now();
+        const requestInfo = serializeRequest(result.request);
         if (opts.replaceMessageId) {
           const replaceId = opts.replaceMessageId;
           updateSessionIfCurrent(startSessionId, prev => ({
@@ -412,6 +421,7 @@ export function useChat({
                     timestamp: assistantUpdatedAt,
                     characterId: replyCharId ?? m.characterId,
                     variants: opts.existingVariants ?? m.variants,
+                    requestInfo,
                   }
                 : m,
             ),
@@ -422,6 +432,7 @@ export function useChat({
             result.content,
             assistantUpdatedAt,
             opts.existingVariants ?? [],
+            requestInfo,
           );
           updateSessionTimestamp(startSessionId, assistantUpdatedAt);
         } else {
@@ -430,6 +441,7 @@ export function useChat({
             role: 'assistant',
             content: result.content,
             timestamp: assistantUpdatedAt,
+            requestInfo,
             ...(replyCharId ? {characterId: replyCharId} : {}),
           };
           updateSessionIfCurrent(startSessionId, prev => ({
@@ -465,6 +477,7 @@ export function useChat({
               role: 'assistant',
               content: result.content,
               timestamp: assistantUpdatedAt,
+              requestInfo,
               ...(replyCharId ? {characterId: replyCharId} : {}),
             };
             const withAssistant: ChatSession = {
@@ -487,6 +500,8 @@ export function useChat({
         const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
         if (isCancelled) {
           const partial = streamingContentRef.current;
+          const cancelledRequest = (e as Error & {request?: RawRequest}).request;
+          const cancelRequestInfo = cancelledRequest ? serializeRequest(cancelledRequest) : undefined;
           if (opts.replaceMessageId) {
             const replaceId = opts.replaceMessageId;
             const existingVariants = opts.existingVariants ?? [];
@@ -496,12 +511,12 @@ export function useChat({
                 ...prev,
                 messages: prev.messages.map(m =>
                   m.id === replaceId
-                    ? {...m, content: partial, timestamp: cancelUpdatedAt, variants: existingVariants}
+                    ? {...m, content: partial, timestamp: cancelUpdatedAt, variants: existingVariants, requestInfo: cancelRequestInfo}
                     : m,
                 ),
                 updatedAt: cancelUpdatedAt,
               }));
-              updateMessageWithVariants(replaceId, partial, cancelUpdatedAt, existingVariants);
+              updateMessageWithVariants(replaceId, partial, cancelUpdatedAt, existingVariants, cancelRequestInfo);
               updateSessionTimestamp(startSessionId, cancelUpdatedAt);
             }
           } else if (partial.length > 0) {
@@ -515,6 +530,7 @@ export function useChat({
               role: 'assistant',
               content: partial,
               timestamp: Date.now(),
+              requestInfo: cancelRequestInfo,
               ...(cancelReplyCharId ? {characterId: cancelReplyCharId} : {}),
             };
             const cancelUpdatedAt = Date.now();

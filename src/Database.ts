@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 7;
+const CURRENT_VERSION = 9;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -186,6 +186,14 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         addColumnIfMissing(conn, 'characters', 'custom_fields', 'TEXT DEFAULT ""');
       }
 
+      if (v === 8) {
+        addColumnIfMissing(conn, 'characters', 'persona_id', 'TEXT DEFAULT ""');
+      }
+
+      if (v === 9) {
+        addColumnIfMissing(conn, 'chat_messages', 'request_info', 'TEXT DEFAULT ""');
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -233,12 +241,13 @@ function compactDatabase(): void {
   } catch {}
 }
 
-async function decryptMessages(messages: Array<Omit<ChatMessage, 'variants'> & {variants?: string}>): Promise<ChatMessage[]> {
+async function decryptMessages(messages: Array<Omit<ChatMessage, 'variants' | 'requestInfo'> & {variants?: string; requestInfo?: string}>): Promise<ChatMessage[]> {
   return Promise.all(
     messages.map(async msg => ({
       ...msg,
       content: await decrypt(msg.content),
       variants: msg.variants ? await decryptVariants(msg.variants) : undefined,
+      requestInfo: msg.requestInfo ? await decrypt(msg.requestInfo) : undefined,
     }))
   );
 }
@@ -280,7 +289,7 @@ export async function getSessionForCharacter(characterId: string): Promise<ChatS
   const sessionId = row.id as string;
 
   const messagesResult = d.execute(
-    'SELECT id, role, content, timestamp, variants FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    'SELECT id, role, content, timestamp, variants, request_info FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
     [sessionId],
   );
 
@@ -293,6 +302,7 @@ export async function getSessionForCharacter(characterId: string): Promise<ChatS
         content: msg.content as string,
         timestamp: msg.timestamp as number,
         variants: msg.variants ? (msg.variants as string) : undefined,
+        requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
       }))
     );
   }
@@ -321,9 +331,10 @@ export async function createSession(session: ChatSession): Promise<void> {
       const encryptedVariants = msg.variants && msg.variants.length > 0
         ? await encryptVariants(msg.variants)
         : '';
+      const encryptedRequest = msg.requestInfo ? await encrypt(msg.requestInfo) : '';
       d.execute(
-        'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants) VALUES (?, ?, ?, ?, ?, ?)',
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, encryptedVariants],
+        'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, encryptedVariants, encryptedRequest],
       );
     }
     d.execute('COMMIT');
@@ -349,9 +360,10 @@ export async function addMessage(sessionId: string, message: ChatMessage): Promi
   const encryptedVariants = message.variants && message.variants.length > 0
     ? await encryptVariants(message.variants)
     : '';
+  const encryptedRequest = message.requestInfo ? await encrypt(message.requestInfo) : '';
   d.execute(
-    'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants) VALUES (?, ?, ?, ?, ?, ?)',
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants],
+    'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants, encryptedRequest],
   );
 }
 
@@ -399,7 +411,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
   }
   const row = sessionResult.results[0];
   const messagesResult = d.execute(
-    'SELECT id, role, content, timestamp, variants FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    'SELECT id, role, content, timestamp, variants, request_info FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
     [sessionId],
   );
   let messages: ChatMessage[] = [];
@@ -411,6 +423,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
         content: msg.content as string,
         timestamp: msg.timestamp as number,
         variants: msg.variants ? (msg.variants as string) : undefined,
+        requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
       }))
     );
   }
@@ -443,13 +456,15 @@ export async function updateMessageWithVariants(
   content: string,
   timestamp: number,
   variants: ReplyVariant[],
+  requestInfo?: string,
 ): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
   const encryptedVariants = variants.length > 0 ? await encryptVariants(variants) : '';
+  const encryptedRequest = requestInfo ? await encrypt(requestInfo) : null;
   d.execute(
-    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ? WHERE id = ?',
-    [encryptedContent, timestamp, encryptedVariants, messageId],
+    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info) WHERE id = ?',
+    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, messageId],
   );
 }
 
@@ -667,6 +682,7 @@ interface DBCharacter {
   icon: string;
   lorebook_id: string;
   custom_fields: string;
+  persona_id: string;
 }
 
 export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
@@ -682,9 +698,9 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
   };
   d.execute(
     `INSERT OR REPLACE INTO characters
-      (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [char.id, char.name, encrypted.description, encrypted.initial_message, encrypted.writing_style, encrypted.personality, encrypted.scenario, encrypted.example_messages, char.icon, char.lorebook_id, encrypted.custom_fields],
+      (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [char.id, char.name, encrypted.description, encrypted.initial_message, encrypted.writing_style, encrypted.personality, encrypted.scenario, encrypted.example_messages, char.icon, char.lorebook_id, encrypted.custom_fields, char.persona_id],
   );
 }
 
@@ -697,7 +713,7 @@ export function deleteCharacterFromDB(id: string): void {
 export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
   const d = initDB();
   const result = d.execute(
-    'SELECT id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields FROM characters ORDER BY name',
+    'SELECT id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id FROM characters ORDER BY name',
   );
   if (!result.results) {
     return [];
@@ -715,6 +731,7 @@ export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
       icon: (row.icon as string) || '',
       lorebook_id: (row.lorebook_id as string) || '',
       custom_fields: await decrypt((row.custom_fields as string) || ''),
+      persona_id: (row.persona_id as string) || '',
     }))
   );
 }
