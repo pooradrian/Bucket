@@ -386,8 +386,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
 
   const scrollOffsetRef = useRef(0);
 
+  const [showGoDown, setShowGoDown] = useState(false);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+    setShowGoDown(e.nativeEvent.contentOffset.y > 120);
   }, []);
 
   useEffect(() => {
@@ -474,6 +477,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         </TouchableOpacity>
       </View>
 
+      <View style={{flex: 1}}>
       <FlatList
         ref={flatListRef}
         data={messagesData}
@@ -505,7 +509,17 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
           </View>
         }
       />
-
+      {showGoDown && (
+        <TouchableOpacity
+          style={st.goDownBtn}
+          onPress={() => {
+            flatListRef.current?.scrollToOffset({offset: 0, animated: true});
+            setShowGoDown(false);
+          }}>
+          <Text style={st.goDownBtnIcon}>↓</Text>
+        </TouchableOpacity>
+      )}
+      </View>
       {showSelectorLine && (
         <View style={st.characterSelector}>
           <ScrollView
@@ -607,7 +621,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
               </View>
             )}
           </View>
-        ) : (selectedQC) ? (
+        ) : (selectedQC && !isGroupChat) ? (
           <View style={{marginRight: 8}}>
             <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: bgSecondary, justifyContent: 'center', alignItems: 'center'}}>
               <Text style={{color: st.textMuted.color, fontSize: 12}}>{selectedQC.name[0]}</Text>
