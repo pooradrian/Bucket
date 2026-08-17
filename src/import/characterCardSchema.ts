@@ -7,6 +7,7 @@ interface CharacterCardExtensions {
   lorebookId?: string;
   bucket?: {
     customFields?: CustomFieldValue[];
+    personaId?: string;
   };
 }
 
@@ -61,6 +62,7 @@ export function parseV2Json(json: CharacterCardJson, id?: string): Character {
     exampleMessages: data.mes_example || '',
     customFields,
     lorebookIds,
+    personaId: data.extensions?.bucket?.personaId || undefined,
   };
 }
 
@@ -104,6 +106,7 @@ interface CCV2Card {
       lorebookIds?: string[];
       bucket?: {
         customFields?: CustomFieldValue[];
+        personaId?: string;
       };
     };
   };

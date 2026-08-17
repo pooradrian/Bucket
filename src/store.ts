@@ -227,6 +227,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           exampleMessages: c.example_messages || undefined,
           lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [],
           icon: c.icon || undefined,
+          personaId: c.persona_id || undefined,
         };
       }), charactersLoading: false});
     } catch (e) {
@@ -253,6 +254,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         icon: char.icon || '',
         lorebook_id: (char.lorebookIds || []).join(','),
         custom_fields: JSON.stringify(char.customFields || []),
+        persona_id: char.personaId || '',
       });
       set({characters: updated});
       logEvent('character_saved', {

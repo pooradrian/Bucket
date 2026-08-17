@@ -4,7 +4,7 @@ import {getCustomField} from './CustomFields';
 import {ChatMessage} from './useChat';
 import {LorebookState, RAGConfig, retrieveRelevantLorebook, buildRAGInjection} from './RAGHandler';
 import {getActiveProviderId, getProviderKey, getProviders} from './SecureStore';
-import {getAIResponse} from './Endpoint';
+import {getAIResponse, RawRequest} from './Endpoint';
 import {encodingForModel} from 'js-tiktoken';
 
 const PROMPT_CONFIG_KEY = 'promptConfig';
@@ -195,6 +195,18 @@ function buildCharBlock(character: Character): string {
   return parts.join('\n');
 }
 
+function resolveUserDescription(character: Character, config: PromptConfig): string {
+  if (character.personaId) {
+    const persona = (config.personas ?? []).find(p => p.id === character.personaId);
+    if (persona) {
+      return persona.name
+        ? `User: ${persona.name}\n${persona.description}`
+        : `User description: ${persona.description}`;
+    }
+  }
+  return config.userDescription ? `User description: ${config.userDescription}` : '';
+}
+
 function resolvePlaceholders(
   template: string,
   character: Character,
@@ -215,6 +227,20 @@ function resolvePlaceholders(
     result = result.split(placeholder).join(value);
   }
   return result;
+}
+
+function buildSystemParts(
+  prefix: string,
+  userDescription: string,
+  config: PromptConfig,
+  ...rest: (string | undefined)[]
+): string[] {
+  const parts: string[] = [prefix];
+  if (userDescription && !config.prefix.includes('$USRDESC$') && !config.suffix.includes('$USRDESC$')) {
+    parts.push(userDescription);
+  }
+  parts.push(...rest.filter(Boolean) as string[]);
+  return parts;
 }
 
 function sliceHistory(
@@ -246,15 +272,19 @@ export function buildPrompt(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
 ): ChatMessageObject[] {
-  const resolvedPrefix = resolvePlaceholders(config.prefix, character, config.userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, character, config.userDescription);
+  const userDescription = resolveUserDescription(character, config);
+  const resolvedPrefix = resolvePlaceholders(config.prefix, character, userDescription);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, character, userDescription);
   const charBlock = buildCharBlock(character);
 
-  const systemParts = [resolvedPrefix, charBlock];
-  if (lorebookContext) {
-    systemParts.push(lorebookContext);
-  }
-  systemParts.push(resolvedSuffix);
+  const systemParts = buildSystemParts(
+    resolvedPrefix,
+    userDescription,
+    config,
+    charBlock,
+    lorebookContext,
+    resolvedSuffix,
+  );
 
   const systemContent = systemParts.filter(Boolean).join('\n\n');
 
@@ -285,18 +315,23 @@ export function buildGroupPrompt(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
 ): ChatMessageObject[] {
-  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, config.userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, config.userDescription);
+  const userDescription = resolveUserDescription(selectedCharacter, config);
+  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, userDescription);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, userDescription);
 
   const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
 
   const groupInstruction = `You are roleplaying as multiple characters in a group conversation. The characters are:\n${characters.map(c => `- ${c.name}`).join('\n')}\n\nThe user has selected **${selectedCharacter.name}** to respond next. Write ONLY as ${selectedCharacter.name}. Stay in character and respond naturally to the conversation.\n\nIMPORTANT: In the conversation history below, messages from each character are prefixed with their name in brackets, like [CharacterName]: message. Use this to understand who said what.`;
 
-  const systemParts = [resolvedPrefix, charBlocks, groupInstruction];
-  if (lorebookContext) {
-    systemParts.push(lorebookContext);
-  }
-  systemParts.push(resolvedSuffix);
+  const systemParts = buildSystemParts(
+    resolvedPrefix,
+    userDescription,
+    config,
+    charBlocks,
+    groupInstruction,
+    lorebookContext,
+    resolvedSuffix,
+  );
 
   const systemContent = systemParts.filter(Boolean).join('\n\n');
 
@@ -328,15 +363,19 @@ export function buildContinuePrompt(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
 ): ChatMessageObject[] {
-  const resolvedPrefix = resolvePlaceholders(config.prefix, character, config.userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, character, config.userDescription);
+  const userDescription = resolveUserDescription(character, config);
+  const resolvedPrefix = resolvePlaceholders(config.prefix, character, userDescription);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, character, userDescription);
   const charBlock = buildCharBlock(character);
 
-  const systemParts = [resolvedPrefix, charBlock];
-  if (lorebookContext) {
-    systemParts.push(lorebookContext);
-  }
-  systemParts.push(resolvedSuffix);
+  const systemParts = buildSystemParts(
+    resolvedPrefix,
+    userDescription,
+    config,
+    charBlock,
+    lorebookContext,
+    resolvedSuffix,
+  );
 
   const systemContent = systemParts.filter(Boolean).join('\n\n');
 
@@ -363,15 +402,22 @@ export function buildGroupContinuePrompt(
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
 ): ChatMessageObject[] {
-  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, config.userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, config.userDescription);
+  const userDescription = resolveUserDescription(selectedCharacter, config);
+  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, userDescription);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, userDescription);
 
   const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
 
   const groupInstruction = `You are roleplaying as multiple characters in a group conversation. The characters are:\n${characters.map(c => `- ${c.name}`).join('\n')}\n\nThe user has selected **${selectedCharacter.name}** to respond next. Write ONLY as ${selectedCharacter.name}. Stay in character and respond naturally to the conversation.\n\nIMPORTANT: In the conversation history below, messages from each character are prefixed with their name in brackets, like [CharacterName]: message. Use this to understand who said what.`;
 
-  const systemParts = [resolvedPrefix, charBlocks, groupInstruction];
-  systemParts.push(resolvedSuffix);
+  const systemParts = buildSystemParts(
+    resolvedPrefix,
+    userDescription,
+    config,
+    charBlocks,
+    groupInstruction,
+    resolvedSuffix,
+  );
 
   const systemContent = systemParts.filter(Boolean).join('\n\n');
 
@@ -404,7 +450,7 @@ export async function sendToLLM(
   lorebooks?: LorebookState[],
   controller?: AbortController,
   continueMode: boolean = false,
-): Promise<{content: string; metrics: TimingMetrics}> {
+): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
 
   const resolved = await resolveProvider(config);
@@ -464,7 +510,7 @@ export async function sendToGroupLLM(
   onToken?: (token: string) => void,
   controller?: AbortController,
   continueMode: boolean = false,
-): Promise<{content: string; metrics: TimingMetrics}> {
+): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
 
@@ -487,7 +533,7 @@ export async function sendToQCLLM(
   onToken?: (token: string) => void,
   controller?: AbortController,
   continueMode: boolean = false,
-): Promise<{content: string; metrics: TimingMetrics}> {
+): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
 
@@ -501,6 +547,7 @@ export async function sendToQCLLM(
     exampleMessages: parentChar.exampleMessages,
     initialMessage: '',
     lorebookIds: [],
+    personaId: parentChar.personaId,
   };
 
   const allChars: Character[] = [
@@ -515,6 +562,7 @@ export async function sendToQCLLM(
       exampleMessages: parentChar.exampleMessages,
       initialMessage: '',
       lorebookIds: [],
+      personaId: parentChar.personaId,
     })),
   ];
 

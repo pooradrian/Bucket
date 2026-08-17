@@ -1,6 +1,11 @@
 import axios from 'axios';
 import {ChatMessageObject, PromptConfig, TimingMetrics} from './PromptHandler';
 
+export interface RawRequest {
+  url: string;
+  body: object;
+}
+
 function streamWithXHR(
   url: string,
   headers: Record<string, string>,
@@ -113,7 +118,7 @@ export async function getAIResponse(
   onToken?: (token: string) => void,
   streaming: boolean = true,
   controller?: AbortController,
-): Promise<{content: string; metrics: TimingMetrics}> {
+): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const url = config.apiUrl?.trim();
   if (!url) {
     throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
@@ -144,6 +149,8 @@ export async function getAIResponse(
     body.temperature = tempNum;
   }
 
+  const request: RawRequest = {url, body};
+
   const ctrl = controller || new AbortController();
   const t0 = performance.now();
 
@@ -168,7 +175,9 @@ export async function getAIResponse(
     }
   } catch (e: unknown) {
     if (e instanceof Error && (e.name === 'AbortError' || e.message === 'Request was cancelled' || axios.isCancel(e))) {
-      throw new Error('Request was cancelled');
+      const cancelErr = new Error('Request was cancelled');
+      (cancelErr as Error & {request?: RawRequest}).request = request;
+      throw cancelErr;
     }
     if (e instanceof Error && e.message.startsWith('API error ')) throw e;
     const axiosErr = e as {response?: {status?: number; data?: unknown}; message?: string};
@@ -187,6 +196,7 @@ export async function getAIResponse(
 
   return {
     content,
+    request,
     metrics: {
       promptBuildMs: 0,
       ttfbMs,

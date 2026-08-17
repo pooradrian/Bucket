@@ -1,8 +1,10 @@
 import React, {useMemo, useRef, useState, useEffect} from 'react';
 import {
   Dimensions,
+  Modal,
   PanResponder,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -171,6 +173,17 @@ export default function Carousel({
   const focusKeyRef = useRef<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
+  const [jsonVisible, setJsonVisible] = useState(false);
+
+  const jsonText = useMemo(() => {
+    if (!message.requestInfo) return null;
+    try {
+      const parsed: unknown = JSON.parse(message.requestInfo);
+      return JSON.stringify(parsed, null, 2).replace(/\\n/g, '\n');
+    } catch {
+      return message.requestInfo;
+    }
+  }, [message.requestInfo]);
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -417,11 +430,39 @@ export default function Carousel({
                 />
               )}
               <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
+              <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
               <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color="#cc3333" disabled={streamingThis} />
             </View>
           </>
         )}
       </Animated.View>
+
+      <Modal
+        visible={jsonVisible && jsonText !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setJsonVisible(false)}>
+        <View style={[styles.jsonOverlay, {backgroundColor: 'rgba(0,0,0,0.6)'}]}>
+          <View style={[styles.jsonModal, {
+            backgroundColor: colors.bgSecondary,
+            borderColor: colors.borderPrimary,
+          }]}>
+            <View style={styles.jsonHeader}>
+              <Text style={[styles.jsonTitle, {color: colors.textPrimary}]}>Request</Text>
+              <TouchableOpacity onPress={() => setJsonVisible(false)} style={styles.jsonCloseBtn}>
+                <Text style={[styles.jsonCloseText, {color: colors.textPrimary}]}>×</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.jsonScroll}
+              contentContainerStyle={styles.jsonScrollContent}>
+              <Text style={[styles.jsonText, {color: colors.textSecondary}]}>
+                {jsonText}
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -766,5 +807,49 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 22,
+  },
+  jsonOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  jsonModal: {
+    width: '100%',
+    maxHeight: '80%',
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  jsonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(128,128,128,0.3)',
+  },
+  jsonTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  jsonCloseBtn: {
+    paddingHorizontal: 8,
+  },
+  jsonCloseText: {
+    fontSize: 22,
+    lineHeight: 24,
+  },
+  jsonScroll: {
+    paddingHorizontal: 16,
+  },
+  jsonScrollContent: {
+    paddingVertical: 12,
+  },
+  jsonText: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 17,
   },
 });

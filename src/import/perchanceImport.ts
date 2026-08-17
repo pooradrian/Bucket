@@ -91,6 +91,7 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
       icon: char.icon || '',
       lorebook_id: (char.lorebookIds || []).join(','),
       custom_fields: JSON.stringify(char.customFields || []),
+      persona_id: char.personaId || '',
     });
   }
 

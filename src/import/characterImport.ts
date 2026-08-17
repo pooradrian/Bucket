@@ -93,6 +93,7 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
     icon: char.icon || '',
     lorebook_id: '',
     custom_fields: JSON.stringify(char.customFields || []),
+    persona_id: char.personaId || '',
   });
 
   return {character: char, format};
