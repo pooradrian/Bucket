@@ -212,9 +212,9 @@ export default function Carousel({
 
   useEffect(() => {
     if (origin === undefined || !targetCenter) return;
-    appear.value = withTiming(1, {duration: 1000, easing: Easing.inOut(Easing.cubic)});
+    appear.value = withTiming(1, {duration: Math.max(0, theme.carouselAnimMs), easing: Easing.inOut(Easing.cubic)});
     onReady();
-  }, [appear, origin, targetCenter, onReady]);
+  }, [appear, origin, targetCenter, onReady, theme.carouselAnimMs]);
 
   const prevItemsRef = useRef<CardItem[]>(items);
   useEffect(() => {

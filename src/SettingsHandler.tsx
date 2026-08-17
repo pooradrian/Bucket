@@ -38,6 +38,8 @@ import {
 import { logEvent } from './EventLogger';
 import { setIcon } from './IconModule';
 import { useTheme } from './ThemeContext';
+import {playNotificationSound} from './NotificationModule';
+import {pick, types, keepLocalCopy} from '@react-native-documents/picker';
 import {
   Settings,
   toDraft,
@@ -354,6 +356,60 @@ export default function SettingsHandler({
     [setLorebooks, lorebooks],
   );
 
+  const handlePickSound = useCallback(async () => {
+    try {
+      const result = await pick({
+        type: [types.audio],
+      });
+      if (!result || result.length === 0) return;
+      const file = result[0];
+      if (file.hasRequestedType === false) {
+        Alert.alert('Sound Error', 'Please choose an audio file.');
+        return;
+      }
+      const ext = file.name?.match(/\.(\w+)$/)?.[1]?.toLowerCase() || 'm4a';
+      const copies = await keepLocalCopy({
+        files: [{ uri: file.uri, fileName: `notification_sound.${ext}` }],
+        destination: 'documentDirectory',
+      });
+      const copy = copies[0];
+      if (copy.status !== 'success' || !copy.localUri) {
+        Alert.alert('Sound Error', 'Could not copy the chosen file.');
+        return;
+      }
+      const updated: AppSettings = {
+        ...appSettings,
+        notificationSound: copy.localUri,
+      };
+      setAppSettings(updated);
+      playNotificationSound(copy.localUri);
+    } catch (e: unknown) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as { code: string }).code === 'OPERATION_CANCELED'
+      ) {
+        return;
+      }
+      Alert.alert('Sound Error', 'Could not use that file as a notification sound.');
+    }
+  }, [appSettings, setAppSettings]);
+
+  const handleResetSound = useCallback(() => {
+    setAppSettings({ ...appSettings, notificationSound: '' });
+  }, [appSettings, setAppSettings]);
+
+  const currentSoundName = useMemo(() => {
+    if (!appSettings.notificationSound) return 'System default';
+    const name = appSettings.notificationSound.split('/').pop() || '';
+    try {
+      return decodeURIComponent(name);
+    } catch {
+      return name;
+    }
+  }, [appSettings.notificationSound]);
+
   return (
     <View style={st.settingsContainer}>
       <View style={st.settingsHeader}>
@@ -665,6 +721,40 @@ export default function SettingsHandler({
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            <View style={st.settingsSectionHeader}>
+              <Text style={st.settingsSectionHeaderText}>Carousel</Text>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>
+                {LABELS.carouselAnimMs}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: st.textMuted.color,
+                  marginBottom: 8,
+                }}
+              >
+                How long the message studio carousel takes to appear.
+              </Text>
+              <TextInput
+                style={st.settingsInput}
+                value={values.carouselAnimMs}
+                onChangeText={text => handleChange('carouselAnimMs', text)}
+                placeholder={defaults.carouselAnimMs}
+                placeholderTextColor={st.textMuted.color}
+                keyboardType="numeric"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity onPress={() => handleReset('carouselAnimMs')}>
+                <Text style={st.settingsDefaultText}>
+                  default value: {defaults.carouselAnimMs}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={st.settingsSectionHeader}>
@@ -1416,6 +1506,60 @@ export default function SettingsHandler({
                   >
                     Both
                   </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>
+                {LABELS.notificationSound}
+              </Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: st.textMuted.color,
+                  marginBottom: 8,
+                }}
+              >
+                Sound played when a message finishes generating.
+              </Text>
+              <Text style={st.settingsDefaultText}>
+                Current: {currentSoundName}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  style={st.settingsToggleButton}
+                  onPress={handlePickSound}
+                >
+                  <Text style={st.settingsToggleText}>
+                    Choose sound file...
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    { flex: 0 },
+                    !appSettings.notificationSound && { opacity: 0.4 },
+                  ]}
+                  onPress={() =>
+                    playNotificationSound(
+                      appSettings.notificationSound || null,
+                    )
+                  }
+                  disabled={!appSettings.notificationSound}
+                >
+                  <Text style={st.settingsToggleText}>Test</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    st.settingsToggleButton,
+                    { flex: 0 },
+                    !appSettings.notificationSound && { opacity: 0.4 },
+                  ]}
+                  onPress={handleResetSound}
+                  disabled={!appSettings.notificationSound}
+                >
+                  <Text style={st.settingsToggleText}>Default</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -1,7 +1,7 @@
 import {NativeModules, Platform} from 'react-native';
 
 interface NotificationModuleType {
-  playNotificationSound(): void;
+  playNotificationSound(uri?: string | null): void;
   vibrate(): void;
 }
 
@@ -13,10 +13,10 @@ const notificationModule: NotificationModuleType | null =
     ? (rawModule as NotificationModuleType)
     : null;
 
-export function playNotificationSound(): void {
+export function playNotificationSound(uri?: string | null): void {
   if (Platform.OS !== 'android') return;
   try {
-    notificationModule?.playNotificationSound();
+    notificationModule?.playNotificationSound(uri ?? null);
   } catch {}
 }
 

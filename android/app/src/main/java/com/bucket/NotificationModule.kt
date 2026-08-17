@@ -17,11 +17,15 @@ class NotificationModule(reactContext: ReactApplicationContext) :
     override fun getName(): String = "NotificationModule"
 
     @ReactMethod
-    fun playNotificationSound() {
+    fun playNotificationSound(uri: String?) {
         val ctx = reactApplicationContext
         try {
-            val uri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            val ringtone = RingtoneManager.getRingtone(ctx, uri)
+            val ringtoneUri = if (uri.isNullOrEmpty()) {
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            } else {
+                Uri.parse(uri)
+            }
+            val ringtone = RingtoneManager.getRingtone(ctx, ringtoneUri)
             ringtone?.play()
         } catch (e: Exception) {
             // Silently fail if sound can't be played
