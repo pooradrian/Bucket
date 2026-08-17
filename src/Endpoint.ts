@@ -6,6 +6,68 @@ export interface RawRequest {
   body: object;
 }
 
+const CAT_API_URL = "cat's api";
+const CAT_SOUNDS = ['meow', 'merp', 'nya', 'purr'];
+const CAT_MAX_WORDS = 100;
+
+function isCatApiUrl(url: string): boolean {
+  return url.trim().toLowerCase() === CAT_API_URL;
+}
+
+function countCatSounds(messages: ChatMessageObject[]): number {
+  const userMessages = messages.filter(m => m.role === 'user');
+  const content = userMessages[userMessages.length - 1]?.content ?? '';
+  const match = content.match(/\d+/);
+  const n = match ? parseInt(match[0], 10) : 0;
+  if (n > 0) {
+    return Math.min(n, CAT_MAX_WORDS);
+  }
+  return 3;
+}
+
+function buildCatSounds(count: number): string[] {
+  return Array.from(
+    {length: count},
+    () => CAT_SOUNDS[Math.floor(Math.random() * CAT_SOUNDS.length)],
+  );
+}
+
+function streamCatSounds(
+  words: string[],
+  onToken: (token: string) => void,
+  controller: AbortController,
+  request: RawRequest,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let content = '';
+    let i = 0;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const onAbort = () => {
+      timers.forEach(t => clearTimeout(t));
+      const cancelErr = new Error('Request was cancelled');
+      (cancelErr as Error & {request?: RawRequest}).request = request;
+      reject(cancelErr);
+    };
+    controller.signal.addEventListener('abort', onAbort, {once: true});
+
+    const tick = () => {
+      if (controller.signal.aborted) return;
+      if (i >= words.length) {
+        controller.signal.removeEventListener('abort', onAbort);
+        resolve(content);
+        return;
+      }
+      const token = words[i] + (i < words.length - 1 ? ' ' : '');
+      content += token;
+      onToken(token);
+      i++;
+      timers.push(setTimeout(tick, 30 + Math.random() * 50));
+    };
+    tick();
+  });
+}
+
 function streamWithXHR(
   url: string,
   headers: Record<string, string>,
@@ -153,6 +215,25 @@ export async function getAIResponse(
 
   const ctrl = controller || new AbortController();
   const t0 = performance.now();
+
+  if (isCatApiUrl(url)) {
+    const onTokenCb = onToken ?? (() => {});
+    const words = buildCatSounds(countCatSounds(messages));
+    const content = streaming
+      ? await streamCatSounds(words, onTokenCb, ctrl, request)
+      : words.join(' ');
+    const totalMs = performance.now() - t0;
+    return {
+      content,
+      request,
+      metrics: {
+        promptBuildMs: 0,
+        ttfbMs: streaming ? 30 : totalMs,
+        bodyReadMs: totalMs,
+        totalMs,
+      },
+    };
+  }
 
   let content = '';
   let ttfbMs = 0;
