@@ -17,7 +17,13 @@ import {
   getKV,
   createSession,
   getAllSessionsForCharacter,
+  getSessionsForGroupChat,
   getSessionById,
+  getQuickCharactersForSession,
+  saveQuickCharacter,
+  getAllGroupChatsFromDB,
+  saveGroupChatToDB,
+  DBQuickCharacter,
 } from '../Database';
 import {readIconFile} from './util';
 import {parseV1Json, parseV2Json, serializeV2} from './characterCardSchema';
@@ -32,6 +38,8 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     characters: [],
     lorebooks: [],
     sessions: [],
+    quickCharacters: [],
+    groups: [],
     skippedCharacters: [],
   };
 
@@ -161,7 +169,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       if (file.dir) continue;
       try {
         const text = await file.async('string');
-        const session: ChatSession = JSON.parse(text);
+        const parsed = JSON.parse(text);
+        const session: ChatSession = parsed;
+        const qcs: DBQuickCharacter[] | undefined = parsed.quickCharacters;
         const newCharId = origIdToNewId.get(session.characterId);
         if (newCharId) {
           session.characterId = newCharId;
@@ -185,7 +195,40 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
           }
         }
         result.sessions.push(session);
+        if (qcs) {
+          for (const qc of qcs) {
+            const mappedCharId = origIdToNewId.get(qc.character_id);
+            result.quickCharacters.push({
+              id: qc.id,
+              session_id: session.id,
+              character_id: mappedCharId ?? qc.character_id,
+              name: qc.name,
+              description: qc.description,
+              personality: qc.personality,
+              starred: qc.starred,
+            });
+          }
+        }
       } catch (e) { console.warn('Failed to import chat session:', e); }
+    }
+  }
+
+  const groupDir = zip.folder('groups');
+  if (groupDir) {
+    const groupFiles = groupDir.filter(() => true);
+    for (const [, file] of Object.entries(groupFiles)) {
+      if (file.dir) continue;
+      try {
+        const text = await file.async('string');
+        const parsed = JSON.parse(text);
+        result.groups.push({
+          id: parsed.id,
+          name: parsed.name,
+          description: parsed.description || '',
+          icon: parsed.icon || undefined,
+          characterIds: Array.isArray(parsed.characterIds) ? parsed.characterIds : [],
+        });
+      } catch (e) { console.warn('Failed to import group:', e); }
     }
   }
 
@@ -210,10 +253,36 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     });
   }
 
+  const validCharIds = new Set((await getAllCharactersFromDB()).map(c => c.id));
+  for (const group of result.groups) {
+    const memberIds = group.characterIds
+      .map(id => origIdToNewId.get(id) ?? id)
+      .filter(id => validCharIds.has(id));
+    if (memberIds.length === 0) {
+      console.warn(`Skipped group ${group.name}: no valid members`);
+      continue;
+    }
+    try {
+      await saveGroupChatToDB({
+        id: group.id,
+        name: group.name,
+        description: group.description || '',
+        icon: group.icon || '',
+        characterIds: memberIds,
+      });
+    } catch (e) { console.warn('Failed to import group:', e); }
+  }
+
   for (const session of result.sessions) {
     try {
       await createSession(session);
     } catch (e) { console.warn('Failed to create session:', e); }
+  }
+
+  for (const qc of result.quickCharacters) {
+    try {
+      await saveQuickCharacter(qc);
+    } catch (e) { console.warn('Failed to create quick character:', e); }
   }
 
   if (result.settings) {
@@ -325,6 +394,23 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     }
   }
 
+  if (options.groupIds.length > 0) {
+    const allGroups = await getAllGroupChatsFromDB();
+    const selectedGroups = allGroups.filter(g => options.groupIds.includes(g.id));
+    if (selectedGroups.length > 0) {
+      const groupFolder = zip.folder('groups');
+      for (const group of selectedGroups) {
+        groupFolder?.file(`${group.id}.json`, JSON.stringify({
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          icon: group.icon,
+          characterIds: group.characterIds,
+        }, null, 2));
+      }
+    }
+  }
+
   if (options.includeChats) {
     const chatFolder = zip.folder('chats');
     for (const charId of options.characterIds) {
@@ -332,7 +418,24 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       for (const summary of sessions) {
         const session = await getSessionById(summary.id);
         if (session) {
-          chatFolder?.file(`${session.id}.json`, JSON.stringify(session, null, 2));
+          const quickCharacters = await getQuickCharactersForSession(session.id);
+          const payload = quickCharacters.length > 0
+            ? {...session, quickCharacters}
+            : session;
+          chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
+        }
+      }
+    }
+    for (const groupId of options.groupIds) {
+      const sessions = getSessionsForGroupChat(groupId);
+      for (const summary of sessions) {
+        const session = await getSessionById(summary.id);
+        if (session) {
+          const quickCharacters = await getQuickCharactersForSession(session.id);
+          const payload = quickCharacters.length > 0
+            ? {...session, quickCharacters}
+            : session;
+          chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
         }
       }
     }

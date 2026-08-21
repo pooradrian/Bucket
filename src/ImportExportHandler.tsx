@@ -25,7 +25,7 @@ import {
   ExportFormat,
   ExportOptions,
 } from './ImportExport';
-import {getAllCharactersFromDB} from './Database';
+import {getAllCharactersFromDB, getAllGroupChatsFromDB} from './Database';
 
 interface ImportExportHandlerProps {
   bottomInset: number;
@@ -33,16 +33,18 @@ interface ImportExportHandlerProps {
 
 export default function ImportExportHandler({bottomInset}: ImportExportHandlerProps) {
   const st = useTheme();
-  const {loadCharacters, loadLorebooks, loadSettings, appSettings, bumpPromptConfigVersion} = useAppStore();
+  const {loadCharacters, loadGroupChats, loadLorebooks, loadSettings, appSettings, bumpPromptConfigVersion} = useAppStore();
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
   const [selectedChars, setSelectedChars] = useState<string[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [includeSettings, setIncludeSettings] = useState(true);
   const [includeLorebooks, setIncludeLorebooks] = useState(true);
   const [includeChats, setIncludeChats] = useState(true);
   const [chars, setChars] = useState<Array<{id: string; name: string; hasCustomFields: boolean}>>([]);
+  const [groups, setGroups] = useState<Array<{id: string; name: string; characterIds: string[]}>>([]);
 
   const handleImport = useCallback(async () => {
     try {
@@ -65,6 +67,12 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         if (imported.sessions.length > 0) {
           message += `, ${imported.sessions.length} chat sessions`;
         }
+        if (imported.groups.length > 0) {
+          message += `, ${imported.groups.length} group chats`;
+        }
+        if (imported.quickCharacters.length > 0) {
+          message += `, ${imported.quickCharacters.length} quick characters`;
+        }
         if (imported.settings) {
           message += ', and settings';
         }
@@ -73,6 +81,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         }
 
         await loadCharacters();
+        await loadGroupChats();
         await loadLorebooks();
         await loadSettings();
         if (imported.settings || imported.promptConfig) {
@@ -128,16 +137,19 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
     } finally {
       setImporting(false);
     }
-  }, [loadCharacters, loadLorebooks, loadSettings, bumpPromptConfigVersion]);
+  }, [loadCharacters, loadGroupChats, loadLorebooks, loadSettings, bumpPromptConfigVersion]);
 
   const handleShowExport = useCallback(async () => {
     const allChars = await getAllCharactersFromDB();
+    const allGroups = await getAllGroupChatsFromDB();
     setChars(allChars.map(c => ({
       id: c.id,
       name: c.name,
       hasCustomFields: parseCustomFields(c.custom_fields).length > 0,
     })));
+    setGroups(allGroups.map(g => ({id: g.id, name: g.name, characterIds: g.characterIds})));
     setSelectedChars(allChars.map(c => c.id));
+    setSelectedGroups(allGroups.map(g => g.id));
     setSelectedFormat(null);
     setIncludeSettings(true);
     setIncludeLorebooks(true);
@@ -194,6 +206,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         const options: ExportOptions = {
           format: 'buk',
           characterIds: selectedChars,
+          groupIds: selectedGroups,
           includeSettings,
           includeLorebooks,
           includeChats,
@@ -214,13 +227,26 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
     } finally {
       setExporting(false);
     }
-  }, [selectedFormat, selectedChars, includeSettings, includeLorebooks, includeChats]);
+  }, [selectedFormat, selectedChars, selectedGroups, includeSettings, includeLorebooks, includeChats]);
 
   const toggleChar = useCallback((id: string) => {
     setSelectedChars(prev =>
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     );
   }, []);
+
+  const toggleGroup = useCallback((id: string) => {
+    const isSelected = selectedGroups.includes(id);
+    setSelectedGroups(prev =>
+      prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
+    );
+    if (!isSelected) {
+      const group = groups.find(g => g.id === id);
+      if (group) {
+        setSelectedChars(sel => [...new Set([...sel, ...group.characterIds])]);
+      }
+    }
+  }, [selectedGroups, groups]);
 
   const ac = appSettings.accentColor;
   const bg = appSettings.bgPrimary;
@@ -243,6 +269,16 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
   const charTextStyle = (id: string) => [
     st.settingsToggleText,
     {color: selectedChars.includes(id) ? bg : ac},
+  ];
+
+  const groupBtnStyle = (id: string) => [
+    st.settingsToggleButton,
+    {marginBottom: 6, backgroundColor: selectedGroups.includes(id) ? ac : 'transparent'},
+  ];
+
+  const groupTextStyle = (id: string) => [
+    st.settingsToggleText,
+    {color: selectedGroups.includes(id) ? bg : ac},
   ];
 
   const hasCustomFieldChars = selectedChars.some(id =>
@@ -407,7 +443,44 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
                 </>
               )}
 
-              {selectedFormat && selectedChars.length > 0 && (
+              {selectedFormat === 'buk' && (
+                <>
+                  <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 10}}>
+                    Group Chats ({selectedGroups.length}/{groups.length})
+                  </Text>
+
+                  <TouchableOpacity
+                    style={st.settingsToggleButton}
+                    onPress={() => setSelectedGroups(
+                      selectedGroups.length === groups.length ? [] : groups.map(g => g.id)
+                    )}>
+                    <Text style={st.settingsToggleText}>
+                      {selectedGroups.length === groups.length ? 'Deselect All Groups' : 'Select All Groups'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={{marginTop: 10}}>
+                    {groups.map(group => (
+                      <TouchableOpacity
+                        key={group.id}
+                        style={groupBtnStyle(group.id)}
+                        onPress={() => toggleGroup(group.id)}>
+                        <Text style={groupTextStyle(group.id)}>
+                          {group.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {groups.length === 0 && (
+                    <Text style={{color: appSettings.textMuted, fontSize: 13, marginTop: 6}}>
+                      No group chats yet
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {selectedFormat && (selectedChars.length > 0 || selectedGroups.length > 0) && (
                 <TouchableOpacity
                   style={[st.card, {marginTop: 16, backgroundColor: ac, alignItems: 'center'}]}
                   onPress={handleExport}
@@ -418,9 +491,9 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
                 </TouchableOpacity>
               )}
 
-              {selectedFormat && selectedChars.length === 0 && (
+              {selectedFormat && selectedChars.length === 0 && selectedGroups.length === 0 && (
                 <Text style={{color: appSettings.textMuted, fontSize: 14, textAlign: 'center', marginTop: 20}}>
-                  Select at least one character to export
+                  Select at least one character or group to export
                 </Text>
               )}
             </ScrollView>

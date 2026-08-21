@@ -209,6 +209,8 @@ function buildSummary(type: string, stats: Record<string, number | string | bool
     }
     case 'group_deleted':
       return `Deleted group chat [name(${stats.nameLen}c), ${stats.memberCount} members]`;
+    case 'chat_converted_to_group':
+      return `Converted chat to group [${stats.memberCount} members]`;
     case 'lorebook_imported':
       return `Imported lorebook [${stats.entryCount} entries, name(${stats.fileNameLen}c)]`;
     case 'lorebook_removed':

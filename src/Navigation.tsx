@@ -10,6 +10,7 @@ import {
   getAllSessionsForCharacter,
   getSessionsForGroupChat,
   deleteSession,
+  migrateSessionToGroup,
   SessionSummary,
   getKV,
   setKV,
@@ -78,6 +79,7 @@ function HomeScreen() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<string | null>(null);
   const [editingGroup, setEditingGroup] = useState<GroupChat | null>(null);
+  const [showConvertGroup, setShowConvertGroup] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(true);
 
@@ -224,6 +226,22 @@ function HomeScreen() {
       loadGroupChats();
     },
     [saveGroupChat, loadGroupChats],
+  );
+
+  const handleConvertSave = useCallback(
+    (group: GroupChat) => {
+      if (!activeSessionId) return;
+      saveGroupChat(group);
+      migrateSessionToGroup(activeSessionId, group.id);
+      logEvent('chat_converted_to_group', {memberCount: group.characterIds.length});
+      setShowConvertGroup(false);
+      setShowHistory(false);
+      loadGroupChats();
+      setActiveGroupChat(group);
+      setActiveChatCharacter(null);
+      setActiveTab('chat');
+    },
+    [activeSessionId, saveGroupChat, loadGroupChats],
   );
 
   const loading = charactersLoading || groupChatsLoading;
@@ -446,6 +464,7 @@ function HomeScreen() {
           onNewChat={handleNewChat}
           onSwitchSession={handleSwitchSession}
           onDeleteSession={handleDeleteSession}
+          onConvertToGroup={!activeGroupChat && activeChatCharacter ? () => setShowConvertGroup(true) : undefined}
           onClose={() => setShowHistory(false)}
           onCreateQC={handleCreateQC}
           onToggleQCStar={handleToggleQCStar}
@@ -457,6 +476,17 @@ function HomeScreen() {
           group={editingGroup}
           onClose={() => setEditingGroup(null)}
           onSave={handleGroupEditSave}
+        />
+
+        <GroupEditor
+          visible={showConvertGroup && !!activeChatCharacter}
+          group={null}
+          fixedMemberId={activeChatCharacter?.id}
+          defaultName={activeChatCharacter?.name}
+          title="Convert to Group Chat"
+          saveLabel="Convert"
+          onClose={() => setShowConvertGroup(false)}
+          onSave={handleConvertSave}
         />
       </View>
     </View>

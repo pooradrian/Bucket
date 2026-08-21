@@ -17,6 +17,7 @@ interface HistoryModalProps {
   onNewChat: () => void;
   onSwitchSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onConvertToGroup?: () => void;
   onClose: () => void;
   onCreateQC: (qc: {name: string; description: string; personality: string}) => void;
   onToggleQCStar: (id: string) => void;
@@ -31,6 +32,7 @@ export default function HistoryModal({
   onNewChat,
   onSwitchSession,
   onDeleteSession,
+  onConvertToGroup,
   onClose,
   onCreateQC,
   onToggleQCStar,
@@ -96,6 +98,12 @@ export default function HistoryModal({
                 <TouchableOpacity onPress={onNewChat} style={st.newChatBtn}>
                   <Text style={st.newChatBtnText}>+ New Chat</Text>
                 </TouchableOpacity>
+
+                {activeSessionId && onConvertToGroup && (
+                  <TouchableOpacity onPress={onConvertToGroup} style={st.newChatBtn}>
+                    <Text style={st.newChatBtnText}>Convert to Group</Text>
+                  </TouchableOpacity>
+                )}
 
                 {activeSessionId && (
                   <>
