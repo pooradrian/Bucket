@@ -438,6 +438,11 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
   };
 }
 
+export function migrateSessionToGroup(sessionId: string, groupChatId: string): void {
+  const d = initDB();
+  d.execute('UPDATE chat_sessions SET character_id = \'\', group_chat_id = ? WHERE id = ?', [groupChatId, sessionId]);
+}
+
 export function deleteSession(sessionId: string): void {
   const d = initDB();
   d.execute('DELETE FROM quick_characters WHERE session_id = ? AND starred = 0', [sessionId]);

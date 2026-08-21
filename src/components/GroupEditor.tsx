@@ -15,10 +15,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import {useAppStore, GroupChat} from '../store';
 import {useTheme} from '../ThemeContext';
+import {generateId} from '../Database';
 
 interface GroupEditorProps {
   visible: boolean;
   group: GroupChat | null;
+  fixedMemberId?: string;
+  defaultName?: string;
+  title?: string;
+  saveLabel?: string;
   onClose: () => void;
   onSave: (group: GroupChat) => void;
 }
@@ -26,6 +31,10 @@ interface GroupEditorProps {
 export default function GroupEditor({
   visible,
   group,
+  fixedMemberId,
+  defaultName,
+  title,
+  saveLabel,
   onClose,
   onSave,
 }: GroupEditorProps) {
@@ -49,9 +58,9 @@ export default function GroupEditor({
         setGroupDescription(group.description || '');
         setSelectedCharacterIds([...group.characterIds]);
       } else {
-        setGroupName('');
+        setGroupName(defaultName ?? '');
         setGroupDescription('');
-        setSelectedCharacterIds([]);
+        setSelectedCharacterIds(fixedMemberId ? [fixedMemberId] : []);
       }
     } else {
       slide.value = 300;
@@ -66,12 +75,15 @@ export default function GroupEditor({
   };
 
   const handleSave = () => {
-    if (!groupName.trim() || selectedCharacterIds.length === 0 || !group) return;
+    if (!groupName.trim() || selectedCharacterIds.length === 0) return;
+    const memberIds = fixedMemberId && !selectedCharacterIds.includes(fixedMemberId)
+      ? [fixedMemberId, ...selectedCharacterIds]
+      : selectedCharacterIds;
     onSave({
-      ...group,
+      id: group ? group.id : generateId(),
       name: groupName.trim(),
       description: groupDescription.trim(),
-      characterIds: selectedCharacterIds,
+      characterIds: memberIds,
     });
   };
 
@@ -84,7 +96,7 @@ export default function GroupEditor({
       <View style={st.groupEditorOverlay}>
         <Animated.View style={[st.groupEditorContent, contentStyle]}>
           <View style={st.groupEditorHeader}>
-            <Text style={st.groupEditorTitle}>Edit Group Chat</Text>
+            <Text style={st.groupEditorTitle}>{title ?? 'Edit Group Chat'}</Text>
             <TouchableOpacity
               onPress={onClose}
               style={st.groupEditorCloseBtn}>
@@ -119,10 +131,15 @@ export default function GroupEditor({
 
             <View style={st.groupEditorField}>
               <Text style={st.groupEditorLabel}>Select Characters</Text>
-              {characters.map(char => (
+              {characters.map(char => {
+                const isFixed = char.id === fixedMemberId;
+                return (
                 <TouchableOpacity
                   key={char.id}
-                  onPress={() => toggleCharacterSelection(char.id)}
+                  onPress={() => {
+                    if (isFixed) return;
+                    toggleCharacterSelection(char.id);
+                  }}
                   style={st.groupEditorMemberRow}>
                   {char.icon ? (
                     <Image source={{uri: char.icon}} style={st.groupEditorMemberAvatar} />
@@ -139,14 +156,15 @@ export default function GroupEditor({
                   </View>
                   <View style={[
                     st.groupEditorMemberCheck,
-                    selectedCharacterIds.includes(char.id) && st.groupEditorMemberCheckActive,
+                    (selectedCharacterIds.includes(char.id) || isFixed) && st.groupEditorMemberCheckActive,
                   ]}>
-                    {selectedCharacterIds.includes(char.id) && (
+                    {(selectedCharacterIds.includes(char.id) || isFixed) && (
                       <Text style={st.groupEditorMemberCheckText}>✓</Text>
                     )}
                   </View>
                 </TouchableOpacity>
-              ))}
+                );
+              })}
               {characters.length === 0 && (
                 <Text style={st.lorebookEmptyText}>
                   No characters yet.{'\n'}Create some characters first.
@@ -157,7 +175,7 @@ export default function GroupEditor({
             <TouchableOpacity
               onPress={handleSave}
               style={[st.groupEditorSaveBtn, (!groupName.trim() || selectedCharacterIds.length === 0) && {opacity: 0.4}]}>
-              <Text style={st.groupEditorSaveBtnText}>Save Group</Text>
+              <Text style={st.groupEditorSaveBtnText}>{saveLabel ?? 'Save Group'}</Text>
             </TouchableOpacity>
           </ScrollView>
         </Animated.View>
