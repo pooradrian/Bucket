@@ -67,3 +67,7 @@ yarn-error.log
 # Project
 TODO.md
 .vscode/
+
+# Release signing (never commit)
+release.keystore
+keystore.properties

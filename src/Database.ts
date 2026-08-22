@@ -230,7 +230,9 @@ export function initDB(): NitroSQLiteConnection {
 function checkpointWAL(): void {
   try {
     initDB().execute('PRAGMA wal_checkpoint(TRUNCATE)');
-  } catch {}
+  } catch (e) {
+    console.warn('WAL checkpoint failed:', e);
+  }
 }
 
 function compactDatabase(): void {
@@ -238,7 +240,9 @@ function compactDatabase(): void {
   try {
     d.execute('PRAGMA wal_checkpoint(TRUNCATE)');
     d.execute('VACUUM');
-  } catch {}
+  } catch (e) {
+    console.warn('Database compaction failed:', e);
+  }
 }
 
 async function decryptMessages(messages: Array<Omit<ChatMessage, 'variants' | 'requestInfo'> & {variants?: string; requestInfo?: string}>): Promise<ChatMessage[]> {
@@ -268,7 +272,8 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
     return Promise.all(
       parsed.map(async v => ({...v, content: await decrypt(v.content)})),
     );
-  } catch {
+  } catch (e) {
+    console.warn('Failed to decrypt message variants:', e);
     return [];
   }
 }

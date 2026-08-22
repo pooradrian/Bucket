@@ -44,8 +44,22 @@ import {LogEntry, parseArgs, findCharacter} from './debuggerUtils';
 import {getCustomField} from './CustomFields';
 import {getEvents, loadPersistedEvents, clearEvents, isLoggingEnabled} from './EventLogger';
 
-const encryptText = encrypt;
-const decryptText = decrypt;
+const MAX_LOG_ENTRIES = 500;
+
+function redactHeaders(headers: unknown): string {
+  try {
+    const copy: Record<string, unknown> = JSON.parse(JSON.stringify(headers || {}));
+    for (const key of Object.keys(copy)) {
+      if (key.toLowerCase() === 'authorization') {
+        const val = String(copy[key]);
+        copy[key] = val.length > 12 ? `${val.slice(0, 12)}...` : '...';
+      }
+    }
+    return JSON.stringify(copy);
+  } catch {
+    return '<unserializable headers>';
+  }
+}
 
 const reqMetaMap = new WeakMap<AxiosRequestConfig, {reqId: string; t0: number}>();
 
@@ -69,7 +83,10 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
   const resInterceptorRef = useRef<number | null>(null);
 
   const appendLog = useCallback((type: LogEntry['type'], text: string) => {
-    setLog(prev => [...prev, {id: Date.now().toString() + Math.random(), type, text}]);
+    setLog(prev => {
+      const next = [...prev, {id: Date.now().toString() + Math.random(), type, text}];
+      return next.length > MAX_LOG_ENTRIES ? next.slice(next.length - MAX_LOG_ENTRIES) : next;
+    });
   }, []);
 
   useEffect(() => {
@@ -108,7 +125,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
         appendLog('info', `[${reqId}] >>> Body:\n${bodyPreview}`);
       }
       if (config.headers) {
-        appendLog('info', `[${reqId}] >>> Headers: ${JSON.stringify(config.headers)}`);
+        appendLog('info', `[${reqId}] >>> Headers: ${redactHeaders(config.headers)}`);
       }
 
       reqMetaMap.set(config, {reqId, t0: performance.now()});
@@ -125,7 +142,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
 
         appendLog('info', [
           `[${reqId}] <<< ${response.status} ${response.statusText} in ${ms}ms`,
-          `  Headers: ${JSON.stringify(resHeaders)}`,
+          `  Headers: ${redactHeaders(resHeaders)}`,
         ].join('\n'));
 
         return response;
@@ -853,8 +870,8 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
                 let passed = 0;
                 let failed = 0;
                 for (const tc of testCases) {
-                  const enc = await encryptText(tc);
-                  const dec = await decryptText(enc);
+                  const enc = await encrypt(tc);
+                  const dec = await decrypt(enc);
                   if (dec === tc) {
                     passed++;
                   } else {
@@ -880,8 +897,8 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
                 break;
               }
               try {
-                const enc = await encryptText(text);
-                const dec = await decryptText(enc);
+                const enc = await encrypt(text);
+                const dec = await decrypt(enc);
                 const match = dec === text;
                 appendLog('output', [
                   `Encrypted:  ${enc.slice(0, 80)}${enc.length > 80 ? '...' : ''} (${enc.length} chars)`,
@@ -903,7 +920,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
                 break;
               }
               try {
-                const dec = await decryptText(hex);
+                const dec = await decrypt(hex);
                 appendLog('output', `Decrypted: ${dec}`);
               } catch (e: unknown) {
                 appendLog('error', `Decrypt failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -916,7 +933,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
               break;
             }
             try {
-              const enc = await encryptText(text);
+              const enc = await encrypt(text);
               appendLog('output', [
                 `Encrypted: ${enc}`,
                 `Length:    ${enc.length} chars`,
