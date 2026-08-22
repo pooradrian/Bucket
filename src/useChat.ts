@@ -127,6 +127,7 @@ export function useChat({
 } {
   const lorebooks = useAppStore(s => s.lorebooks);
   const allCharacters = useAppStore(s => s.characters);
+  const promptConfigVersion = useAppStore(s => s.promptConfigVersion);
 
   const [session, setSession] = useState<ChatSession | null>(null);
   const [inputText, setInputText] = useState('');
@@ -143,7 +144,9 @@ export function useChat({
   const [selectedQC, setSelectedQC] = useState<QuickCharacter | null>(null);
   const [variantIndexMap, setVariantIndexMap] = useState<Record<string, number>>({});
   const variantIndexMapRef = useRef(variantIndexMap);
-  variantIndexMapRef.current = variantIndexMap;
+  useEffect(() => {
+    variantIndexMapRef.current = variantIndexMap;
+  }, [variantIndexMap]);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef('');
@@ -158,6 +161,21 @@ export function useChat({
   useEffect(() => {
     sessionIdRef.current = session?.id ?? null;
   }, [session?.id]);
+
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (streamingTimerRef.current) {
+        clearTimeout(streamingTimerRef.current);
+        streamingTimerRef.current = null;
+      }
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const pendingCreationKeyRef = useRef<string | null>(null);
 
@@ -216,8 +234,10 @@ export function useChat({
   }, []);
 
   useEffect(() => {
-    loadPromptConfig().then(setPromptConfig);
-  }, []);
+    loadPromptConfig()
+      .then(setPromptConfig)
+      .catch(e => console.warn('Failed to load prompt config:', e));
+  }, [promptConfigVersion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -589,7 +609,7 @@ export function useChat({
         isGroupChat,
         isQC: !!selectedQC,
       });
-      setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
+      scrollTimeoutRef.current = setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
 
       await runLLMRequest(startSessionId, withUser.messages, trimmed, {
         setLastReplyCharacter: true,
@@ -648,9 +668,13 @@ export function useChat({
       m.id === msg.id ? {...m, content: trimmed} : m,
     );
     setSession({...session, messages: updated, updatedAt: Date.now()});
-    await updateMessage(msg.id, trimmed);
-    updateSessionTimestamp(session.id, Date.now());
-    logEvent('message_edited', {oldCharCount: msg.content.length, newCharCount: trimmed.length});
+    try {
+      await updateMessage(msg.id, trimmed);
+      updateSessionTimestamp(session.id, Date.now());
+      logEvent('message_edited', {oldCharCount: msg.content.length, newCharCount: trimmed.length});
+    } catch (e) {
+      console.warn('Failed to save message edit:', e);
+    }
     setEditingMessageId(null);
     setEditingText('');
   }, [session]);

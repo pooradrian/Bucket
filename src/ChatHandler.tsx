@@ -396,14 +396,15 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   useEffect(() => {
     if (editingMessageId) {
       const offset = scrollOffsetRef.current;
-      requestAnimationFrame(() => {
+      const raf = requestAnimationFrame(() => {
         flatListRef.current?.scrollToOffset({offset, animated: false});
       });
+      return () => cancelAnimationFrame(raf);
     }
   }, [editingMessageId, flatListRef]);
 
   useEffect(() => {
-    if (isStreaming) {
+    if (isStreaming && scrollOffsetRef.current <= 120) {
       flatListRef.current?.scrollToOffset({offset: 0, animated: true});
     }
   }, [streamingContent, isStreaming, flatListRef]);
@@ -492,7 +493,6 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
           if (selectedMessageId) {setSelectedMessageId(null);}
           if (carouselMessageId) {setCarouselMessageIdInner(null);}
         }}
-        ListHeaderComponent={null}
         ListEmptyComponent={
           <View style={st.emptyStateContainer}>
             <View style={st.emptyStateBubble}>

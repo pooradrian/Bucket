@@ -43,6 +43,7 @@ export async function setProviderKey(providerId: string, key: string): Promise<v
   }
   await Keychain.setGenericPassword(providerId, key, {
     service: KEY_SERVICE_PREFIX + providerId,
+    accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
 }
 
