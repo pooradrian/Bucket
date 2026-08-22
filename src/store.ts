@@ -27,6 +27,7 @@ export interface ThemePreset {
 }
 
 export interface AppSettings extends ThemePreset {
+  dangerColor: string;
   cardRadius: number;
   pillRadius: number;
   bubbleRadius: number;
@@ -99,6 +100,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notificationMode: 'off',
   notificationSound: '',
   carouselAnimMs: 1000,
+  dangerColor: '#cc3333',
 };
 
 interface AppStore {
@@ -146,7 +148,7 @@ const NUMERIC_SETTING_KEYS = [
 const THEME_COLOR_KEYS = [
   'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
   'textPrimary', 'textSecondary', 'textMuted',
-  'accentColor', 'userBubbleBg',
+  'accentColor', 'userBubbleBg', 'dangerColor',
 ] as const;
 
 export function parseSavedSettings(raw: unknown): AppSettings {

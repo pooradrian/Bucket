@@ -22,6 +22,7 @@ import {useTheme} from './ThemeContext';
 import {estimateTokens, loadPromptConfig, Persona} from './PromptHandler';
 import {CUSTOM_FIELDS, CustomFieldValue, getCustomField} from './CustomFields';
 import AutoGrowTextInput from './components/AutoGrowTextInput';
+import GroupEditor from './components/GroupEditor';
 
 export interface Character {
   id: string;
@@ -52,7 +53,6 @@ export default function CharacterEditor({
 }: CharacterEditorProps) {
   const st = useTheme();
   const lorebooks = useAppStore(store => store.lorebooks);
-  const characters = useAppStore(store => store.characters);
   const saveGroupChat = useAppStore(store => store.saveGroupChat);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -65,9 +65,6 @@ export default function CharacterEditor({
   const [showLorebookPicker, setShowLorebookPicker] = useState(false);
   const [icon, setIcon] = useState('');
   const [showGroupEditor, setShowGroupEditor] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [groupDescription, setGroupDescription] = useState('');
-  const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [personaId, setPersonaId] = useState('');
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
@@ -79,10 +76,6 @@ export default function CharacterEditor({
   const personaSlide = useSharedValue(300);
   const personaContentStyle = useAnimatedStyle(() => ({
     transform: [{translateY: personaSlide.value}],
-  }));
-  const groupSlide = useSharedValue(300);
-  const groupContentStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: groupSlide.value}],
   }));
 
   useEffect(() => {
@@ -106,15 +99,6 @@ export default function CharacterEditor({
   useEffect(() => {
     loadPromptConfig().then(cfg => setPersonas(cfg.personas ?? []));
   }, []);
-
-  useEffect(() => {
-    if (showGroupEditor) {
-      groupSlide.value = withTiming(0, {duration: 250});
-    } else {
-      groupSlide.value = 300;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showGroupEditor]);
 
   useEffect(() => {
     if (character) {
@@ -182,26 +166,10 @@ export default function CharacterEditor({
     }
   };
 
-  const handleSaveGroup = () => {
-    if (!groupName.trim() || selectedCharacterIds.length === 0) return;
-    const group: GroupChat = {
-      id: generateId(),
-      name: groupName.trim(),
-      description: groupDescription.trim(),
-      characterIds: selectedCharacterIds,
-    };
+  const handleSaveGroup = (group: GroupChat) => {
     saveGroupChat(group);
     setShowGroupEditor(false);
-    setGroupName('');
-    setGroupDescription('');
-    setSelectedCharacterIds([]);
     if (onMakeGroup) onMakeGroup();
-  };
-
-  const toggleCharacterSelection = (id: string) => {
-    setSelectedCharacterIds(prev =>
-      prev.includes(id) ? prev.filter(cId => cId !== id) : [...prev, id],
-    );
   };
 
   const totalTokens =
@@ -534,93 +502,14 @@ export default function CharacterEditor({
       </KeyboardAvoidingView>
 
       {/* Group Editor Modal */}
-      <Modal
+      <GroupEditor
         visible={showGroupEditor}
-        animationType="none"
-        transparent
-        onRequestClose={() => setShowGroupEditor(false)}>
-        <View style={st.groupEditorOverlay}>
-          <Animated.View style={[st.groupEditorContent, groupContentStyle]}>
-            <View style={st.groupEditorHeader}>
-              <Text style={st.groupEditorTitle}>Create Group Chat</Text>
-              <TouchableOpacity
-                onPress={() => setShowGroupEditor(false)}
-                style={st.groupEditorCloseBtn}>
-                <Text style={st.groupEditorCloseBtnText}>×</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={st.groupEditorBody}>
-              <View style={st.groupEditorField}>
-                <Text style={st.groupEditorLabel}>Group Name</Text>
-                <TextInput
-                  style={st.groupEditorInput}
-                  value={groupName}
-                  onChangeText={setGroupName}
-                  placeholder="Enter group name"
-                  placeholderTextColor={st.textMuted.color}
-                />
-              </View>
-
-              <View style={st.groupEditorField}>
-                <Text style={st.groupEditorLabel}>Description (optional)</Text>
-                <TextInput
-                  style={[st.groupEditorInput, {minHeight: 60, textAlignVertical: 'top'}]}
-                  value={groupDescription}
-                  onChangeText={setGroupDescription}
-                  placeholder="What is this group about?"
-                  placeholderTextColor={st.textMuted.color}
-                  multiline
-                  numberOfLines={2}
-                />
-              </View>
-
-              <View style={st.groupEditorField}>
-                <Text style={st.groupEditorLabel}>Select Characters</Text>
-                {characters.map(char => (
-                  <TouchableOpacity
-                    key={char.id}
-                    onPress={() => toggleCharacterSelection(char.id)}
-                    style={st.groupEditorMemberRow}>
-                    {char.icon ? (
-                      <Image source={{uri: char.icon}} style={st.groupEditorMemberAvatar} />
-                    ) : (
-                      <View style={[st.groupEditorMemberAvatar, {justifyContent: 'center', alignItems: 'center'}]}>
-                        <Text style={{color: st.textMuted.color, fontSize: 16}}>{char.name[0]}</Text>
-                      </View>
-                    )}
-                    <View style={st.groupEditorMemberInfo}>
-                      <Text style={st.groupEditorMemberName}>{char.name}</Text>
-                      {char.description ? (
-                        <Text style={st.groupEditorMemberDesc} numberOfLines={1}>{char.description}</Text>
-                      ) : null}
-                    </View>
-                    <View style={[
-                      st.groupEditorMemberCheck,
-                      selectedCharacterIds.includes(char.id) && st.groupEditorMemberCheckActive,
-                    ]}>
-                      {selectedCharacterIds.includes(char.id) && (
-                        <Text style={st.groupEditorMemberCheckText}>✓</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                {characters.length === 0 && (
-                  <Text style={st.lorebookEmptyText}>
-                    No characters yet.{'\n'}Create some characters first.
-                  </Text>
-                )}
-              </View>
-
-              <TouchableOpacity
-                onPress={handleSaveGroup}
-                style={[st.groupEditorSaveBtn, (!groupName.trim() || selectedCharacterIds.length === 0) && {opacity: 0.4}]}>
-                <Text style={st.groupEditorSaveBtnText}>Create Group</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
+        group={null}
+        title="Create Group Chat"
+        saveLabel="Create Group"
+        onClose={() => setShowGroupEditor(false)}
+        onSave={handleSaveGroup}
+      />
     </View>
   );
 }

@@ -126,12 +126,12 @@ export function createStyles(s: AppSettings) {
       fontWeight: '500',
     },
     cardActionBtnTextDanger: {
-      color: '#cc3333',
+      color: s.dangerColor,
       fontSize: 13,
       fontWeight: '500',
     },
     confirmBtn: {
-      backgroundColor: '#cc3333',
+      backgroundColor: s.dangerColor,
       borderRadius: s.inputRadius,
       paddingVertical: 6,
       paddingHorizontal: 14,
@@ -309,7 +309,7 @@ export function createStyles(s: AppSettings) {
       alignItems: 'center',
     },
     sessionDeleteBtnText: {
-      color: '#cc3333',
+      color: s.dangerColor,
       fontSize: 18,
     },
     emptyHistoryText: {
@@ -435,7 +435,7 @@ export function createStyles(s: AppSettings) {
       fontWeight: '500',
     },
     actionBtnTextDelete: {
-      color: '#cc3333',
+      color: s.dangerColor,
     },
     actionBtnDisabled: {
       opacity: 0.4,
@@ -533,7 +533,7 @@ export function createStyles(s: AppSettings) {
       width: s.sendBtnSize,
       height: s.sendBtnSize,
       borderRadius: s.sendBtnSize / 2,
-      backgroundColor: '#cc3333',
+      backgroundColor: s.dangerColor,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -564,12 +564,12 @@ export function createStyles(s: AppSettings) {
     typingDot3: {opacity: 0.9},
     errorBubble: {
       backgroundColor: 'rgba(204, 51, 51, 0.12)',
-      borderColor: '#cc3333',
+      borderColor: s.dangerColor,
     },
     errorText: {
       fontSize: s.fontSizeBody,
       lineHeight: 20,
-      color: '#ff6b6b',
+      color: s.dangerColor,
     },
     retryBtn: {
       marginTop: 8,
@@ -578,10 +578,10 @@ export function createStyles(s: AppSettings) {
       paddingHorizontal: 12,
       borderRadius: s.inputRadius,
       borderWidth: 1,
-      borderColor: '#cc3333',
+      borderColor: s.dangerColor,
     },
     retryBtnText: {
-      color: '#cc3333',
+      color: s.dangerColor,
       fontSize: 13,
       fontWeight: '600',
     },
@@ -870,7 +870,7 @@ export function createStyles(s: AppSettings) {
       lineHeight: 18,
     },
     debugLogError: {
-      color: '#ff6b6b',
+      color: s.dangerColor,
       fontSize: 13,
       fontFamily: monospace,
       lineHeight: 18,
@@ -980,6 +980,9 @@ export function createStyles(s: AppSettings) {
       minHeight: 120,
       textAlignVertical: 'top',
     },
+    dangerText: {
+      color: s.dangerColor,
+    },
     settingsDefaultText: {
       color: s.textMuted,
       fontSize: 12,
@@ -1076,10 +1079,10 @@ export function createStyles(s: AppSettings) {
       paddingHorizontal: 10,
       borderRadius: s.inputRadius,
       borderWidth: 1,
-      borderColor: '#cc3333',
+      borderColor: s.dangerColor,
     },
     settingsLorebookRemoveBtnText: {
-      color: '#cc3333',
+      color: s.dangerColor,
       fontSize: 12,
       fontWeight: '500',
     },

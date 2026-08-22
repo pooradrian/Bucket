@@ -8,6 +8,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
 import {
   Provider,
   getProviders,
@@ -189,6 +194,19 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
   const [url, setUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
 
+  const slide = useSharedValue(300);
+  const contentStyle = useAnimatedStyle(() => ({
+    transform: [{translateY: slide.value}],
+  }));
+
+  useEffect(() => {
+    if (visible) {
+      slide.value = withTiming(0, {duration: 250});
+    } else {
+      slide.value = 300;
+    }
+  }, [visible, slide]);
+
   const handleAdd = useCallback(async () => {
     const trimmedName = name.trim();
     const trimmedUrl = url.trim();
@@ -211,16 +229,16 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
   }, [name, url, apiKey, onAdded]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={st.lorebookModalOverlay}>
-        <View style={st.lorebookModalContent}>
-          <View style={st.lorebookModalHeader}>
-            <Text style={st.lorebookModalTitle}>Add Provider</Text>
-            <TouchableOpacity onPress={onClose} style={st.lorebookCloseBtn}>
-              <Text style={st.lorebookCloseBtnText}>×</Text>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
+      <View style={st.groupEditorOverlay}>
+        <Animated.View style={[st.groupEditorContent, contentStyle]}>
+          <View style={st.groupEditorHeader}>
+            <Text style={st.groupEditorTitle}>Add Provider</Text>
+            <TouchableOpacity onPress={onClose} style={st.groupEditorCloseBtn}>
+              <Text style={st.groupEditorCloseBtnText}>×</Text>
             </TouchableOpacity>
           </View>
-          <View style={st.providerModalContent}>
+          <View style={[st.groupEditorBody, {paddingBottom: 24}]}>
             <View style={st.settingsField}>
               <Text style={st.settingsLabel}>Name</Text>
               <TextInput
@@ -228,7 +246,7 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
                 value={name}
                 onChangeText={setName}
                 placeholder="e.g. OpenAI, Claude, Local"
-                placeholderTextColor="#666"
+                placeholderTextColor={st.textMuted.color}
                 autoCapitalize="words"
                 autoCorrect={false}
               />
@@ -240,7 +258,7 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
                 value={url}
                 onChangeText={setUrl}
                 placeholder="https://api.openai.com/v1"
-                placeholderTextColor="#666"
+                placeholderTextColor={st.textMuted.color}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -252,7 +270,7 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
                 value={apiKey}
                 onChangeText={setApiKey}
                 placeholder="sk-... (leave empty for local)"
-                placeholderTextColor="#666"
+                placeholderTextColor={st.textMuted.color}
                 autoCapitalize="none"
                 autoCorrect={false}
                 secureTextEntry
@@ -263,11 +281,12 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
             </View>
             <TouchableOpacity
               onPress={handleAdd}
-              style={[st.card, st.providerAddCardContent]}>
-              <Text style={st.cardTitle}>Add Provider</Text>
+              disabled={!name.trim() || !url.trim()}
+              style={[st.groupEditorSaveBtn, (!name.trim() || !url.trim()) && {opacity: 0.4}]}>
+              <Text style={st.groupEditorSaveBtnText}>Add Provider</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
