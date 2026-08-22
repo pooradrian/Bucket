@@ -357,6 +357,9 @@ export async function createSession(session: ChatSession): Promise<void> {
     d.execute('ROLLBACK');
     throw e;
   }
+  for (const msg of session.messages) {
+    searchCachePut(session.id, msg);
+  }
 }
 
 export function updateSessionTimestamp(sessionId: string, updatedAt: number): void {
@@ -380,6 +383,7 @@ export async function addMessage(sessionId: string, message: ChatMessage): Promi
     'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants, encryptedRequest],
   );
+  searchCachePut(sessionId, message);
 }
 
 export interface SessionSummary {
@@ -446,6 +450,11 @@ export function deleteSession(sessionId: string): void {
   const d = initDB();
   d.execute('DELETE FROM quick_characters WHERE session_id = ? AND starred = 0', [sessionId]);
   d.execute('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
+  for (const [id, entry] of searchCache) {
+    if (entry.sessionId === sessionId) {
+      searchCache.delete(id);
+    }
+  }
   checkpointWAL();
 }
 
@@ -453,6 +462,10 @@ export async function updateMessage(messageId: string, content: string): Promise
   const d = initDB();
   const encryptedContent = await encrypt(content);
   d.execute('UPDATE chat_messages SET content = ? WHERE id = ?', [encryptedContent, messageId]);
+  const cached = searchCache.get(messageId);
+  if (cached) {
+    cached.content = content;
+  }
 }
 
 export async function updateMessageWithVariants(
@@ -470,11 +483,17 @@ export async function updateMessageWithVariants(
     'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info) WHERE id = ?',
     [encryptedContent, timestamp, encryptedVariants, encryptedRequest, messageId],
   );
+  const cached = searchCache.get(messageId);
+  if (cached) {
+    cached.content = content;
+    cached.timestamp = timestamp;
+  }
 }
 
 export function deleteMessage(messageId: string): void {
   const d = initDB();
   d.execute('DELETE FROM chat_messages WHERE id = ?', [messageId]);
+  searchCache.delete(messageId);
 }
 
 export function getDbConnection(): NitroSQLiteConnection {
@@ -503,49 +522,95 @@ const SEARCH_PAGE_SIZE = 500;
 const SEARCH_MAX_RESULTS = 200;
 
 /**
- * Full-text search across all chat messages.
+ * Decrypted-content cache for full-text search.
  *
- * Message content is encrypted at rest, so we cannot filter with a SQL `LIKE`.
- * Instead we page through every row in deterministic order, decrypt each page,
- * and filter in JS. Scanning is bounded by `SEARCH_MAX_RESULTS` matches, but we
- * no longer silently look at only the first 200 arbitrary rows.
+ * Message content is encrypted at rest, so SQL `LIKE` cannot filter it. The
+ * first search decrypts every row once and caches the plaintext in memory;
+ * afterwards searches run entirely from cache. All message write paths keep
+ * the cache in sync (see searchCachePut/Delete helpers below).
  */
-export async function searchMessages(query: string): Promise<MessageSearchResult[]> {
+interface SearchCacheEntry {
+  sessionId: string;
+  id: string;
+  role: string;
+  content: string;
+  timestamp: number;
+}
+const searchCache = new Map<string, SearchCacheEntry>();
+
+function searchCacheSync(): void {
   const d = initDB();
+  const result = d.execute('SELECT COUNT(*) as count FROM chat_messages');
+  const dbCount = result.results?.[0]?.count as number ?? 0;
+  if (searchCache.size !== dbCount) {
+    searchCache.clear();
+  }
+}
+
+function searchCachePut(sessionId: string, msg: ChatMessage): void {
+  searchCache.set(msg.id, {
+    sessionId,
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    timestamp: msg.timestamp,
+  });
+}
+
+export async function searchMessages(query: string): Promise<MessageSearchResult[]> {
   const needle = query.toLowerCase();
   if (!needle) {
     return [];
   }
 
-  const matches: MessageSearchResult[] = [];
-  let offset = 0;
+  searchCacheSync();
 
+  const matches: MessageSearchResult[] = [];
+  const consider = (entry: SearchCacheEntry) => {
+    if (entry.content.toLowerCase().includes(needle)) {
+      matches.push({
+        sessionId: entry.sessionId,
+        id: entry.id,
+        role: entry.role,
+        content: entry.content,
+        timestamp: entry.timestamp,
+      });
+    }
+  };
+
+  let offset = 0;
   for (;;) {
-    const result = d.execute(
+    const rows = initDB().execute(
       'SELECT session_id, id, role, content, timestamp FROM chat_messages ORDER BY timestamp DESC, id ASC LIMIT ? OFFSET ?',
       [SEARCH_PAGE_SIZE, offset],
-    );
-    const rows = result.results;
+    ).results;
     if (!rows || rows.length === 0) {
       break;
     }
 
     const decrypted = await Promise.all(
-      rows.map(async row => ({
-        sessionId: row.session_id as string,
-        id: row.id as string,
-        role: row.role as string,
-        content: await decrypt(row.content as string),
-        timestamp: row.timestamp as number,
-      }))
+      rows.map(async row => {
+        const id = row.id as string;
+        const cached = searchCache.get(id);
+        if (cached) {
+          return cached;
+        }
+        const entry: SearchCacheEntry = {
+          sessionId: row.session_id as string,
+          id,
+          role: row.role as string,
+          content: await decrypt(row.content as string),
+          timestamp: row.timestamp as number,
+        };
+        searchCache.set(id, entry);
+        return entry;
+      })
     );
 
     for (const msg of decrypted) {
-      if (msg.content.toLowerCase().includes(needle)) {
-        matches.push(msg);
-        if (matches.length >= SEARCH_MAX_RESULTS) {
-          return matches;
-        }
+      consider(msg);
+      if (matches.length >= SEARCH_MAX_RESULTS) {
+        return matches;
       }
     }
 
@@ -576,6 +641,7 @@ export function deleteAllByPrefix(prefix: string): {sessions: number; messages: 
     [like, like],
   );
   const sessResult = d.execute('DELETE FROM chat_sessions WHERE id LIKE ?', [like]);
+  searchCache.clear();
   compactDatabase();
   return {
     sessions: sessResult.rowsAffected ?? 0,
