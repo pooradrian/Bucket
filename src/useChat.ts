@@ -192,7 +192,6 @@ export function useChat({
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [promptConfig, setPromptConfig] = useState<PromptConfig>(DEFAULT_PROMPT_CONFIG);
-  const [lorebook, setLorebook] = useState<LorebookState[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
@@ -298,27 +297,21 @@ export function useChat({
       .catch(e => console.warn('Failed to load prompt config:', e));
   }, [promptConfigVersion]);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!isGroupChat && activeCharacter?.lorebookIds?.length) {
-      const found = activeCharacter.lorebookIds
-        .map(id => lorebooks.find(l => l.id === id))
-        .filter(Boolean) as LorebookState[];
-      (async () => {
-        const withEntries = await Promise.all(
-          found.map(async lb => ({
-            ...lb,
-            entries: await getLorebookEntriesFromDB(lb.id),
-          })),
-        );
-        if (!cancelled) setLorebook(withEntries);
-      })();
-    } else {
-      setLorebook([]);
+  // Lorebook entries are loaded lazily at send time instead of eagerly on
+  // every character change — large lorebooks made chat entry sluggish.
+  const loadChatLorebooks = useCallback(async (): Promise<LorebookState[]> => {
+    if (isGroupChat || !activeCharacter?.lorebookIds?.length) {
+      return [];
     }
-    return () => {
-      cancelled = true;
-    };
+    const found = activeCharacter.lorebookIds
+      .map(id => lorebooks.find(l => l.id === id))
+      .filter(Boolean) as LorebookState[];
+    return Promise.all(
+      found.map(async lb => ({
+        ...lb,
+        entries: await getLorebookEntriesFromDB(lb.id),
+      })),
+    );
   }, [isGroupChat, activeCharacter, lorebooks]);
 
   const loadOrCreateSession = useCallback(async () => {
@@ -473,7 +466,7 @@ export function useChat({
             messages,
             promptConfig,
             flushStreamingContent,
-            lorebook,
+            await loadChatLorebooks(),
             ctrl,
             opts.continueMode,
           );
@@ -614,7 +607,7 @@ export function useChat({
         setSending(false);
       }
     },
-    [isGroupChat, selectedReplyCharacter, selectedQC, quickCharacters, groupMembers, activeCharacter, promptConfig, lorebook, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
+    [isGroupChat, selectedReplyCharacter, selectedQC, quickCharacters, groupMembers, activeCharacter, promptConfig, loadChatLorebooks, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
   );
 
   const handleSend = useCallback(
