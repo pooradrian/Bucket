@@ -657,7 +657,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
           value={inputText}
           onChangeText={setInputText}
           placeholder="Message..."
-          placeholderTextColor="#666"
+          placeholderTextColor={st.textMuted.color}
           editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
           multiline
           textAlignVertical="top"

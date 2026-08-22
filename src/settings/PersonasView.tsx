@@ -164,7 +164,7 @@ export default function PersonasView({
                       );
                     }}
                   >
-                    <Text style={{color: '#cc3333', fontSize: 13}}>Delete</Text>
+                    <Text style={{color: values.dangerColor, fontSize: 13}}>Delete</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {

@@ -120,7 +120,7 @@ export default function HistoryModal({
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => onDeleteQC(qc.id)} style={st.historyQCActionBtn}>
-                          <Text style={[st.historyQCActionBtnText, {color: '#cc3333'}]}>×</Text>
+                          <Text style={[st.historyQCActionBtnText, {color: st.dangerText.color}]}>×</Text>
                         </TouchableOpacity>
                       </View>
                     ))}

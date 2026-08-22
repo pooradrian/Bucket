@@ -8,7 +8,7 @@ export const SETTINGS_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
   'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
   'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-  'accentColor', 'userBubbleBg', 'showCharacterIcons', 'showGroupCharNames', 'dynamicIcon', 'forceItalic', 'debugLogging', 'notificationMode', 'notificationSound', 'carouselAnimMs',
+  'accentColor', 'userBubbleBg', 'dangerColor', 'showCharacterIcons', 'showGroupCharNames', 'dynamicIcon', 'forceItalic', 'debugLogging', 'notificationMode', 'notificationSound', 'carouselAnimMs',
 ];
 
 export function toDraft(s: AppSettings): Settings {
@@ -40,6 +40,7 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   inputRadius: 'Input border radius',
   sendBtnSize: 'Send button size',
   accentColor: 'Accent color',
+  dangerColor: 'Danger color (delete buttons)',
   userBubbleBg: 'User bubble color',
   showCharacterIcons: 'Show character icons',
   showGroupCharNames: 'Group chat selector',

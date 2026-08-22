@@ -71,6 +71,7 @@ interface CardItem {
 
 interface Colors {
   accent: string;
+  danger: string;
   bgPrimary: string;
   bgSecondary: string;
   borderPrimary: string;
@@ -125,6 +126,7 @@ export default function Carousel({
   const theme = useAppStore(s => s.appSettings);
   const colors = useMemo<Colors>(() => ({
     accent: theme.accentColor,
+    danger: theme.dangerColor,
     bgPrimary: theme.bgPrimary,
     bgSecondary: theme.bgSecondary,
     borderPrimary: theme.borderPrimary,
@@ -137,7 +139,7 @@ export default function Carousel({
     forceItalic: theme.forceItalic,
     blurType: isDarkTheme(theme.bgPrimary, theme.textMuted) ? ('dark' as const) : ('light' as const),
     overlay: overlayColor(theme.bgPrimary),
-  }), [theme.accentColor, theme.bgPrimary, theme.bgSecondary, theme.borderPrimary, theme.userBubbleBg, theme.textPrimary, theme.textSecondary, theme.textMuted, theme.bubbleRadius, theme.fontSizeBody, theme.forceItalic]);
+  }), [theme.accentColor, theme.dangerColor, theme.bgPrimary, theme.bgSecondary, theme.borderPrimary, theme.userBubbleBg, theme.textPrimary, theme.textSecondary, theme.textMuted, theme.bubbleRadius, theme.fontSizeBody, theme.forceItalic]);
 
   const items = useMemo<CardItem[]>(() => {
     const variants: ReplyVariant[] = message.variants ?? [];
@@ -407,7 +409,7 @@ export default function Carousel({
         {editing ? (
           <View style={styles.actionRow}>
             <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
-            <ActionButton label="Cancel" onPress={() => setEditing(false)} color="#cc3333" />
+            <ActionButton label="Cancel" onPress={() => setEditing(false)} color={colors.danger} />
           </View>
         ) : (
           <>
@@ -420,7 +422,7 @@ export default function Carousel({
             </View>
             <View style={styles.actionRow}>
               {streamingThis ? (
-                <ActionButton label="Stop" onPress={onStop} color="#cc3333" />
+                <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
               ) : canRegenerate && (
                 <ActionButton
                   label="Regen"
@@ -431,7 +433,7 @@ export default function Carousel({
               )}
               <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
               <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
-              <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color="#cc3333" disabled={streamingThis} />
+              <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
             </View>
           </>
         )}
