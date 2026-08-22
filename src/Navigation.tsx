@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, Text, View} from 'react-native';
+import {ActivityIndicator, BackHandler, FlatList, Text, View} from 'react-native';
 import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import {createNativeStackNavigator, NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
@@ -87,6 +87,30 @@ function HomeScreen() {
     const v = getKV('welcome_dismissed');
     setWelcomeDismissed(v === 'true');
   }, []);
+
+  useEffect(() => {
+    if (showHistory) {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        setShowHistory(false);
+        return true;
+      });
+      return () => sub.remove();
+    }
+    if (editingGroup !== null) {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        setEditingGroup(null);
+        return true;
+      });
+      return () => sub.remove();
+    }
+    if (showConvertGroup) {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        setShowConvertGroup(false);
+        return true;
+      });
+      return () => sub.remove();
+    }
+  }, [showHistory, editingGroup, showConvertGroup]);
 
   const reloadQCs = useCallback(async (sessionId: string | null) => {
     if (sessionId && activeChatCharacter) {

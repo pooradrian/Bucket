@@ -306,7 +306,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
 function stripRequestInfo<T extends {messages: Array<{requestInfo?: string}>}>(session: T): T {
   return {
     ...session,
-    messages: session.messages.map(({requestInfo, ...m}) => m),
+    messages: session.messages.map(({requestInfo: _, ...m}) => m),
   };
 }
 

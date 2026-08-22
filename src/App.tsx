@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, StyleSheet} from 'react-native';
+import {View, Text, StyleSheet, BackHandler, ToastAndroid, Platform} from 'react-native';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import {NavigationContainer} from '@react-navigation/native';
 import pkg from '../package.json';
@@ -70,6 +70,21 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
   const splashStart = useRef(Date.now());
+  const lastBackRef = useRef(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      const now = Date.now();
+      if (now - lastBackRef.current < 2000) {
+        return false;
+      }
+      lastBackRef.current = now;
+      ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     (async () => {

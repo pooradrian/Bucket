@@ -1,8 +1,10 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   Animated,
+  BackHandler,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -331,6 +333,16 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     setCarouselReady(false);
   }, []);
 
+  useEffect(() => {
+    if (carouselMessageId === null) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleCloseCarousel();
+      setSelectedMessageId(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [carouselMessageId, handleCloseCarousel, setSelectedMessageId]);
+
   const registerBubble = useCallback((id: string, ref: View | null) => {
     if (ref) {
       bubbleRefs[id] = ref;
@@ -387,6 +399,18 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   const scrollOffsetRef = useRef(0);
 
   const [showGoDown, setShowGoDown] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
@@ -607,7 +631,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         </View>
       )}
 
-      <View style={[st.inputBar, {paddingBottom: bottomInset + 30}]}>
+      <View style={[st.inputBar, {paddingBottom: keyboardVisible ? bottomInset + 30 : bottomInset}]}>
         {(isGroupChat && selectedReplyCharacter) ? (
           <View style={{marginRight: 8}}>
             {showCharacterIcons && selectedReplyCharacter.icon ? (
