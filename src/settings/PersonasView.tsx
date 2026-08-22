@@ -33,7 +33,7 @@ export default function PersonasView({
   return (
     <View style={st.settingsField}>
       <Text style={st.settingsLabel}>User Personas</Text>
-      <Text style={st.settingsDefaultText}>
+      <Text style={[st.settingsDefaultText, {marginBottom: 10}]}>
         Create persona profiles to quickly switch your user description.
       </Text>
 

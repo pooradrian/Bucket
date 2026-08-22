@@ -238,6 +238,7 @@ export default function SettingsHandler({
         </Text>
       </View>
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           st.settingsContent,
           {paddingBottom: bottomInset + 60},

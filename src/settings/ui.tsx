@@ -1,33 +1,14 @@
-import {useState} from 'react';
 import {
-  NativeSyntheticEvent,
   Text,
   TextInput,
-  TextInputContentSizeChangeEventData,
   TextInputProps,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {useTheme} from '../ThemeContext';
+import AutoGrowTextInput from '../components/AutoGrowTextInput';
 
-export function AutoGrowTextInput({
-  style,
-  minHeight = 120,
-  ...rest
-}: TextInputProps & {minHeight?: number}) {
-  const [height, setHeight] = useState(minHeight);
-  return (
-    <TextInput
-      {...rest}
-      multiline
-      textAlignVertical="top"
-      style={[style, {height}]}
-      onContentSizeChange={(
-        e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>,
-      ) => setHeight(Math.max(minHeight, e.nativeEvent.contentSize.height))}
-    />
-  );
-}
+export {AutoGrowTextInput};
 
 export function SectionHeader({title}: {title: string}) {
   const st = useTheme();

@@ -636,7 +636,7 @@ export function deleteLorebookFromDB(lorebookId: string): void {
   const d = initDB();
   d.execute('DELETE FROM lorebook_entries WHERE lorebook_id = ?', [lorebookId]);
   d.execute('DELETE FROM lorebooks WHERE id = ?', [lorebookId]);
-  compactDatabase();
+  checkpointWAL();
 }
 
 export function getAllLorebooksFromDB(): LorebookState[] {

@@ -21,6 +21,7 @@ import {generateId} from './Database';
 import {useTheme} from './ThemeContext';
 import {estimateTokens, loadPromptConfig, Persona} from './PromptHandler';
 import {CUSTOM_FIELDS, CustomFieldValue, getCustomField} from './CustomFields';
+import AutoGrowTextInput from './components/AutoGrowTextInput';
 
 export interface Character {
   id: string;
@@ -273,87 +274,93 @@ export default function CharacterEditor({
           {/* Description */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Description</Text>
-            <TextInput
+            <AutoGrowTextInput
               style={st.cardInputMultiline}
+              minHeight={80}
               value={description}
               onChangeText={setDescription}
               placeholder="A short description of who this character is"
               placeholderTextColor={st.textMuted.color}
-              multiline
-              numberOfLines={3}
             />
           </View>
 
           {/* Personality */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Personality</Text>
-            <TextInput
+            <AutoGrowTextInput
               style={st.cardInputMultiline}
+              minHeight={80}
               value={personality}
               onChangeText={setPersonality}
               placeholder="Describe their personality traits, quirks, and demeanor"
               placeholderTextColor={st.textMuted.color}
-              multiline
-              numberOfLines={4}
             />
           </View>
 
           {CUSTOM_FIELDS.map(def => (
             <View style={st.card} key={def.id}>
               <Text style={st.cardTitle}>{def.label}</Text>
-              <TextInput
-                style={def.multiline ? st.cardInputMultiline : st.cardInput}
-                value={customFieldValues[def.id] || ''}
-                onChangeText={text =>
-                  setCustomFieldValues(prev => ({...prev, [def.id]: text}))
-                }
-                placeholder={def.placeholder}
-                placeholderTextColor={st.textMuted.color}
-                multiline={def.multiline}
-                numberOfLines={def.lines ?? 1}
-              />
+              {def.multiline ? (
+                <AutoGrowTextInput
+                  style={st.cardInputMultiline}
+                  minHeight={80}
+                  value={customFieldValues[def.id] || ''}
+                  onChangeText={text =>
+                    setCustomFieldValues(prev => ({...prev, [def.id]: text}))
+                  }
+                  placeholder={def.placeholder}
+                  placeholderTextColor={st.textMuted.color}
+                />
+              ) : (
+                <TextInput
+                  style={st.cardInput}
+                  value={customFieldValues[def.id] || ''}
+                  onChangeText={text =>
+                    setCustomFieldValues(prev => ({...prev, [def.id]: text}))
+                  }
+                  placeholder={def.placeholder}
+                  placeholderTextColor={st.textMuted.color}
+                />
+              )}
             </View>
           ))}
 
           {/* Scenario */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Scenario</Text>
-            <TextInput
+            <AutoGrowTextInput
               style={st.cardInputMultiline}
+              minHeight={80}
               value={scenario}
               onChangeText={setScenario}
               placeholder="The setting or context of the conversation"
               placeholderTextColor={st.textMuted.color}
-              multiline
-              numberOfLines={4}
             />
           </View>
 
           {/* Example Messages */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Example Messages</Text>
-            <TextInput
+            <AutoGrowTextInput
               style={st.cardInputMultilineLarge}
+              minHeight={100}
               value={exampleMessages}
               onChangeText={setExampleMessages}
               placeholder="Sample dialogue showing how the character speaks (one example per line)"
               placeholderTextColor={st.textMuted.color}
-              multiline
-              numberOfLines={5}
             />
           </View>
 
           {/* Initial Message */}
           <View style={st.card}>
             <Text style={st.cardTitle}>First Message</Text>
-            <TextInput
+            <AutoGrowTextInput
               style={st.cardInputMultilineLarge}
+              minHeight={100}
               value={initialMessage}
               onChangeText={setInitialMessage}
               placeholder="The character's opening message when a new chat starts"
               placeholderTextColor={st.textMuted.color}
-              multiline
-              numberOfLines={5}
             />
           </View>
 

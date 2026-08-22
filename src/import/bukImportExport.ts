@@ -303,6 +303,13 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   return result;
 }
 
+function stripRequestInfo<T extends {messages: Array<{requestInfo?: string}>}>(session: T): T {
+  return {
+    ...session,
+    messages: session.messages.map(({requestInfo, ...m}) => m),
+  };
+}
+
 export async function exportBuk(options: ExportOptions): Promise<string> {
   const dir = `${RNFS.CachesDirectoryPath}/export`;
   await RNFS.mkdir(dir);
@@ -419,9 +426,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
         const session = await getSessionById(summary.id);
         if (session) {
           const quickCharacters = await getQuickCharactersForSession(session.id);
-          const payload = quickCharacters.length > 0
-            ? {...session, quickCharacters}
-            : session;
+          const payload = stripRequestInfo({...session, quickCharacters});
           chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
         }
       }
@@ -432,9 +437,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
         const session = await getSessionById(summary.id);
         if (session) {
           const quickCharacters = await getQuickCharactersForSession(session.id);
-          const payload = quickCharacters.length > 0
-            ? {...session, quickCharacters}
-            : session;
+          const payload = stripRequestInfo({...session, quickCharacters});
           chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
         }
       }
