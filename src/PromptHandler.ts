@@ -393,6 +393,11 @@ export function buildContinuePrompt(
     });
   }
 
+  messages.push({
+    role: 'user',
+    content: '[Continue your previous reply exactly where it left off. Do not repeat any earlier text.]',
+  });
+
   return messages;
 }
 
@@ -437,6 +442,11 @@ export function buildGroupContinuePrompt(
       messages.push({role: 'assistant', content: prefixed});
     }
   }
+
+  messages.push({
+    role: 'user',
+    content: `[Continue your previous reply as ${selectedCharacter.name} exactly where it left off. Do not repeat any earlier text.]`,
+  });
 
   return messages;
 }

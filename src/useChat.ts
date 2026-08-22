@@ -481,6 +481,10 @@ export function useChat({
           return;
         }
 
+        if (!result.content.trim()) {
+          throw new Error('The model returned an empty response. Try again, or use Continue.');
+        }
+
         const replyCharId = (isGroupChat && targetReplyCharacter)
           ? targetReplyCharacter.id
           : targetQC
