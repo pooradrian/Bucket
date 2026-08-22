@@ -192,11 +192,13 @@ export default function SettingsHandler({
   }, [appSettings]);
 
   useEffect(() => {
-    loadPromptConfig().then(cfg => {
-      setPromptValues(cfg);
-      setPromptSaved(cfg);
-      setPromptLoaded(true);
-    });
+    loadPromptConfig()
+      .then(cfg => {
+        setPromptValues(cfg);
+        setPromptSaved(cfg);
+        setPromptLoaded(true);
+      })
+      .catch(e => console.warn('Failed to load prompt config:', e));
     setActiveProviderId(getActiveProviderId() || '');
   }, [promptConfigVersion]);
 
@@ -212,7 +214,11 @@ export default function SettingsHandler({
       const cfg = pendingSaveRef.current;
       if (!cfg) return;
       pendingSaveRef.current = null;
-      await savePromptConfig(cfg);
+      try {
+        await savePromptConfig(cfg);
+      } catch (e) {
+        console.warn('Failed to save prompt config:', e);
+      }
       setPromptSaved(cfg);
     }, 500);
     return () => {
@@ -226,7 +232,7 @@ export default function SettingsHandler({
       const cfg = pendingSaveRef.current;
       if (cfg) {
         pendingSaveRef.current = null;
-        savePromptConfig(cfg);
+        savePromptConfig(cfg).catch(e => console.warn('Failed to save prompt config:', e));
       }
     },
     [],
@@ -239,7 +245,7 @@ export default function SettingsHandler({
       const cfg = pendingSaveRef.current;
       if (cfg) {
         pendingSaveRef.current = null;
-        savePromptConfig(cfg);
+        savePromptConfig(cfg).catch(e => console.warn('Failed to save prompt config:', e));
       }
     });
     return () => sub.remove();
@@ -336,6 +342,7 @@ export default function SettingsHandler({
       }
     } catch (e) {
       console.warn('Failed to load lorebook:', e);
+      Alert.alert('Import lorebook', 'Could not import the selected lorebook file.');
     } finally {
       setLorebookLoading(false);
     }
@@ -344,13 +351,18 @@ export default function SettingsHandler({
   const handleRemoveLorebook = useCallback(
     async (id: string) => {
       const lb = lorebooks.find(l => l.id === id);
-      const updated = await removeLorebook(id);
-      setLorebooks(updated);
-      if (lb) {
-        logEvent('lorebook_removed', {
-          entryCount: lb.entryCount,
-          fileNameLen: lb.fileName.length,
-        });
+      try {
+        const updated = await removeLorebook(id);
+        setLorebooks(updated);
+        if (lb) {
+          logEvent('lorebook_removed', {
+            entryCount: lb.entryCount,
+            fileNameLen: lb.fileName.length,
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to remove lorebook:', e);
+        Alert.alert('Remove lorebook', 'Could not remove the lorebook.');
       }
     },
     [setLorebooks, lorebooks],
