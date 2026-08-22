@@ -24,7 +24,12 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
 function tableColumns(conn: NitroSQLiteConnection, table: string): Set<string> {
+  if (!IDENT_RE.test(table)) {
+    throw new Error(`Invalid table name: ${table}`);
+  }
   const result = conn.execute(`PRAGMA table_info(${table})`);
   const columns = new Set<string>();
   for (const row of result.results || []) {
@@ -42,6 +47,9 @@ function addColumnIfMissing(
   column: string,
   definition: string,
 ) {
+  if (!IDENT_RE.test(table) || !IDENT_RE.test(column)) {
+    throw new Error(`Invalid identifier: ${table}.${column}`);
+  }
   if (!tableColumns(conn, table).has(column)) {
     conn.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
@@ -278,6 +286,26 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
   }
 }
 
+async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+  const messagesResult = initDB().execute(
+    'SELECT id, role, content, timestamp, variants, request_info FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    [sessionId],
+  );
+  if (!messagesResult.results) {
+    return [];
+  }
+  return decryptMessages(
+    messagesResult.results.map(msg => ({
+      id: msg.id as string,
+      role: msg.role as 'user' | 'assistant',
+      content: msg.content as string,
+      timestamp: msg.timestamp as number,
+      variants: msg.variants ? (msg.variants as string) : undefined,
+      requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
+    })),
+  );
+}
+
 export async function getSessionForCharacter(characterId: string): Promise<ChatSession | null> {
   const d = initDB();
 
@@ -292,25 +320,7 @@ export async function getSessionForCharacter(characterId: string): Promise<ChatS
 
   const row = sessionResult.results[0];
   const sessionId = row.id as string;
-
-  const messagesResult = d.execute(
-    'SELECT id, role, content, timestamp, variants, request_info FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
-    [sessionId],
-  );
-
-  let messages: ChatMessage[] = [];
-  if (messagesResult.results) {
-    messages = await decryptMessages(
-      messagesResult.results.map(msg => ({
-        id: msg.id as string,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content as string,
-        timestamp: msg.timestamp as number,
-        variants: msg.variants ? (msg.variants as string) : undefined,
-        requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
-      }))
-    );
-  }
+  const messages = await loadSessionMessages(sessionId);
 
   return {
     id: row.id as string,
@@ -415,23 +425,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
     return null;
   }
   const row = sessionResult.results[0];
-  const messagesResult = d.execute(
-    'SELECT id, role, content, timestamp, variants, request_info FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
-    [sessionId],
-  );
-  let messages: ChatMessage[] = [];
-  if (messagesResult.results) {
-    messages = await decryptMessages(
-      messagesResult.results.map(msg => ({
-        id: msg.id as string,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content as string,
-        timestamp: msg.timestamp as number,
-        variants: msg.variants ? (msg.variants as string) : undefined,
-        requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
-      }))
-    );
-  }
+  const messages = await loadSessionMessages(sessionId);
   return {
     id: row.id as string,
     characterId: row.character_id as string,
@@ -771,33 +765,21 @@ export async function saveQuickCharacter(qc: DBQuickCharacter): Promise<void> {
 }
 
 export async function getQuickCharactersForSession(sessionId: string): Promise<DBQuickCharacter[]> {
-  const d = initDB();
-  const result = d.execute(
+  return queryQuickCharacters(
     'SELECT id, session_id, character_id, name, description, personality, starred FROM quick_characters WHERE session_id = ? ORDER BY rowid',
     [sessionId],
-  );
-  if (!result.results) {
-    return [];
-  }
-  return Promise.all(
-    result.results.map(async row => ({
-      id: row.id as string,
-      session_id: row.session_id as string,
-      character_id: row.character_id as string,
-      name: row.name as string,
-      description: await decrypt((row.description as string) || ''),
-      personality: await decrypt((row.personality as string) || ''),
-      starred: (row.starred as number) ?? 0,
-    }))
   );
 }
 
 export async function getQuickCharactersForCharacter(characterId: string, sessionId: string): Promise<DBQuickCharacter[]> {
-  const d = initDB();
-  const result = d.execute(
+  return queryQuickCharacters(
     'SELECT id, session_id, character_id, name, description, personality, starred FROM quick_characters WHERE character_id = ? OR session_id = ? ORDER BY rowid',
     [characterId, sessionId],
   );
+}
+
+async function queryQuickCharacters(query: string, params: (string | number)[]): Promise<DBQuickCharacter[]> {
+  const result = initDB().execute(query, params);
   if (!result.results) {
     return [];
   }
