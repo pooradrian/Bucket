@@ -20,6 +20,15 @@ export const DB_HELP_TEXT = [
   '  db cleanup                        Remove all stress test data',
 ].join('\n');
 
+const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function safeIdentifier(name: string): string {
+  if (!IDENT_RE.test(name)) {
+    throw new Error(`Invalid identifier: "${name}"`);
+  }
+  return `"${name}"`;
+}
+
 export const dbCommand: CommandHandler = async (rest, env, io) => {
   const sub = rest[0]?.toLowerCase();
 
@@ -46,7 +55,7 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
     const lines: string[] = [];
     for (const row of tables.results) {
       const name = row.name as string;
-      const count = d.execute(`SELECT COUNT(*) as count FROM "${name}"`);
+      const count = d.execute(`SELECT COUNT(*) as count FROM ${safeIdentifier(name)}`);
       const cnt = count.results?.[0]?.count as number ?? 0;
       lines.push(`  ${name}: ${cnt} rows`);
     }
@@ -61,7 +70,7 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
       return;
     }
     const d = getDbConnection();
-    const result = d.execute(`PRAGMA table_info("${table}")`);
+    const result = d.execute(`PRAGMA table_info(${safeIdentifier(table)})`);
     if (!result.results || result.results.length === 0) {
       io.log('error', `Table "${table}" not found.`);
       return;
