@@ -1,6 +1,7 @@
-import React, {useMemo, useRef, useState, useEffect} from 'react';
+import React, {useMemo, useRef, useState, useEffect, useCallback} from 'react';
 import {
   Dimensions,
+  Keyboard,
   Modal,
   PanResponder,
   Platform,
@@ -31,8 +32,14 @@ import {renderFormattedText} from '../textFormat';
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
 const CHAT_H_PADDING = 32;
-const CARD_W = Math.round((SCREEN_W - CHAT_H_PADDING) * 0.72);
+// Must match the bubbles' `maxWidth: '72%'` of the chat content area
+// (SCREEN_W - 2 * 16 padding) so text wraps at identical points.
+const CARD_W = (SCREEN_W - CHAT_H_PADDING) * 0.72;
 const PEEK = Math.round(SCREEN_W * 0.12);
+// While editing: how far below the visible-area center the card sits (closer
+// to the keyboard), the gap between the card bottom and the Save/Cancel row,
+// and the geometry constants used to anchor that row to the card.
+const KB_LIFT_DOWN = 40;
 
 interface OriginFrame {
   x: number;
@@ -163,12 +170,14 @@ export default function Carousel({
   const liveIndex = items.findIndex(it => it.live);
   const standardMaxW = CARD_W;
   const isUser = message.role === 'user';
-  const showCounter = !isUser && (message.variants?.length ?? 0) > 0;
+  const isError = message.id === '__error__';
+  const showCounter = !isUser && !isError && (message.variants?.length ?? 0) > 0;
   const streamingThis = isStreaming && replacingMessageId === message.id;
   const liveStreamText = streamingThis ? streamingContent : null;
 
   const pos = useSharedValue(liveIndex);
   const appear = useSharedValue(0);
+  const kbHeight = useSharedValue(0);
   const overlayRef = useRef<View>(null);
   const [centered, setCentered] = useState(liveIndex);
   const [targetCenter, setTargetCenter] = useState<{x: number; y: number} | null>(null);
@@ -194,6 +203,23 @@ export default function Carousel({
   editingRef.current = editing;
 
   const cIndex = Math.min(Math.max(centered, 0), count - 1);
+
+  useEffect(() => {
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    type KbEvent = {endCoordinates: {height: number}};
+    const showSub = Keyboard.addListener(showEvt, (e: KbEvent) => {
+      kbHeight.value = withTiming(e.endCoordinates.height, {duration: 250});
+    });
+    const hideSub = Keyboard.addListener(hideEvt, () => {
+      kbHeight.value = withTiming(0, {duration: 250});
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      kbHeight.value = 0;
+    };
+  }, [kbHeight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +277,7 @@ export default function Carousel({
   snapToRef.current = snapTo;
 
   const commitAndClose = () => {
+    Keyboard.dismiss();
     const slot = Math.min(Math.max(Math.round(pos.value), 0), items.length - 1);
     if (slot !== liveIndex) {
       onSelectVariant(message.id, slot);
@@ -294,7 +321,7 @@ export default function Carousel({
     setEditing(true);
   };
 
-  const saveEdit = async () => {
+  const saveEdit = useCallback(async () => {
     const item = items[cIndex];
     if (!item) return;
     const text = editDraft.trim();
@@ -303,8 +330,14 @@ export default function Carousel({
       return;
     }
     await onEditEntry(message.id, item.key, text);
+    Keyboard.dismiss();
     setEditing(false);
-  };
+  }, [items, cIndex, editDraft, message.id, onEditEntry]);
+
+  const cancelEdit = useCallback(() => {
+    Keyboard.dismiss();
+    setEditing(false);
+  }, []);
 
   const handleFork = async () => {
     const item = items[cIndex];
@@ -363,22 +396,32 @@ export default function Carousel({
           editing={editing && i === cIndex}
           editDraft={editDraft}
           onEditDraftChange={setEditDraft}
+          onSaveEdit={saveEdit}
+          onCancelEdit={cancelEdit}
           liveStreamText={item.live ? liveStreamText : null}
         />,
       );
     }
     return out;
-  }, [items, count, pos, appear, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText]);
+  }, [items, count, pos, appear, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, saveEdit, cancelEdit]);
 
   const ready = origin !== undefined && targetCenter !== null;
-
-  const stageStyle = useAnimatedStyle(() => ({
-    transform: [{perspective: 1000}],
-  }));
 
   const blurStyle = useAnimatedStyle(() => ({opacity: appear.value}));
 
   const uiStyle = useAnimatedStyle(() => ({opacity: appear.value}));
+
+  const stageStyle = useAnimatedStyle(() => {
+    // Zero shift while closed; ramps smoothly to "half the keyboard height,
+    // minus a little" once it's up so the card sits closer to the keyboard.
+    const kb = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2);
+    return {
+      transform: [
+        {perspective: 1000},
+        {translateY: -kb / 2},
+      ],
+    };
+  });
 
   const canPrev = cIndex > 0;
   const canNext = cIndex < count - 1;
@@ -406,12 +449,11 @@ export default function Carousel({
       </Animated.View>
 
       <Animated.View style={[styles.actionStack, uiStyle]}>
-        {editing ? (
+        {isError ? (
           <View style={styles.actionRow}>
-            <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
-            <ActionButton label="Cancel" onPress={() => setEditing(false)} color={colors.danger} />
+            <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
           </View>
-        ) : (
+        ) : !editing && (
           <>
             <View style={styles.actionRow}>
               <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
@@ -483,6 +525,8 @@ function CarouselCard({
   editing,
   editDraft,
   onEditDraftChange,
+  onSaveEdit,
+  onCancelEdit,
   liveStreamText,
 }: {
   item: CardItem;
@@ -498,6 +542,8 @@ function CarouselCard({
   editing?: boolean;
   editDraft?: string;
   onEditDraftChange?: (text: string) => void;
+  onSaveEdit?: () => void;
+  onCancelEdit?: () => void;
   liveStreamText?: string | null;
 }) {
   const [cardW, setCardW] = useState(0);
@@ -576,57 +622,68 @@ function CarouselCard({
         onLayout={measureCard}
         style={[
           animatedStyle,
-          styles.card,
-          {maxWidth: maxW},
+          styles.cardCluster,
           editing && {width: maxW},
-          {
-            borderRadius: colors.bubbleRadius,
-            ...bubbleLook,
-          },
         ]}>
-        <View style={styles.cardInner}>
-          {editing ? (
-            <TextInput
-              style={[
-                styles.cardInput,
-                {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
-              ]}
-              value={editDraft}
-              onChangeText={onEditDraftChange}
-              multiline
-              autoFocus
-              textAlignVertical="top"
-            />
-          ) : (
-            <>
-              {showTyping ? (
-                <TypingDots color={textColor} />
-              ) : (
-                <Text
-                  style={[
-                    styles.cardText,
-                    {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
-                  ]}>
-                  {renderFormattedText(displayContent, {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
-                </Text>
-              )}
-              <View style={styles.cardMetaRow}>
-                <Text style={[styles.cardMeta, {color: colors.textMuted}]}>
-                  {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                </Text>
-                {counter && (
-                  <Text style={[styles.cardMeta, {color: colors.textMuted, marginLeft: 8, fontSize: 12}]}>
-                    {counter}
+        <View
+          style={[
+            styles.card,
+            {maxWidth: maxW},
+            {
+              borderRadius: colors.bubbleRadius,
+              ...bubbleLook,
+            },
+          ]}>
+          <View style={styles.cardInner}>
+            {editing ? (
+              <TextInput
+                style={[
+                  styles.cardInput,
+                  {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
+                ]}
+                value={editDraft}
+                onChangeText={onEditDraftChange}
+                multiline
+                autoFocus
+                textAlignVertical="top"
+              />
+            ) : (
+              <>
+                {showTyping ? (
+                  <TypingDots color={textColor} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.cardText,
+                      {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
+                    ]}>
+                    {renderFormattedText(displayContent, {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
                   </Text>
                 )}
-              </View>
-            </>
-          )}
+                <View style={styles.cardMetaRow}>
+                  <Text style={[styles.cardMeta, {color: colors.textMuted}]}>
+                    {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                  </Text>
+                  {counter && (
+                    <Text style={[styles.cardMeta, {color: colors.textMuted, marginLeft: 8, fontSize: 12}]}>
+                      {counter}
+                    </Text>
+                  )}
+                </View>
+              </>
+            )}
+          </View>
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, scrim, {backgroundColor: colors.overlay}]}
+          />
         </View>
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, scrim, {backgroundColor: colors.overlay}]}
-        />
+        {editing && (
+          <View style={styles.editActionsRow}>
+            <ActionButton label="Save" onPress={onSaveEdit ?? (() => {})} color={colors.accent} />
+            <ActionButton label="Cancel" onPress={onCancelEdit ?? (() => {})} color={colors.danger} />
+          </View>
+        )}
       </Animated.View>
     </View>
   );
@@ -721,10 +778,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cardCluster: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 12,
+  },
   card: {
     maxWidth: '72%',
     overflow: 'hidden',
     borderWidth: 1,
+  },
+  editActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   cardInner: {
     paddingHorizontal: 14,
@@ -746,6 +813,22 @@ const styles = StyleSheet.create({
     padding: 0,
     minHeight: 60,
     width: '100%',
+  },
+  cardEditActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 8,
+  },
+  cardEditBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  cardEditBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   cardMetaRow: {
     flexDirection: 'row',

@@ -105,14 +105,26 @@ const MessageBubble = React.memo(function MessageBubble({
   if (isError) {
     return (
       <View style={[st.messageContainer, st.messageContainerAssistant]}>
-        <View style={[st.bubble, st.bubbleAssistant, st.errorBubble]}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          ref={ref => registerBubble(item.id, ref)}
+          onLayout={e => onBubbleLayout(item.id, e.nativeEvent.layout.width, e.nativeEvent.layout.height)}
+          onPress={() => onOpenCarousel(item.id)}
+          style={[st.bubble, st.bubbleAssistant, st.errorBubble]}>
           <Text style={st.errorText}>{item.content}</Text>
-          <TouchableOpacity
-            onPress={onRetry}
-            style={st.retryBtn}>
-            <Text style={st.retryBtnText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={{flexDirection: 'row', gap: 12, marginTop: 6}}>
+            <TouchableOpacity
+              onPress={onRetry}
+              style={st.retryBtn}>
+              <Text style={st.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => onOpenCarousel(item.id)}
+              style={st.retryBtn}>
+              <Text style={st.retryBtnText}>Details</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -248,6 +260,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     messagesData,
     replacingMessageId,
     variantIndexMap,
+    error,
     handleSend,
     handleContinue,
     handleEditMessage,
@@ -383,9 +396,15 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     handleCloseCarousel();
   }, [handleDeleteMessage, handleCloseCarousel]);
 
-  const carouselMessage = carouselMessageId && session
-    ? session.messages.find(m => m.id === carouselMessageId) ?? null
-    : null;
+  const carouselMessage: ChatMessage | null = (() => {
+    if (!carouselMessageId) return null;
+    if (carouselMessageId === '__error__') {
+      return error
+        ? {id: '__error__', role: 'assistant', content: error, timestamp: Date.now()}
+        : null;
+    }
+    return session?.messages.find(m => m.id === carouselMessageId) ?? null;
+  })();
   const carouselCanRegen = !!carouselMessage && !!session && session.messages.length > 0 &&
     session.messages[session.messages.length - 1].id === carouselMessage.id &&
     carouselMessage.role === 'assistant';
