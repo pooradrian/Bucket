@@ -279,10 +279,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   } = useChat({character, groupChat, activeSessionId, onSessionCreated, quickCharacters});
 
   const [carouselMessageId, setCarouselMessageIdInner] = useState<string | null>(null);
-  const [carouselOrigin, setCarouselOrigin] = useState<{x: number; y: number; width: number; height: number} | null | undefined>(undefined);
+  const [carouselOrigin, setCarouselOrigin] = useState<{x: number; y: number; width: number; height: number; viewport?: {y: number; height: number}} | null | undefined>(undefined);
   const [carouselReady, setCarouselReady] = useState(false);
   const bubbleRefs = useRef<Record<string, View | null>>({}).current;
   const bubbleLayouts = useRef<Record<string, {width: number; height: number}>>({}).current;
+  const listAreaRef = useRef<View>(null);
 
   const lastSendTapRef = useRef(0);
   const sendTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,7 +374,8 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     setCarouselOrigin(undefined);
     setCarouselMessageIdInner(id);
     const ref = bubbleRefs[id];
-    if (!ref) {
+    const area = listAreaRef.current;
+    if (!ref || !area) {
       setCarouselOrigin(null);
       return;
     }
@@ -383,8 +385,11 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         width = layout.width;
         height = layout.height;
       }
-      if (width > 0 && height > 0 && x >= -100 && x <= 5000 && y >= -100 && y <= 5000) {
-        setCarouselOrigin({x, y, width, height});
+      if (width > 0 && height > 0 && x >= -100 && x <= 5000 && y >= -100000 && y <= 100000) {
+        area.measureInWindow((vx, vy, vw, vh) => {
+          const viewport = vh > 0 ? {y: vy, height: vh} : undefined;
+          setCarouselOrigin({x, y, width, height, viewport});
+        });
       } else {
         setCarouselOrigin(null);
       }
@@ -521,7 +526,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         </TouchableOpacity>
       </View>
 
-      <View style={{flex: 1}}>
+      <View ref={listAreaRef} style={{flex: 1}}>
       <FlatList
         ref={flatListRef}
         data={messagesData}
