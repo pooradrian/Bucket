@@ -8,7 +8,6 @@ export interface RawRequest {
 
 const CAT_API_URL = "cat's api";
 const CAT_SOUNDS = ['meow', 'merp', 'nya', 'purr'];
-const CAT_MAX_WORDS = 100;
 
 function isCatApiUrl(url: string): boolean {
   return url.trim().toLowerCase() === CAT_API_URL;
@@ -20,7 +19,7 @@ function countCatSounds(messages: ChatMessageObject[]): number {
   const match = content.match(/\d+/);
   const n = match ? parseInt(match[0], 10) : 0;
   if (n > 0) {
-    return Math.min(n, CAT_MAX_WORDS);
+    return n;
   }
   return 3;
 }

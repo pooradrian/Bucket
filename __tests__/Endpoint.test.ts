@@ -70,9 +70,9 @@ describe('built-in cat API', () => {
     expect(result.content.split(' ')).toHaveLength(3);
   });
 
-  test('caps the word count to avoid runaway output', async () => {
+  test('does not cap the word count', async () => {
     const result = await getAIResponse(msg('10000'), catConfig, undefined, false);
-    expect(result.content.split(' ')).toHaveLength(100);
+    expect(result.content.split(' ')).toHaveLength(10000);
   });
 
   test('non-streaming returns the words immediately', async () => {
