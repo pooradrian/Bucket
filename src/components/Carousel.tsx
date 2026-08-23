@@ -46,6 +46,7 @@ interface OriginFrame {
   y: number;
   width: number;
   height: number;
+  viewport?: {y: number; height: number};
 }
 
 interface CarouselProps {
@@ -178,6 +179,7 @@ export default function Carousel({
   const pos = useSharedValue(liveIndex);
   const appear = useSharedValue(0);
   const kbHeight = useSharedValue(0);
+  const pullY = useSharedValue(0);
   const overlayRef = useRef<View>(null);
   const [centered, setCentered] = useState(liveIndex);
   const [targetCenter, setTargetCenter] = useState<{x: number; y: number} | null>(null);
@@ -185,6 +187,11 @@ export default function Carousel({
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
   const [jsonVisible, setJsonVisible] = useState(false);
+  const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
+
+  const handleCardHeight = useCallback((key: string, h: number) => {
+    setCardHeights(prev => (prev[key] === h ? prev : {...prev, [key]: h}));
+  }, []);
 
   const jsonText = useMemo(() => {
     if (!message.requestInfo) return null;
@@ -203,6 +210,30 @@ export default function Carousel({
   editingRef.current = editing;
 
   const cIndex = Math.min(Math.max(centered, 0), count - 1);
+
+  const centeredKey = items[cIndex]?.key ?? null;
+  const cardH = (centeredKey && cardHeights[centeredKey]) || 0;
+  const maxPull = cardH > SCREEN_H ? cardH / 2 : 0;
+  const maxPullRef = useRef(maxPull);
+  maxPullRef.current = maxPull;
+
+  const initialPull = useMemo(() => {
+    if (!origin?.viewport) return 0;
+    const {y: by, height: bh, viewport} = origin;
+    if (bh <= viewport.height) return 0;
+    const visTop = Math.max(by, viewport.y);
+    const visBot = Math.min(by + bh, viewport.y + viewport.height);
+    if (visBot <= visTop) return 0;
+    const p = ((visTop + visBot) / 2 - by) / bh;
+    return (0.5 - p) * bh;
+  }, [origin]);
+
+  const syncedRef = useRef(false);
+  useEffect(() => {
+    if (syncedRef.current || cardH <= 0) return;
+    syncedRef.current = true;
+    pullY.value = Math.min(maxPull, Math.max(-maxPull, initialPull));
+  }, [cardH, initialPull, maxPull, pullY]);
 
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -259,20 +290,24 @@ export default function Carousel({
       desiredKey = items.find(i => i.live)?.key ?? items[0]?.key ?? null;
     }
     if (desiredKey) {
+      if (desiredKey !== centeredKeyRef.current) {
+        pullY.value = 0;
+      }
       const idx = items.findIndex(i => i.key === desiredKey);
       pos.value = idx;
       setCentered(idx);
       centeredKeyRef.current = desiredKey;
     }
     if (focusKeyRef.current) focusKeyRef.current = null;
-  }, [items, pos]);
+  }, [items, pos, pullY]);
 
-  const snapTo = (target: number) => {
+  const snapTo = useCallback((target: number) => {
     const clamped = Math.min(Math.max(Math.round(target), 0), items.length - 1);
     pos.value = withTiming(clamped, {duration: 260, easing: Easing.out(Easing.ease)});
+    pullY.value = withTiming(0, {duration: 200});
     setCentered(clamped);
     centeredKeyRef.current = items[clamped]?.key ?? null;
-  };
+  }, [items, pos, pullY]);
   const snapToRef = useRef(snapTo);
   snapToRef.current = snapTo;
 
@@ -287,39 +322,56 @@ export default function Carousel({
   const commitAndCloseRef = useRef(commitAndClose);
   commitAndCloseRef.current = commitAndClose;
 
-  const panRef = useRef({moved: false, anchor: 0});
+  const panRef = useRef({moved: false, anchor: 0, axis: null as 'x' | 'y' | null, pullAnchor: 0});
   const cardSpanRef = useRef(SCREEN_W / 2 + CARD_W / 2 - PEEK);
   cardSpanRef.current = SCREEN_W / 2 + (origin && origin.width > 0 ? origin.width : CARD_W) / 2 - PEEK;
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !editingRef.current,
-      onMoveShouldSetPanResponder: (_e, g) => !editingRef.current && Math.abs(g.dx) > 6,
+      onMoveShouldSetPanResponder: (_e, g) =>
+        !editingRef.current && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6),
       onPanResponderGrant: () => {
         panRef.current.moved = false;
+        panRef.current.axis = null;
         panRef.current.anchor = Math.round(pos.value);
+        panRef.current.pullAnchor = pullY.value;
       },
       onPanResponderMove: (_e, g) => {
-        if (Math.abs(g.dx) > 8) panRef.current.moved = true;
-        pos.value = panRef.current.anchor - g.dx / cardSpanRef.current;
+        const p = panRef.current;
+        if (!p.axis && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6)) {
+          p.axis = Math.abs(g.dx) >= Math.abs(g.dy) ? 'x' : 'y';
+        }
+        if (!p.axis) return;
+        if (p.axis === 'x') {
+          if (Math.abs(g.dx) > 8) p.moved = true;
+          pos.value = p.anchor - g.dx / cardSpanRef.current;
+        } else {
+          p.moved = true;
+          const max = maxPullRef.current;
+          pullY.value = Math.min(max, Math.max(-max, p.pullAnchor + g.dy));
+        }
       },
       onPanResponderRelease: (_e, g) => {
-        if (!panRef.current.moved && Math.abs(g.dx) < 6) {
+        const p = panRef.current;
+        if (!p.moved && Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
           commitAndCloseRef.current();
           return;
         }
+        if (p.axis === 'y') return;
         const delta = Math.round(g.dx / cardSpanRef.current);
-        const target = Math.round(panRef.current.anchor) - delta;
+        const target = Math.round(p.anchor) - delta;
         snapToRef.current(target);
       },
     }),
   ).current;
 
-  const startEdit = () => {
+  const startEdit = useCallback(() => {
     const item = items[cIndex];
     if (!item) return;
     setEditDraft(item.content);
     setEditing(true);
-  };
+    pullY.value = withTiming(0, {duration: 150});
+  }, [items, cIndex, pullY]);
 
   const saveEdit = useCallback(async () => {
     const item = items[cIndex];
@@ -339,23 +391,23 @@ export default function Carousel({
     setEditing(false);
   }, []);
 
-  const handleFork = async () => {
+  const handleFork = useCallback(async () => {
     const item = items[cIndex];
     if (!item) return;
     const newId = await onFork(message.id, item.key);
     if (newId) focusKeyRef.current = newId;
-  };
+  }, [items, cIndex, onFork, message.id]);
 
-  const handleFresh = async () => {
+  const handleFresh = useCallback(async () => {
     const newId = await onFresh(message.id);
     if (newId) {
       focusKeyRef.current = newId;
       setEditDraft('');
       setEditing(true);
     }
-  };
+  }, [onFresh, message.id]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     const item = items[cIndex];
     if (!item) return;
     if (items.length <= 1) {
@@ -367,11 +419,48 @@ export default function Carousel({
     const replacementKey = remaining[replacementIdx]?.key ?? null;
     if (replacementKey) focusKeyRef.current = replacementKey;
     await onDeleteEntry(message.id, item.key);
-  };
+  }, [items, cIndex, onDeleteMessage, onDeleteEntry, message]);
 
-  const handleDeleteAll = () => {
+  const handleDeleteAll = useCallback(() => {
     onDeleteMessage(message);
-  };
+  }, [onDeleteMessage, message]);
+
+  const canPrev = cIndex > 0;
+  const canNext = cIndex < count - 1;
+
+  const actionsNode = useMemo(() => isError ? (
+    <View style={styles.actionRow}>
+      <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
+    </View>
+  ) : editing ? null : (
+    <>
+      <View style={styles.actionRow}>
+        <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
+        <ActionButton label="Edit" onPress={startEdit} color={colors.accent} disabled={streamingThis} />
+        <ActionButton label="Fork" onPress={handleFork} color={colors.accent} disabled={streamingThis} />
+        <ActionButton label="Fresh" onPress={handleFresh} color={colors.accent} disabled={streamingThis} />
+        <ArrowButton disabled={!canNext} onPress={() => snapTo(cIndex + 1)} colors={colors} dir="›" />
+      </View>
+      <View style={styles.actionRow}>
+        {streamingThis ? (
+          <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
+        ) : canRegenerate && (
+          <ActionButton
+            label="Regen"
+            onPress={onRegenerate}
+            color={colors.accent}
+            disabled={sending}
+          />
+        )}
+        <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
+        <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
+        <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
+      </View>
+    </>
+  ), [isError, editing, message, colors, canPrev, canNext, cIndex, snapTo, startEdit, handleFork, handleFresh, streamingThis, onStop, canRegenerate, onRegenerate, sending, onCopy, jsonText, handleDelete, handleDeleteAll]);
+
+  const sideMode =
+    !isError && !editing && cardH > 0 && SCREEN_H / 2 + cardH / 2 + 90 > SCREEN_H - 24;
 
   const cards = useMemo(() => {
     const out: React.ReactElement[] = [];
@@ -387,6 +476,7 @@ export default function Carousel({
           i={i}
           pos={pos}
           enter={appear}
+          pull={pullY}
           colors={colors}
           origin={origin}
           target={targetCenter}
@@ -398,12 +488,14 @@ export default function Carousel({
           onEditDraftChange={setEditDraft}
           onSaveEdit={saveEdit}
           onCancelEdit={cancelEdit}
+          onHeight={handleCardHeight}
+          actions={i === cIndex && !sideMode ? actionsNode : null}
           liveStreamText={item.live ? liveStreamText : null}
         />,
       );
     }
     return out;
-  }, [items, count, pos, appear, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, saveEdit, cancelEdit]);
+  }, [items, count, pos, appear, pullY, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, saveEdit, cancelEdit, handleCardHeight, actionsNode, sideMode]);
 
   const ready = origin !== undefined && targetCenter !== null;
 
@@ -423,9 +515,6 @@ export default function Carousel({
     };
   });
 
-  const canPrev = cIndex > 0;
-  const canNext = cIndex < count - 1;
-
   return (
     <View ref={overlayRef} style={styles.overlay} {...panResponder.panHandlers}>
       <Animated.View style={[StyleSheet.absoluteFill, blurStyle]}>
@@ -437,7 +526,7 @@ export default function Carousel({
         />
       </Animated.View>
       {ready && (
-        <Animated.View style={[styles.stage, stageStyle]} pointerEvents={editing ? 'box-none' : 'none'}>
+        <Animated.View style={[styles.stage, stageStyle]} pointerEvents="box-none">
           {cards}
         </Animated.View>
       )}
@@ -448,38 +537,32 @@ export default function Carousel({
         </TouchableOpacity>
       </Animated.View>
 
-      <Animated.View style={[styles.actionStack, uiStyle]}>
-        {isError ? (
-          <View style={styles.actionRow}>
+      {sideMode && (
+        <>
+          <Animated.View style={[styles.sideCol, styles.sideColLeft, uiStyle]}>
+            <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
+            <ActionButton label="Edit" onPress={startEdit} color={colors.accent} disabled={streamingThis} />
+            <ActionButton label="Fork" onPress={handleFork} color={colors.accent} disabled={streamingThis} />
+            <ActionButton label="Fresh" onPress={handleFresh} color={colors.accent} disabled={streamingThis} />
+          </Animated.View>
+          <Animated.View style={[styles.sideCol, styles.sideColRight, uiStyle]}>
+            <ArrowButton disabled={!canNext} onPress={() => snapTo(cIndex + 1)} colors={colors} dir="›" />
+            {streamingThis ? (
+              <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
+            ) : canRegenerate && (
+              <ActionButton
+                label="Regen"
+                onPress={onRegenerate}
+                color={colors.accent}
+                disabled={sending}
+              />
+            )}
             <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
-          </View>
-        ) : !editing && (
-          <>
-            <View style={styles.actionRow}>
-              <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
-              <ActionButton label="Edit" onPress={startEdit} color={colors.accent} disabled={streamingThis} />
-              <ActionButton label="Fork" onPress={handleFork} color={colors.accent} disabled={streamingThis} />
-              <ActionButton label="Fresh" onPress={handleFresh} color={colors.accent} disabled={streamingThis} />
-              <ArrowButton disabled={!canNext} onPress={() => snapTo(cIndex + 1)} colors={colors} dir="›" />
-            </View>
-            <View style={styles.actionRow}>
-              {streamingThis ? (
-                <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
-              ) : canRegenerate && (
-                <ActionButton
-                  label="Regen"
-                  onPress={onRegenerate}
-                  color={colors.accent}
-                  disabled={sending}
-                />
-              )}
-              <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
-              <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
-              <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
-            </View>
-          </>
-        )}
-      </Animated.View>
+            <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
+            <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
+          </Animated.View>
+        </>
+      )}
 
       <Modal
         visible={jsonVisible && jsonText !== null}
@@ -516,6 +599,7 @@ function CarouselCard({
   i,
   pos,
   enter,
+  pull,
   colors,
   origin,
   target,
@@ -527,12 +611,15 @@ function CarouselCard({
   onEditDraftChange,
   onSaveEdit,
   onCancelEdit,
+  onHeight,
+  actions,
   liveStreamText,
 }: {
   item: CardItem;
   i: number;
   pos: SharedValue<number>;
   enter: SharedValue<number>;
+  pull: SharedValue<number>;
   colors: Colors;
   origin?: OriginFrame | null;
   target: {x: number; y: number} | null;
@@ -544,9 +631,12 @@ function CarouselCard({
   onEditDraftChange?: (text: string) => void;
   onSaveEdit?: () => void;
   onCancelEdit?: () => void;
+  onHeight?: (key: string, h: number) => void;
+  actions?: React.ReactNode | null;
   liveStreamText?: string | null;
 }) {
   const [cardW, setCardW] = useState(0);
+  const [cardHLocal, setCardHLocal] = useState(0);
   const animatedStyle = useAnimatedStyle(() => {
     const rel = i - pos.value;
     const absRel = Math.abs(rel);
@@ -581,7 +671,7 @@ function CarouselCard({
     return {
       transform: [
         {translateX: restX + enterDx},
-        {translateY: enterTy},
+        {translateY: enterTy + pull.value - cardHLocal / 2},
         {scale: scale * enterScale},
       ],
       opacity,
@@ -611,21 +701,24 @@ function CarouselCard({
   const showTyping = liveStreamText != null && liveStreamText.length === 0;
   const displayContent = liveStreamText ?? item.content;
 
-  const measureCard = (ev: {nativeEvent: {layout: {width: number}}}) => {
+  const measureCard = (ev: {nativeEvent: {layout: {width: number; height: number}}}) => {
     const next = Math.round(ev.nativeEvent.layout.width);
     if (cardW !== next) setCardW(next);
+    const nextH = Math.round(ev.nativeEvent.layout.height);
+    if (cardHLocal !== nextH) setCardHLocal(nextH);
+    onHeight?.(item.key, nextH);
   };
 
   return (
     <View style={styles.cardWrap}>
       <Animated.View
-        onLayout={measureCard}
         style={[
           animatedStyle,
           styles.cardCluster,
           editing && {width: maxW},
         ]}>
         <View
+          onLayout={measureCard}
           style={[
             styles.card,
             {maxWidth: maxW},
@@ -678,6 +771,11 @@ function CarouselCard({
             style={[StyleSheet.absoluteFill, scrim, {backgroundColor: colors.overlay}]}
           />
         </View>
+        {actions ? (
+          <View pointerEvents="box-none" style={styles.clusterActions}>
+            {actions}
+          </View>
+        ) : null}
         {editing && (
           <View style={styles.editActionsRow}>
             <ActionButton label="Save" onPress={onSaveEdit ?? (() => {})} color={colors.accent} />
@@ -773,10 +871,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: 0,
-    bottom: 0,
+    top: '50%',
     alignItems: 'center',
-    justifyContent: 'center',
   },
   cardCluster: {
     flexDirection: 'column',
@@ -787,6 +883,15 @@ const styles = StyleSheet.create({
     maxWidth: '72%',
     overflow: 'hidden',
     borderWidth: 1,
+  },
+  clusterActions: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingTop: 12,
+    gap: 10,
   },
   editActionsRow: {
     flexDirection: 'row',
@@ -857,12 +962,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  actionStack: {
+  sideCol: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 56 : 36,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'column',
-    gap: 10,
+    gap: 8,
+  },
+  sideColLeft: {
+    left: 4,
+  },
+  sideColRight: {
+    right: 4,
   },
   actionRow: {
     flexDirection: 'row',
