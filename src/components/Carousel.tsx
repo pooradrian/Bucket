@@ -234,13 +234,6 @@ export default function Carousel({
     return (0.5 - p) * bh;
   }, [origin]);
 
-  const syncedRef = useRef(false);
-  useEffect(() => {
-    if (syncedRef.current || cardH <= 0) return;
-    syncedRef.current = true;
-    pullY.value = Math.min(maxPull, Math.max(-maxPull, initialPull));
-  }, [cardH, initialPull, maxPull, pullY]);
-
   const [belowActions, setBelowActions] = useState(false);
   const setBelowSafe = useCallback((v: boolean) => {
     setBelowActions(prev => (prev === v ? prev : v));
@@ -250,7 +243,12 @@ export default function Carousel({
     () => {
       const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
       const bottom = vh / 2 + cardH / 2 + pullY.value - kbHalf;
-      return !dragging.value && cardH > vh && vh - bottom >= 114;
+      return (
+        appear.value >= 1 &&
+        !dragging.value &&
+        cardH > vh &&
+        vh - bottom >= 114
+      );
     },
     (cur, prev) => {
       if (cur !== prev) runOnJS(setBelowSafe)(cur);
@@ -532,13 +530,16 @@ export default function Carousel({
           editDraft={editDraft}
           onEditDraftChange={setEditDraft}
           onHeight={handleCardHeight}
-          actions={i === cIndex && !overflows ? actionsNode : null}
+          entryPull={initialPull}
+          vh={vh}
+          animMs={Math.max(0, theme.carouselAnimMs)}
+          actions={i === cIndex && cardH > 0 && !overflows ? actionsNode : null}
           liveStreamText={item.live ? liveStreamText : null}
         />,
       );
     }
     return out;
-  }, [items, count, pos, appear, pullY, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, handleCardHeight, actionsNode, overflows]);
+  }, [items, count, pos, appear, pullY, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, handleCardHeight, actionsNode, overflows, initialPull, vh, theme.carouselAnimMs, cardH]);
 
   const ready = origin !== undefined && targetCenter !== null;
 
@@ -548,6 +549,7 @@ export default function Carousel({
 
   const belowOpenStyle = useAnimatedStyle(() => {
     const open =
+      appear.value >= 1 &&
       cardH > vh &&
       vh - (vh / 2 + cardH / 2 + pullY.value) >= 114;
     return {
@@ -561,7 +563,7 @@ export default function Carousel({
     const open =
       cardH > vh &&
       vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= 114;
-    return {opacity: open ? 0 : appear.value};
+    return {opacity: open && appear.value >= 1 ? 0 : appear.value};
   }, [cardH, vh]);
 
   const editStackStyle = useAnimatedStyle(() => {
@@ -715,6 +717,9 @@ function CarouselCard({
   onEditDraftChange,
   onHeight,
   actions,
+  entryPull,
+  vh,
+  animMs,
   liveStreamText,
 }: {
   item: CardItem;
@@ -733,10 +738,13 @@ function CarouselCard({
   onEditDraftChange?: (text: string) => void;
   onHeight?: (key: string, h: number) => void;
   actions?: React.ReactNode | null;
+  entryPull?: number;
+  vh?: number;
+  animMs?: number;
   liveStreamText?: string | null;
 }) {
   const [cardW, setCardW] = useState(0);
-  const [cardHLocal, setCardHLocal] = useState(0);
+  const didSyncRef = useRef(false);
   const animatedStyle = useAnimatedStyle(() => {
     const rel = i - pos.value;
     const absRel = Math.abs(rel);
@@ -771,7 +779,7 @@ function CarouselCard({
     return {
       transform: [
         {translateX: restX + enterDx},
-        {translateY: enterTy + pull.value - cardHLocal / 2},
+        {translateY: enterTy + pull.value},
         {scale: scale * enterScale},
       ],
       opacity,
@@ -805,18 +813,27 @@ function CarouselCard({
     const next = Math.round(ev.nativeEvent.layout.width);
     if (cardW !== next) setCardW(next);
     const nextH = Math.round(ev.nativeEvent.layout.height);
-    if (cardHLocal !== nextH) setCardHLocal(nextH);
+    if (!didSyncRef.current && nextH > 0) {
+      didSyncRef.current = true;
+      const max = vh && nextH > vh ? (nextH - vh) / 2 : 0;
+      const pullTarget = Math.min(max, Math.max(-max, entryPull ?? 0));
+      pull.value = withTiming(pullTarget, {
+        duration: animMs ?? 0,
+        easing: Easing.inOut(Easing.cubic),
+      });
+    }
     onHeight?.(item.key, nextH);
   };
 
   return (
     <View style={styles.cardWrap}>
-      <Animated.View
-        style={[
-          animatedStyle,
-          styles.cardCluster,
-          editing && {width: maxW},
-        ]}>
+      <View style={styles.centerShift}>
+        <Animated.View
+          style={[
+            animatedStyle,
+            styles.cardCluster,
+            editing && {width: maxW},
+          ]}>
         <View
           onLayout={measureCard}
           style={[
@@ -876,7 +893,8 @@ function CarouselCard({
             {actions}
           </View>
         ) : null}
-      </Animated.View>
+        </Animated.View>
+      </View>
     </View>
   );
 }
@@ -967,6 +985,9 @@ const styles = StyleSheet.create({
     right: 0,
     top: '50%',
     alignItems: 'center',
+  },
+  centerShift: {
+    transform: [{translateY: '-50%'}],
   },
   cardCluster: {
     flexDirection: 'column',
