@@ -2,7 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {FlatList} from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import {Character} from './CharacterEditor';
-import {loadPromptConfig, sendToLLM, sendToGroupLLM, sendToQCLLM, PromptConfig, DEFAULT_PROMPT_CONFIG} from './PromptHandler';
+import {loadPromptConfig, sendToLLM, sendToGroupLLM, sendToQCLLM, PromptConfig} from './PromptHandler';
 import {RawRequest} from './Endpoint';
 import {LorebookState} from './RAGHandler';
 import {useAppStore, GroupChat} from './store';
@@ -19,7 +19,7 @@ import {
   getLorebookEntriesFromDB,
 } from './Database';
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
-import {applyDisplacements, parseDisplacements} from './displacement';
+import {applyDisplacements, DisplacementRule, parseDisplacements} from './displacement';
 import {logEvent} from './EventLogger';
 import {playNotificationSound, vibrateDevice} from './NotificationModule';
 
@@ -187,21 +187,12 @@ export function useChat({
 } {
   const lorebooks = useAppStore(s => s.lorebooks);
   const allCharacters = useAppStore(s => s.characters);
-  const promptConfigVersion = useAppStore(s => s.promptConfigVersion);
 
   const [session, setSession] = useState<ChatSession | null>(null);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
-  const [promptConfig, setPromptConfig] = useState<PromptConfig>(DEFAULT_PROMPT_CONFIG);
-  const displacementRules = useMemo(
-    () => parseDisplacements(promptConfig.wordDisplacements),
-    [promptConfig.wordDisplacements],
-  );
-  const displacementRulesRef = useRef(displacementRules);
-  useEffect(() => {
-    displacementRulesRef.current = displacementRules;
-  }, [displacementRules]);
   const displacementSeedRef = useRef(0);
+  const displacementRulesRef = useRef<DisplacementRule[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
@@ -304,12 +295,6 @@ export function useChat({
       console.warn('Failed to persist message:', e);
     }
   }, []);
-
-  useEffect(() => {
-    loadPromptConfig()
-      .then(setPromptConfig)
-      .catch(e => console.warn('Failed to load prompt config:', e));
-  }, [promptConfigVersion]);
 
   // Lorebook entries are loaded lazily at send time instead of eagerly on
   // every character change — large lorebooks made chat entry sluggish.
@@ -444,7 +429,11 @@ export function useChat({
         ? (opts.continueTarget.qc ?? null)
         : selectedQC;
       try {
+        // Fresh config per request so settings changes reach open chats
+        // without remounting them.
+        const promptConfig = await loadPromptConfig();
         displacementSeedRef.current = Math.floor(Math.random() * 0x7fffffff);
+        displacementRulesRef.current = parseDisplacements(promptConfig.wordDisplacements);
         rawStreamRef.current = '';
         streamingContentRef.current = '';
         setIsStreaming(true);
@@ -624,7 +613,7 @@ export function useChat({
         setSending(false);
       }
     },
-    [isGroupChat, selectedReplyCharacter, selectedQC, quickCharacters, groupMembers, activeCharacter, promptConfig, loadChatLorebooks, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
+    [isGroupChat, selectedReplyCharacter, selectedQC, quickCharacters, groupMembers, activeCharacter, loadChatLorebooks, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
   );
 
   const handleSend = useCallback(
