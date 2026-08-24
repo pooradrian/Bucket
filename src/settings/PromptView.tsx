@@ -3,6 +3,7 @@ import {PromptConfig, DEFAULT_PROMPT_CONFIG, PLACEHOLDERS} from '../PromptHandle
 import {useTheme} from '../ThemeContext';
 import {
   AutoGrowTextInput,
+  MutedNote,
   OptionRow,
   SectionHeader,
   TextField,
@@ -175,6 +176,26 @@ export default function PromptView({
           />
         </>
       )}
+
+      <SectionHeader title="Word Displacement" />
+      <View style={st.settingsField}>
+        <MutedNote>
+          {'Rewrites replies as they generate, one rule per line: a bare word is deleted · "w =>" becomes a space · "w => new" replaces · "w => a ~ b" picks randomly · "a <=> b" swaps. // starts a comment.'}
+        </MutedNote>
+        <AutoGrowTextInput
+          style={st.settingsInput}
+          value={promptValues.wordDisplacements}
+          onChangeText={text =>
+            setPromptValues(prev => ({...prev, wordDisplacements: text}))
+          }
+          placeholder={
+            'word1\nword2 =>\nword3 => word4\nword5 => word6 ~ word7\nword8 <=> word9'
+          }
+          placeholderTextColor={st.textMuted.color}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      </View>
     </>
   );
 }
