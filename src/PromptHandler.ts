@@ -48,6 +48,7 @@ export interface PromptConfig {
   summarizationTokenThreshold: string;
   summarizationMaxSummaries: string;
   summarizationModel: string;
+  wordDisplacements: string;
 }
 
 export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
@@ -71,6 +72,7 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   summarizationTokenThreshold: '4000',
   summarizationMaxSummaries: '3',
   summarizationModel: '',
+  wordDisplacements: '',
 };
 
 export const PLACEHOLDERS = [

@@ -19,6 +19,7 @@ import {
   getLorebookEntriesFromDB,
 } from './Database';
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
+import {applyDisplacements, parseDisplacements} from './displacement';
 import {logEvent} from './EventLogger';
 import {playNotificationSound, vibrateDevice} from './NotificationModule';
 
@@ -192,6 +193,15 @@ export function useChat({
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [promptConfig, setPromptConfig] = useState<PromptConfig>(DEFAULT_PROMPT_CONFIG);
+  const displacementRules = useMemo(
+    () => parseDisplacements(promptConfig.wordDisplacements),
+    [promptConfig.wordDisplacements],
+  );
+  const displacementRulesRef = useRef(displacementRules);
+  useEffect(() => {
+    displacementRulesRef.current = displacementRules;
+  }, [displacementRules]);
+  const displacementSeedRef = useRef(0);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
@@ -208,6 +218,7 @@ export function useChat({
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingContentRef = useRef('');
+  const rawStreamRef = useRef('');
   const streamingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replacingMessageIdRef = useRef<string | null>(null);
   const [replacingMessageId, setReplacingMessageId] = useState<string | null>(null);
@@ -257,11 +268,13 @@ export function useChat({
   );
 
   const flushStreamingContent = useCallback((token: string) => {
-    streamingContentRef.current += token;
+    rawStreamRef.current += token;
     if (!streamingTimerRef.current) {
       streamingTimerRef.current = setTimeout(() => {
         streamingTimerRef.current = null;
-        setStreamingContent(streamingContentRef.current);
+        const displaced = applyDisplacements(rawStreamRef.current, displacementRulesRef.current, displacementSeedRef.current);
+        streamingContentRef.current = displaced;
+        setStreamingContent(displaced);
       }, 50);
     }
   }, []);
@@ -271,6 +284,7 @@ export function useChat({
       clearTimeout(streamingTimerRef.current);
       streamingTimerRef.current = null;
     }
+    rawStreamRef.current = '';
     streamingContentRef.current = '';
     setStreamingContent('');
   }, []);
@@ -430,6 +444,8 @@ export function useChat({
         ? (opts.continueTarget.qc ?? null)
         : selectedQC;
       try {
+        displacementSeedRef.current = Math.floor(Math.random() * 0x7fffffff);
+        rawStreamRef.current = '';
         streamingContentRef.current = '';
         setIsStreaming(true);
         const ctrl = new AbortController();
@@ -474,7 +490,8 @@ export function useChat({
           return;
         }
 
-        if (!result.content.trim()) {
+        const content = applyDisplacements(result.content, displacementRulesRef.current, displacementSeedRef.current);
+        if (!content.trim()) {
           throw new Error('The model returned an empty response. Try again, or use Continue.');
         }
 
@@ -493,7 +510,7 @@ export function useChat({
               m.id === replaceId
                 ? {
                     ...m,
-                    content: result.content,
+                    content,
                     timestamp: assistantUpdatedAt,
                     characterId: replyCharId ?? m.characterId,
                     variants: opts.existingVariants ?? m.variants,
@@ -515,7 +532,7 @@ export function useChat({
           const assistantMessage: ChatMessage = {
             id: generateId(),
             role: 'assistant',
-            content: result.content,
+            content,
             timestamp: assistantUpdatedAt,
             requestInfo,
             ...(replyCharId ? {characterId: replyCharId} : {}),
@@ -534,7 +551,7 @@ export function useChat({
         setIsStreaming(false);
         resetStreamingContent();
         logEvent('message_streamed', {
-          charCount: result.content.length,
+          charCount: content.length,
           durationMs: result.metrics.totalMs,
           sessionMsgCount: messages.length + 1,
         });
