@@ -16,7 +16,10 @@ import {BlurView} from '@react-native-community/blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
+  runOnJS,
   withTiming,
+  withDecay,
   withRepeat,
   withSequence,
   withDelay,
@@ -180,9 +183,11 @@ export default function Carousel({
   const appear = useSharedValue(0);
   const kbHeight = useSharedValue(0);
   const pullY = useSharedValue(0);
+  const dragging = useSharedValue(false);
   const overlayRef = useRef<View>(null);
   const [centered, setCentered] = useState(liveIndex);
   const [targetCenter, setTargetCenter] = useState<{x: number; y: number} | null>(null);
+  const [overlayH, setOverlayH] = useState(SCREEN_H);
   const focusKeyRef = useRef<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
@@ -213,7 +218,8 @@ export default function Carousel({
 
   const centeredKey = items[cIndex]?.key ?? null;
   const cardH = (centeredKey && cardHeights[centeredKey]) || 0;
-  const maxPull = cardH > SCREEN_H ? cardH / 2 : 0;
+  const vh = overlayH;
+  const maxPull = cardH > vh ? cardH / 2 : 0;
   const maxPullRef = useRef(maxPull);
   maxPullRef.current = maxPull;
 
@@ -234,6 +240,23 @@ export default function Carousel({
     syncedRef.current = true;
     pullY.value = Math.min(maxPull, Math.max(-maxPull, initialPull));
   }, [cardH, initialPull, maxPull, pullY]);
+
+  const [belowActions, setBelowActions] = useState(false);
+  const setBelowSafe = useCallback((v: boolean) => {
+    setBelowActions(prev => (prev === v ? prev : v));
+  }, []);
+
+  useAnimatedReaction(
+    () => {
+      const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
+      const bottom = vh / 2 + cardH / 2 + pullY.value - kbHalf;
+      return !dragging.value && cardH > vh && vh - bottom >= 114;
+    },
+    (cur, prev) => {
+      if (cur !== prev) runOnJS(setBelowSafe)(cur);
+    },
+    [cardH, vh, setBelowSafe],
+  );
 
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -259,6 +282,7 @@ export default function Carousel({
         if (cancelled) return;
         if (w > 0 && h > 0) {
           setTargetCenter({x: x + w / 2, y: y + h / 2});
+          setOverlayH(h);
         } else {
           setTargetCenter({x: SCREEN_W / 2, y: SCREEN_H / 2});
         }
@@ -328,11 +352,17 @@ export default function Carousel({
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !editingRef.current,
-      onMoveShouldSetPanResponder: (_e, g) =>
-        !editingRef.current && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6),
+      onMoveShouldSetPanResponder: (_e, g) => {
+        if (editingRef.current) {
+          return Math.abs(g.dy) > 10 && Math.abs(g.dy) > Math.abs(g.dx);
+        }
+        return Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6;
+      },
       onPanResponderGrant: () => {
+        pullY.value = pullY.value;
+        dragging.value = true;
         panRef.current.moved = false;
-        panRef.current.axis = null;
+        panRef.current.axis = editingRef.current ? 'y' : null;
         panRef.current.anchor = Math.round(pos.value);
         panRef.current.pullAnchor = pullY.value;
       },
@@ -351,13 +381,30 @@ export default function Carousel({
           pullY.value = Math.min(max, Math.max(-max, p.pullAnchor + g.dy));
         }
       },
+      onPanResponderTerminate: () => {
+        dragging.value = false;
+      },
       onPanResponderRelease: (_e, g) => {
+        dragging.value = false;
         const p = panRef.current;
-        if (!p.moved && Math.abs(g.dx) < 6 && Math.abs(g.dy) < 6) {
+        if (
+          !editingRef.current &&
+          !p.moved &&
+          Math.abs(g.dx) < 6 &&
+          Math.abs(g.dy) < 6
+        ) {
           commitAndCloseRef.current();
           return;
         }
-        if (p.axis === 'y') return;
+        if (p.axis === 'y') {
+          const max = maxPullRef.current;
+          pullY.value = withDecay({
+            velocity: g.vy * 1000,
+            deceleration: 0.994,
+            clamp: [-max, max],
+          });
+          return;
+        }
         const delta = Math.round(g.dx / cardSpanRef.current);
         const target = Math.round(p.anchor) - delta;
         snapToRef.current(target);
@@ -370,8 +417,7 @@ export default function Carousel({
     if (!item) return;
     setEditDraft(item.content);
     setEditing(true);
-    pullY.value = withTiming(0, {duration: 150});
-  }, [items, cIndex, pullY]);
+  }, [items, cIndex]);
 
   const saveEdit = useCallback(async () => {
     const item = items[cIndex];
@@ -459,8 +505,7 @@ export default function Carousel({
     </>
   ), [isError, editing, message, colors, canPrev, canNext, cIndex, snapTo, startEdit, handleFork, handleFresh, streamingThis, onStop, canRegenerate, onRegenerate, sending, onCopy, jsonText, handleDelete, handleDeleteAll]);
 
-  const sideMode =
-    !isError && !editing && cardH > 0 && SCREEN_H / 2 + cardH / 2 + 90 > SCREEN_H - 24;
+  const overflows = cardH > vh;
 
   const cards = useMemo(() => {
     const out: React.ReactElement[] = [];
@@ -486,22 +531,49 @@ export default function Carousel({
           editing={editing && i === cIndex}
           editDraft={editDraft}
           onEditDraftChange={setEditDraft}
-          onSaveEdit={saveEdit}
-          onCancelEdit={cancelEdit}
           onHeight={handleCardHeight}
-          actions={i === cIndex && !sideMode ? actionsNode : null}
+          actions={i === cIndex && !overflows ? actionsNode : null}
           liveStreamText={item.live ? liveStreamText : null}
         />,
       );
     }
     return out;
-  }, [items, count, pos, appear, pullY, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, saveEdit, cancelEdit, handleCardHeight, actionsNode, sideMode]);
+  }, [items, count, pos, appear, pullY, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, handleCardHeight, actionsNode, overflows]);
 
   const ready = origin !== undefined && targetCenter !== null;
 
   const blurStyle = useAnimatedStyle(() => ({opacity: appear.value}));
 
   const uiStyle = useAnimatedStyle(() => ({opacity: appear.value}));
+
+  const belowOpenStyle = useAnimatedStyle(() => {
+    const open =
+      cardH > vh &&
+      vh - (vh / 2 + cardH / 2 + pullY.value) >= 114;
+    return {
+      top: vh / 2 + cardH / 2 + pullY.value + 12,
+      opacity: open ? appear.value : 0,
+    };
+  }, [cardH, vh]);
+
+  const sideFadeStyle = useAnimatedStyle(() => {
+    const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
+    const open =
+      cardH > vh &&
+      vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= 114;
+    return {opacity: open ? 0 : appear.value};
+  }, [cardH, vh]);
+
+  const editStackStyle = useAnimatedStyle(() => {
+    const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
+    const open =
+      cardH <= vh ||
+      vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= 114;
+    return {
+      top: vh / 2 + cardH / 2 + pullY.value - kbHalf + 12,
+      opacity: open ? appear.value : 0,
+    };
+  }, [cardH, vh]);
 
   const stageStyle = useAnimatedStyle(() => {
     // Zero shift while closed; ramps smoothly to "half the keyboard height,
@@ -537,15 +609,19 @@ export default function Carousel({
         </TouchableOpacity>
       </Animated.View>
 
-      {sideMode && (
+      {overflows && !editing && (
         <>
-          <Animated.View style={[styles.sideCol, styles.sideColLeft, uiStyle]}>
+          <Animated.View
+            pointerEvents={belowActions ? 'none' : 'box-none'}
+            style={[styles.sideCol, styles.sideColLeft, sideFadeStyle]}>
             <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
             <ActionButton label="Edit" onPress={startEdit} color={colors.accent} disabled={streamingThis} />
             <ActionButton label="Fork" onPress={handleFork} color={colors.accent} disabled={streamingThis} />
             <ActionButton label="Fresh" onPress={handleFresh} color={colors.accent} disabled={streamingThis} />
           </Animated.View>
-          <Animated.View style={[styles.sideCol, styles.sideColRight, uiStyle]}>
+          <Animated.View
+            pointerEvents={belowActions ? 'none' : 'box-none'}
+            style={[styles.sideCol, styles.sideColRight, sideFadeStyle]}>
             <ArrowButton disabled={!canNext} onPress={() => snapTo(cIndex + 1)} colors={colors} dir="›" />
             {streamingThis ? (
               <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
@@ -560,6 +636,34 @@ export default function Carousel({
             <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
             <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
             <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
+          </Animated.View>
+          <Animated.View
+            pointerEvents={belowActions ? 'box-none' : 'none'}
+            style={[styles.belowStack, belowOpenStyle]}>
+            {actionsNode}
+          </Animated.View>
+        </>
+      )}
+
+      {editing && (
+        <Animated.View
+          pointerEvents={belowActions ? 'box-none' : 'none'}
+          style={[styles.belowStack, editStackStyle]}>
+          <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
+          <ActionButton label="Cancel" onPress={cancelEdit} color={colors.danger} />
+        </Animated.View>
+      )}
+      {editing && overflows && (
+        <>
+          <Animated.View
+            pointerEvents={belowActions ? 'none' : 'box-none'}
+            style={[styles.sideCol, styles.sideColLeft, sideFadeStyle]}>
+            <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
+          </Animated.View>
+          <Animated.View
+            pointerEvents={belowActions ? 'none' : 'box-none'}
+            style={[styles.sideCol, styles.sideColRight, sideFadeStyle]}>
+            <ActionButton label="Cancel" onPress={cancelEdit} color={colors.danger} />
           </Animated.View>
         </>
       )}
@@ -609,8 +713,6 @@ function CarouselCard({
   editing,
   editDraft,
   onEditDraftChange,
-  onSaveEdit,
-  onCancelEdit,
   onHeight,
   actions,
   liveStreamText,
@@ -629,8 +731,6 @@ function CarouselCard({
   editing?: boolean;
   editDraft?: string;
   onEditDraftChange?: (text: string) => void;
-  onSaveEdit?: () => void;
-  onCancelEdit?: () => void;
   onHeight?: (key: string, h: number) => void;
   actions?: React.ReactNode | null;
   liveStreamText?: string | null;
@@ -776,12 +876,6 @@ function CarouselCard({
             {actions}
           </View>
         ) : null}
-        {editing && (
-          <View style={styles.editActionsRow}>
-            <ActionButton label="Save" onPress={onSaveEdit ?? (() => {})} color={colors.accent} />
-            <ActionButton label="Cancel" onPress={onCancelEdit ?? (() => {})} color={colors.danger} />
-          </View>
-        )}
       </Animated.View>
     </View>
   );
@@ -893,11 +987,6 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     gap: 10,
   },
-  editActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
   cardInner: {
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -961,6 +1050,13 @@ const styles = StyleSheet.create({
   closeText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  belowStack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: 10,
   },
   sideCol: {
     position: 'absolute',
