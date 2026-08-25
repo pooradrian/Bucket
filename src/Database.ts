@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 9;
+const CURRENT_VERSION = 10;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -202,6 +202,13 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         addColumnIfMissing(conn, 'chat_messages', 'request_info', 'TEXT DEFAULT ""');
       }
 
+      if (v === 10) {
+        addColumnIfMissing(conn, 'chat_sessions', 'name', 'TEXT DEFAULT ""');
+        conn.execute(
+          'DELETE FROM chat_sessions WHERE id NOT IN (SELECT DISTINCT session_id FROM chat_messages)',
+        );
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -337,8 +344,8 @@ export async function createSession(session: ChatSession): Promise<void> {
   d.execute('BEGIN');
   try {
     d.execute(
-      'INSERT INTO chat_sessions (id, character_id, group_chat_id, last_reply_character_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [session.id, session.characterId, session.groupChatId || '', session.lastReplyCharacterId || '', session.createdAt, session.updatedAt],
+      'INSERT INTO chat_sessions (id, character_id, group_chat_id, last_reply_character_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [session.id, session.characterId, session.groupChatId || '', session.lastReplyCharacterId || '', session.name || '', session.createdAt, session.updatedAt],
     );
 
     for (const msg of session.messages) {
@@ -390,39 +397,57 @@ export interface SessionSummary {
   id: string;
   characterId: string;
   groupChatId?: string;
+  name: string;
+  preview?: string;
   messageCount: number;
   createdAt: number;
   updatedAt: number;
 }
 
-export function getAllSessionsForCharacter(characterId: string): SessionSummary[] {
+const SESSION_SUMMARY_SELECT = `
+  SELECT s.id, s.character_id, s.group_chat_id, s.name, s.created_at, s.updated_at,
+    COUNT(m.id) as message_count,
+    (SELECT content FROM chat_messages WHERE session_id = s.id ORDER BY timestamp DESC LIMIT 1) AS last_content
+  FROM chat_sessions s
+  LEFT JOIN chat_messages m ON m.session_id = s.id
+`;
+
+async function mapSessionSummaries(result: {results?: Array<Record<string, unknown>>}): Promise<SessionSummary[]> {
+  if (!result.results) {
+    return [];
+  }
+  return Promise.all(
+    result.results.map(async row => ({
+      id: row.id as string,
+      characterId: row.character_id as string,
+      groupChatId: (row.group_chat_id as string) || undefined,
+      name: (row.name as string) || '',
+      preview: row.last_content
+        ? (await decrypt(row.last_content as string)).slice(0, 120)
+        : undefined,
+      messageCount: row.message_count as number,
+      createdAt: row.created_at as number,
+      updatedAt: row.updated_at as number,
+    })),
+  );
+}
+
+export async function getAllSessionsForCharacter(characterId: string): Promise<SessionSummary[]> {
   const d = initDB();
   const result = d.execute(
-    `SELECT s.id, s.character_id, s.created_at, s.updated_at,
-       COUNT(m.id) as message_count
-     FROM chat_sessions s
-     LEFT JOIN chat_messages m ON m.session_id = s.id
+    `${SESSION_SUMMARY_SELECT}
      WHERE s.character_id = ?
      GROUP BY s.id
      ORDER BY s.updated_at DESC`,
     [characterId],
   );
-  if (!result.results) {
-    return [];
-  }
-  return result.results.map(row => ({
-    id: row.id as string,
-    characterId: row.character_id as string,
-    messageCount: row.message_count as number,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  }));
+  return mapSessionSummaries(result);
 }
 
 export async function getSessionById(sessionId: string): Promise<ChatSession | null> {
   const d = initDB();
   const sessionResult = d.execute(
-    'SELECT id, character_id, group_chat_id, last_reply_character_id, created_at, updated_at FROM chat_sessions WHERE id = ?',
+    'SELECT id, character_id, group_chat_id, last_reply_character_id, name, created_at, updated_at FROM chat_sessions WHERE id = ?',
     [sessionId],
   );
   if (!sessionResult.results || sessionResult.results.length === 0) {
@@ -435,10 +460,16 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
     characterId: row.character_id as string,
     groupChatId: (row.group_chat_id as string) || undefined,
     lastReplyCharacterId: (row.last_reply_character_id as string) || undefined,
+    ...(row.name ? {name: row.name as string} : {}),
     messages,
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
   };
+}
+
+export function renameSession(sessionId: string, name: string): void {
+  const d = initDB();
+  d.execute('UPDATE chat_sessions SET name = ? WHERE id = ?', [name.trim(), sessionId]);
 }
 
 export function migrateSessionToGroup(sessionId: string, groupChatId: string): void {
@@ -942,27 +973,14 @@ export async function getAllGroupChatsFromDB(): Promise<GroupChatRow[]> {
   );
 }
 
-export function getSessionsForGroupChat(groupChatId: string): SessionSummary[] {
+export async function getSessionsForGroupChat(groupChatId: string): Promise<SessionSummary[]> {
   const d = initDB();
   const result = d.execute(
-    `SELECT s.id, s.character_id, s.group_chat_id, s.created_at, s.updated_at,
-       COUNT(m.id) as message_count
-     FROM chat_sessions s
-     LEFT JOIN chat_messages m ON m.session_id = s.id
+    `${SESSION_SUMMARY_SELECT}
      WHERE s.group_chat_id = ?
      GROUP BY s.id
      ORDER BY s.updated_at DESC`,
     [groupChatId],
   );
-  if (!result.results) {
-    return [];
-  }
-  return result.results.map(row => ({
-    id: row.id as string,
-    characterId: row.character_id as string,
-    groupChatId: row.group_chat_id as string,
-    messageCount: row.message_count as number,
-    createdAt: row.created_at as number,
-    updatedAt: row.updated_at as number,
-  }));
+  return mapSessionSummaries(result);
 }

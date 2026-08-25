@@ -36,7 +36,7 @@ export const charCommand: CommandHandler = async (rest, env, io) => {
     io.log('error', `Character "${query}" not found.`);
     return;
   }
-  const sessions = getAllSessionsForCharacter(char.id);
+  const sessions = await getAllSessionsForCharacter(char.id);
   const lorebooks = await getAllLorebooksFromDB();
   const assignedLorebooks = lorebooks.filter(l => (char.lorebookIds || []).includes(l.id));
   io.log(

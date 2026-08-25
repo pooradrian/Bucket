@@ -318,6 +318,106 @@ export function createStyles(s: AppSettings) {
       textAlign: 'center',
       marginTop: 40,
     },
+    historyTabs: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingTop: 12,
+    },
+    historyTabBtn: {
+      flex: 1,
+      paddingVertical: 9,
+      borderRadius: s.inputRadius,
+      borderWidth: 1,
+      borderColor: s.borderPrimary,
+      alignItems: 'center',
+      backgroundColor: s.bgSecondary,
+    },
+    historyTabBtnActive: {
+      borderColor: s.accentColor,
+    },
+    historyTabBtnText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: s.textMuted,
+    },
+    historyTabBtnTextActive: {
+      color: s.accentColor,
+    },
+    sessionMeta: {
+      color: s.textMuted,
+      fontSize: 13,
+      marginTop: 2,
+    },
+    sessionPreview: {
+      color: s.textMuted,
+      fontSize: 13,
+      marginTop: 2,
+      fontStyle: 'italic',
+    },
+    sessionActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    sessionEditBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 4,
+    },
+    sessionEditBtnText: {
+      color: s.textSecondary,
+      fontSize: 15,
+    },
+    sessionConfirmBtn: {
+      paddingVertical: 5,
+      paddingHorizontal: 10,
+      borderRadius: s.inputRadius,
+      borderWidth: 1,
+      marginLeft: 6,
+    },
+    sessionConfirmBtnDanger: {
+      borderColor: s.dangerColor,
+    },
+    sessionConfirmBtnNeutral: {
+      borderColor: s.borderPrimary,
+    },
+    sessionConfirmBtnText: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: s.dangerColor,
+    },
+    sessionConfirmBtnTextNeutral: {
+      color: s.textSecondary,
+    },
+    historyPopupOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    historyPopupCard: {
+      width: '100%',
+      maxWidth: 360,
+      backgroundColor: s.bgPrimary,
+      borderRadius: s.cardRadius,
+      borderWidth: 1,
+      borderColor: s.borderPrimary,
+      padding: 16,
+    },
+    historyPopupTitle: {
+      color: s.textPrimary,
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 12,
+    },
 
     // =========================================================================
     // ChatHandler — header

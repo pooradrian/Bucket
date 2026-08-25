@@ -51,6 +51,7 @@ export interface ChatSession {
   characterId: string;
   groupChatId?: string;
   lastReplyCharacterId?: string;
+  name?: string;
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
@@ -238,6 +239,25 @@ export function useChat({
   }, []);
 
   const pendingCreationKeyRef = useRef<string | null>(null);
+  // Sessions created in memory but not yet written to the DB. A session row is
+  // only inserted once it actually has content, so empty threads never appear.
+  const unpersistedRef = useRef<Set<string>>(new Set());
+
+  const ensureSessionPersisted = useCallback(
+    async (s: ChatSession) => {
+      if (!unpersistedRef.current.has(s.id)) {
+        return;
+      }
+      try {
+        await createSession(s);
+        unpersistedRef.current.delete(s.id);
+        onSessionCreated(s.id);
+      } catch (e) {
+        console.warn('Failed to persist session:', e);
+      }
+    },
+    [onSessionCreated],
+  );
 
   useEffect(() => {
     if (activeSessionId) {
@@ -318,6 +338,7 @@ export function useChat({
       if (activeSessionId) {
         const existing = await getSessionById(activeSessionId);
         if (existing) {
+          unpersistedRef.current.delete(existing.id);
           setSession(existing);
           if (isGroupChat && existing.lastReplyCharacterId) {
             const lastChar = groupMembers.find(c => c.id === existing.lastReplyCharacterId);
@@ -348,9 +369,7 @@ export function useChat({
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
-        await createSession(newSession);
         setSession(newSession);
-        onSessionCreated(newSession.id);
         return;
       }
 
@@ -376,14 +395,12 @@ export function useChat({
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      await createSession(newSession);
       setSession(newSession);
-      onSessionCreated(newSession.id);
     } catch (e) {
       pendingCreationKeyRef.current = null;
       console.warn('Failed to load or create session:', e);
     }
-  }, [activeSessionId, isGroupChat, groupChat, groupMembers, activeCharacter, onSessionCreated]);
+  }, [activeSessionId, isGroupChat, groupChat, groupMembers, activeCharacter]);
 
   useEffect(() => {
     loadOrCreateSession();
@@ -640,8 +657,12 @@ export function useChat({
         messages: [...session.messages, userMessage],
         updatedAt: Date.now(),
       };
+      if (unpersistedRef.current.has(startSessionId)) {
+        await ensureSessionPersisted(withUser);
+      } else {
+        persistMessage(startSessionId, userMessage, withUser.updatedAt);
+      }
       setSession(withUser);
-      persistMessage(startSessionId, userMessage, withUser.updatedAt);
       setInputText('');
       logEvent('message_sent', {
         charCount: userMessage.content.length,
@@ -657,7 +678,7 @@ export function useChat({
         summaryBase: withUser,
       });
     },
-    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, persistMessage, runLLMRequest],
+    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, ensureSessionPersisted, persistMessage, runLLMRequest],
   );
 
   const handleContinue = useCallback(
@@ -678,6 +699,7 @@ export function useChat({
         return;
       }
 
+      await ensureSessionPersisted(session);
       const startSessionId = session.id;
       logEvent('message_continue', {
         sessionMsgCount: session.messages.length,
@@ -691,7 +713,7 @@ export function useChat({
         continueTarget,
       });
     },
-    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, runLLMRequest],
+    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, ensureSessionPersisted, runLLMRequest],
   );
 
   const handleEditMessage = useCallback((msg: ChatMessage) => {
@@ -1019,8 +1041,9 @@ export function useChat({
       return;
     }
 
+    await ensureSessionPersisted(session);
     await runLLMRequest(session.id, session.messages, lastUserMsg.content);
-  }, [session, sending, runLLMRequest]);
+  }, [session, sending, ensureSessionPersisted, runLLMRequest]);
 
   const messagesData = useMemo(() => {
     const base = [...(session?.messages ?? [])].reverse();
