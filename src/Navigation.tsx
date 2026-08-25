@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {ActivityIndicator, BackHandler, FlatList, Text, View} from 'react-native';
 import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import {createNativeStackNavigator, NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import {
   getAllSessionsForCharacter,
   getSessionsForGroupChat,
   deleteSession,
+  renameSession,
   migrateSessionToGroup,
   SessionSummary,
   getKV,
@@ -145,11 +146,11 @@ function HomeScreen() {
   const hasChat = !!(activeChatCharacter || activeGroupChat || showWelcome);
   const isChat = activeTab === 'chat' && hasChat;
 
-  const loadHistorySessions = useCallback(() => {
+  const loadHistorySessions = useCallback(async () => {
     if (activeGroupChat) {
-      setHistorySessions(getSessionsForGroupChat(activeGroupChat.id));
+      setHistorySessions(await getSessionsForGroupChat(activeGroupChat.id));
     } else if (activeChatCharacter) {
-      setHistorySessions(getAllSessionsForCharacter(activeChatCharacter.id));
+      setHistorySessions(await getAllSessionsForCharacter(activeChatCharacter.id));
     }
   }, [activeChatCharacter, activeGroupChat]);
 
@@ -201,7 +202,7 @@ function HomeScreen() {
   );
 
   const openChat = useCallback(
-    (char: Character | null, group: GroupChat | null) => {
+    async (char: Character | null, group: GroupChat | null) => {
       if (char?.id === WELCOME_ID) {
         setShowWelcome(true);
         setActiveChatCharacter(null);
@@ -213,9 +214,9 @@ function HomeScreen() {
       setActiveChatCharacter(char);
       setActiveGroupChat(group);
       const sessions = char
-        ? getAllSessionsForCharacter(char.id)
+        ? await getAllSessionsForCharacter(char.id)
         : group
-        ? getSessionsForGroupChat(group.id)
+        ? await getSessionsForGroupChat(group.id)
         : [];
       setActiveSessionId(sessions.length > 0 ? sessions[0].id : null);
       setActiveTab('chat');
@@ -247,10 +248,20 @@ function HomeScreen() {
     (group: GroupChat) => {
       saveGroupChat(group);
       setEditingGroup(null);
+      if (activeGroupChat?.id === group.id) {
+        setActiveGroupChat(group);
+      }
       loadGroupChats();
     },
-    [saveGroupChat, loadGroupChats],
+    [activeGroupChat, saveGroupChat, loadGroupChats],
   );
+
+  const handleRenameSession = useCallback((sessionId: string, name: string) => {
+    renameSession(sessionId, name);
+    setHistorySessions(prev =>
+      prev.map(s => (s.id === sessionId ? {...s, name: name.trim()} : s)),
+    );
+  }, []);
 
   const handleConvertSave = useCallback(
     (group: GroupChat) => {
@@ -269,6 +280,13 @@ function HomeScreen() {
   );
 
   const loading = charactersLoading || groupChatsLoading;
+
+  const activeGroupMembers = useMemo(() => {
+    if (!activeGroupChat) return [];
+    return activeGroupChat.characterIds
+      .map(id => characters.find(c => c.id === id))
+      .filter(Boolean) as Character[];
+  }, [activeGroupChat, characters]);
 
   const handleWelcomeDelete = useCallback(() => {
     setKV('welcome_dismissed', 'true');
@@ -485,10 +503,21 @@ function HomeScreen() {
           sessions={historySessions}
           activeSessionId={activeSessionId}
           quickCharacters={quickCharacters}
+          isGroupChat={!!activeGroupChat}
+          groupMembers={activeGroupMembers}
           onNewChat={handleNewChat}
           onSwitchSession={handleSwitchSession}
           onDeleteSession={handleDeleteSession}
+          onRenameSession={handleRenameSession}
           onConvertToGroup={!activeGroupChat && activeChatCharacter ? () => setShowConvertGroup(true) : undefined}
+          onEditGroup={
+            activeGroupChat
+              ? () => {
+                  setShowHistory(false);
+                  setEditingGroup(activeGroupChat);
+                }
+              : undefined
+          }
           onClose={() => setShowHistory(false)}
           onCreateQC={handleCreateQC}
           onToggleQCStar={handleToggleQCStar}

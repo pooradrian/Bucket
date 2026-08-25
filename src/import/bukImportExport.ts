@@ -421,7 +421,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
   if (options.includeChats) {
     const chatFolder = zip.folder('chats');
     for (const charId of options.characterIds) {
-      const sessions = getAllSessionsForCharacter(charId);
+      const sessions = await getAllSessionsForCharacter(charId);
       for (const summary of sessions) {
         const session = await getSessionById(summary.id);
         if (session) {
@@ -432,7 +432,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       }
     }
     for (const groupId of options.groupIds) {
-      const sessions = getSessionsForGroupChat(groupId);
+      const sessions = await getSessionsForGroupChat(groupId);
       for (const summary of sessions) {
         const session = await getSessionById(summary.id);
         if (session) {

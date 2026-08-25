@@ -78,7 +78,7 @@ export async function crashExport(): Promise<string | null> {
 
     const chatFolder = zip.folder('chats');
     for (const char of characters) {
-      const sessions = getAllSessionsForCharacter(char.id);
+      const sessions = await getAllSessionsForCharacter(char.id);
       for (const summary of sessions) {
         const session = await getSessionById(summary.id);
         if (session) {
