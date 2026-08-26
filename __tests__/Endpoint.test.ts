@@ -12,7 +12,7 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {getAIResponse} from '../src/Endpoint';
+import {getAIResponse, embeddingsUrl} from '../src/Endpoint';
 import {DEFAULT_PROMPT_CONFIG} from '../src/PromptHandler';
 import type {ChatMessageObject} from '../src/PromptHandler';
 
@@ -85,5 +85,23 @@ describe('built-in cat API', () => {
     const pending = getAIResponse(msg('100'), catConfig, undefined, true, ctrl);
     ctrl.abort();
     await expect(pending).rejects.toThrow('Request was cancelled');
+  });
+});
+
+describe('embeddingsUrl', () => {
+  test('replaces /chat/completions with /embeddings', () => {
+    expect(embeddingsUrl('http://h:8080/v1/chat/completions')).toBe('http://h:8080/v1/embeddings');
+  });
+
+  test('handles trailing slashes and whitespace', () => {
+    expect(embeddingsUrl('  http://h/v1/chat/completions/  ')).toBe('http://h/v1/embeddings');
+  });
+
+  test('appends to a bare versioned base', () => {
+    expect(embeddingsUrl('http://h/v1')).toBe('http://h/v1/embeddings');
+  });
+
+  test('appends to an unversioned URL', () => {
+    expect(embeddingsUrl('http://h:8080')).toBe('http://h:8080/embeddings');
   });
 });

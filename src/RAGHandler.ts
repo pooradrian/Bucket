@@ -1,6 +1,6 @@
 import {pick, types} from '@react-native-documents/picker';
 import {ChatMessageObject, PromptConfig} from './PromptHandler';
-import {getAIResponse} from './Endpoint';
+import {getEmbeddings} from './Endpoint';
 import {generateId, saveLorebookToDB, deleteLorebookFromDB, getAllLorebooksFromDB} from './Database';
 
 export interface LorebookEntry {
@@ -77,59 +77,82 @@ export async function retrieveRelevantLorebook(
   ragConfig: RAGConfig,
   promptConfig: PromptConfig,
 ): Promise<string[]> {
-  const maxToSend = Number(ragConfig.maxEntriesToSend) || 50;
   const maxToReturn = Number(ragConfig.maxResults) || 5;
-  const entries = lorebook.entries.slice(0, maxToSend);
+  const query = buildQuery(recentMessages);
+  const ranked = await rankLorebookEntries(query, lorebook.entries, ragConfig, promptConfig);
+  return ranked
+    .filter(r => r.score >= MIN_SIMILARITY)
+    .slice(0, maxToReturn)
+    .map(r => r.entry.text);
+}
 
-  const factsBlock = entries.map(e => `${e.id + 1}. ${e.text}`).join('\n');
+export interface ScoredEntry {
+  entry: LorebookEntry;
+  score: number;
+}
 
-  const recentConversation = recentMessages
-    .slice(-10)
-    .map(m => `[${m.role}]: ${m.content}`)
+export const MIN_SIMILARITY = 0.25;
+const QUERY_MESSAGE_COUNT = 3;
+const QUERY_MAX_CHARS = 4000;
+const EMBEDDING_CACHE = new Map<string, number[]>();
+
+export function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+}
+
+function buildQuery(recentMessages: ChatMessageObject[]): string {
+  const joined = recentMessages
+    .slice(-QUERY_MESSAGE_COUNT)
+    .map(m => m.content)
     .join('\n');
+  return joined.length > QUERY_MAX_CHARS ? joined.slice(-QUERY_MAX_CHARS) : joined;
+}
 
-  const metaPrompt = `You are a fact-retrieval assistant. Given the following numbered facts and a conversation, return the numbers (as a JSON array of integers) of facts that are relevant to continuing the conversation. Return at most ${maxToReturn} numbers. Only return the JSON array, nothing else.
+async function embedTexts(texts: string[], model: string, config: PromptConfig): Promise<number[][]> {
+  const cached = texts.map(t => EMBEDDING_CACHE.get(`${model}\u0000${t}`));
+  const missingIdx: number[] = [];
+  cached.forEach((v, i) => {
+    if (!v) missingIdx.push(i);
+  });
+  if (missingIdx.length > 0) {
+    const fetched = await getEmbeddings(
+      missingIdx.map(i => texts[i]),
+      model,
+      config,
+    );
+    missingIdx.forEach((textIdx, i) => {
+      const vector = fetched[i];
+      EMBEDDING_CACHE.set(`${model}\u0000${texts[textIdx]}`, vector);
+      cached[textIdx] = vector;
+    });
+  }
+  return cached as number[][];
+}
 
-FACTS:
-${factsBlock}
-
-CONVERSATION:
-${recentConversation}`;
-
-  const ragModel = ragConfig.model || promptConfig.model;
-  const ragPromptConfig: PromptConfig = {
-    ...promptConfig,
-    model: ragModel,
-  };
-
-  const messages: ChatMessageObject[] = [
-    {role: 'system', content: 'You are a fact-retrieval assistant. Only output a JSON array of integers.'},
-    {role: 'user', content: metaPrompt},
-  ];
-
-  const result = await getAIResponse(messages, ragPromptConfig, undefined, true);
-
-  let raw = result.content.trim();
-  raw = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-  const match = raw.match(/\[[\d\s,]*\]/);
-  if (!match) {
+export async function rankLorebookEntries(
+  query: string,
+  entries: LorebookEntry[],
+  ragConfig: RAGConfig,
+  promptConfig: PromptConfig,
+): Promise<ScoredEntry[]> {
+  const capped = entries.slice(0, Number(ragConfig.maxEntriesToSend) || 50);
+  if (!query.trim() || capped.length === 0) {
     return [];
   }
-
-  try {
-    const indices: number[] = JSON.parse(match[0]);
-    const relevant: string[] = [];
-    for (const idx of indices) {
-      const entry = entries.find(e => e.id + 1 === idx);
-      if (entry && relevant.length < maxToReturn) {
-        relevant.push(entry.text);
-      }
-    }
-    return relevant;
-  } catch {
-    return [];
-  }
+  const model = ragConfig.model?.trim() || promptConfig.model;
+  const vectors = await embedTexts([query, ...capped.map(e => e.text)], model, promptConfig);
+  return capped
+    .map((entry, i) => ({entry, score: cosineSimilarity(vectors[0], vectors[i + 1])}))
+    .sort((a, b) => b.score - a.score);
 }
 
 export function buildRAGInjection(relevantEntries: string[]): string {
