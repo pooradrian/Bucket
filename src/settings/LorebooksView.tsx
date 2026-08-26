@@ -105,16 +105,16 @@ export default function LorebooksView({
       <SectionHeader title="RAG Settings" />
 
       <TextField
-        label="RAG Model (leave blank to use main model)"
+        label="Embedding Model (leave blank to use main model)"
         value={promptValues.ragModel}
         onChangeText={text =>
           setPromptValues(prev => ({...prev, ragModel: text}))
         }
-        placeholder="e.g. gpt-4o-mini"
+        placeholder="e.g. nomic-embed-text"
       />
 
       <TextField
-        label="Max entries sent to RAG model"
+        label="Max entries to embed per retrieval"
         value={promptValues.ragMaxEntriesToSend}
         onChangeText={text =>
           setPromptValues(prev => ({...prev, ragMaxEntriesToSend: text}))

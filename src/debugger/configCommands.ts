@@ -33,7 +33,7 @@ export const configCommand: CommandHandler = async (rest, env, io) => {
       `API Key:       ${config.apiKey ? '****' + config.apiKey.slice(-4) : '(not set)'}`,
       `Model:         ${config.model}`,
       `Temperature:   ${config.temperature || '(default)'}`,
-      `RAG Model:     ${config.ragModel || '(uses main model)'}`,
+      `Embedding Model: ${config.ragModel || '(uses main model)'}`,
       `RAG Enabled:   ${config.ragEnabled ? 'yes' : 'no'}`,
       `RAG Max Entry: ${config.ragMaxEntriesToSend}`,
       `RAG Max Res:   ${config.ragMaxResults}`,
@@ -69,6 +69,8 @@ export const configSetCommand: CommandHandler = async (rest, env, io) => {
     config.historyCutoffMode = value;
   } else if (key === 'cutoffamount' || key === 'amount') {
     config.historyCutoffAmount = value;
+  } else if (key === 'ragmodel' || key === 'embedmodel') {
+    config.ragModel = value;
   } else {
     io.log('error', `Unknown key "${key}". Use: prefix, suffix, usr, model, apiurl, apikey, cutoffmode, cutoffamount`);
     return;

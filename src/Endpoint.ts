@@ -173,6 +173,70 @@ function streamWithXHR(
   });
 }
 
+export function embeddingsUrl(chatUrl: string): string {
+  const url = chatUrl.trim().replace(/\/+$/, '');
+  if (/\/chat\/completions$/i.test(url)) {
+    return url.replace(/\/chat\/completions$/i, '/embeddings');
+  }
+  return `${url}/embeddings`;
+}
+
+const EMBED_BATCH_SIZE = 32;
+
+export async function getEmbeddings(
+  inputs: string[],
+  model: string,
+  config: PromptConfig,
+): Promise<number[][]> {
+  const url = embeddingsUrl(config.apiUrl || '');
+  if (!url || url === '/embeddings') {
+    throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const apiKey = config.apiKey?.trim();
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
+  const vectors: number[][] = [];
+  for (let i = 0; i < inputs.length; i += EMBED_BATCH_SIZE) {
+    const batch = inputs.slice(i, i + EMBED_BATCH_SIZE);
+    try {
+      const response = await axios.post(
+        url,
+        {model, input: batch},
+        {headers, timeout: 60000},
+      );
+      const data = [...(response.data?.data ?? [])].sort(
+        (a: {index?: number}, b: {index?: number}) => (a.index ?? 0) - (b.index ?? 0),
+      );
+      for (const item of data) {
+        if (!Array.isArray(item.embedding)) {
+          throw new Error('Embeddings response missing vector data');
+        }
+        vectors.push(item.embedding as number[]);
+      }
+    } catch (e: unknown) {
+      const axiosErr = e as {response?: {status?: number; data?: unknown}; message?: string};
+      const status = axiosErr.response?.status;
+      const errorText = axiosErr.response?.data
+        ? (typeof axiosErr.response.data === 'string' ? axiosErr.response.data : JSON.stringify(axiosErr.response.data))
+        : (e instanceof Error ? e.message : String(e));
+      if (status) {
+        throw new Error(`Embeddings API error ${status}: ${errorText}`);
+      }
+      throw new Error(`Embeddings network error: ${errorText}`);
+    }
+  }
+  if (vectors.length !== inputs.length) {
+    throw new Error(`Embeddings API returned ${vectors.length} vectors for ${inputs.length} inputs`);
+  }
+  return vectors;
+}
+
 export async function getAIResponse(
   messages: ChatMessageObject[],
   config: PromptConfig,

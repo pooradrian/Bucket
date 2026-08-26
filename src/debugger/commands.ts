@@ -27,6 +27,8 @@ import {
   settingsCommand,
 } from './toolCommands';
 import {dbCommand, DB_HELP_TEXT} from './dbCommands';
+import {embedCommand, ragCommand} from './ragCommands';
+import {MIN_SIMILARITY} from '../RAGHandler';
 
 const GENERAL_HELP = [
   'General:',
@@ -56,16 +58,20 @@ const GENERAL_HELP = [
   '  config                            Show current prompt config',
   '  config.set <key> <value>          Set config value',
   '     keys: prefix, suffix, usr, model, apiurl,',
-  '           apikey, cutoffmode, cutoffamount',
+  '           apikey, cutoffmode, cutoffamount, ragmodel',
   '',
   'Storage:',
   '  storage <key>                     Read stored value',
   '  storage.set <key> <value>         Write stored value',
   '  storage.keys                      List all stored keys',
   '',
-  'Lorebooks:',
-  '  lorebooks                         List all lorebooks',
-  '  lorebook <id>                     Show lorebook entries',
+   'Lorebooks:',
+   '  lorebooks                         List all lorebooks',
+   '  lorebook <id>                     Show lorebook entries',
+   '',
+   'RAG / Embeddings:',
+   '  embed [text]                      Test the embeddings endpoint',
+   '  rag <id> <query>                  Rank lorebook entries vs query',
   '',
   'Theme & Settings:',
   '  settings                          Show current app settings',
@@ -98,6 +104,15 @@ const LOREBOOK_HELP = [
   '  lorebook <id>                     Show lorebook entries',
 ].join('\n');
 
+const RAG_HELP = [
+  'RAG / Embedding Commands:',
+  '  embed [text]                      POST text to the embeddings endpoint; shows URL, model, dims and latency',
+  '  rag <id> <query>                  Rank a lorebook\'s entries against the query by cosine similarity',
+  '',
+  '  Retrieval uses the Embedding Model setting (config.set ragmodel <name>, blank = main model).',
+  `  Entries scoring >= ${MIN_SIMILARITY} are injected, at most "max results" of them.`,
+].join('\n');
+
 export const COMMANDS: Record<string, CommandHandler> = {
   chars: charsCommand,
   char: charCommand,
@@ -111,6 +126,8 @@ export const COMMANDS: Record<string, CommandHandler> = {
   provider: providerCommand,
   lorebooks: lorebooksCommand,
   lorebook: lorebookCommand,
+  embed: embedCommand,
+  rag: ragCommand,
   test: testCommand,
   api: apiCommand,
   tiktoken: tiktokenCommand,
@@ -152,6 +169,8 @@ export async function executeDebuggerCommand(
         io.log('info', PROVIDER_HELP);
       } else if (sub === 'lorebook') {
         io.log('info', LOREBOOK_HELP);
+      } else if (sub === 'rag' || sub === 'embed') {
+        io.log('info', RAG_HELP);
       } else {
         io.log('info', GENERAL_HELP);
       }
