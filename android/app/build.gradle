@@ -78,7 +78,7 @@ if (keystorePropertiesFile.exists()) {
     def props = new Properties()
     keystorePropertiesFile.withInputStream { props.load(it) }
     releaseKeystore = [
-        storeFile: file(props['storeFile']),
+        storeFile: rootProject.file(props['storeFile']),
         storePassword: props['storePassword'],
         keyAlias: props['keyAlias'],
         keyPassword: props['keyPassword']
