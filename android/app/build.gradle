@@ -99,16 +99,8 @@ android {
         applicationId "com.bucket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10601
-        versionName "1.6.1"
-    }
-    splits {
-        abi {
-            enable true
-            reset()
-            include "arm64-v8a", "armeabi-v7a"
-            universalApk false
-        }
+        versionCode 10700
+        versionName "1.7.0"
     }
     signingConfigs {
         debug {
