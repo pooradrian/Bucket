@@ -369,6 +369,7 @@ export function useChat({
           createdAt: Date.now(),
           updatedAt: Date.now(),
         };
+        unpersistedRef.current.add(newSession.id);
         setSession(newSession);
         return;
       }
@@ -395,6 +396,7 @@ export function useChat({
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
+      unpersistedRef.current.add(newSession.id);
       setSession(newSession);
     } catch (e) {
       pendingCreationKeyRef.current = null;

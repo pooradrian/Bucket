@@ -114,8 +114,8 @@ function HomeScreen() {
   }, [showHistory, editingGroup, showConvertGroup]);
 
   const reloadQCs = useCallback(async (sessionId: string | null) => {
-    if (sessionId && activeChatCharacter) {
-      const dbQCs = await getQuickCharactersForCharacter(activeChatCharacter.id, sessionId);
+    if (activeChatCharacter) {
+      const dbQCs = await getQuickCharactersForCharacter(activeChatCharacter.id, sessionId ?? '');
       setQuickCharacters(dbQCs.map(dbQc => ({
         id: dbQc.id,
         session_id: dbQc.session_id,
