@@ -43,6 +43,7 @@ const PEEK = Math.round(SCREEN_W * 0.12);
 // to the keyboard), the gap between the card bottom and the Save/Cancel row,
 // and the geometry constants used to anchor that row to the card.
 const KB_LIFT_DOWN = 40;
+const ACTION_STACK_H = 114;
 
 interface OriginFrame {
   x: number;
@@ -246,8 +247,8 @@ export default function Carousel({
       return (
         appear.value >= 1 &&
         !dragging.value &&
-        cardH > vh &&
-        vh - bottom >= 114
+        vh / 2 - cardH / 2 < ACTION_STACK_H &&
+        vh - bottom >= ACTION_STACK_H
       );
     },
     (cur, prev) => {
@@ -503,7 +504,7 @@ export default function Carousel({
     </>
   ), [isError, editing, message, colors, canPrev, canNext, cIndex, snapTo, startEdit, handleFork, handleFresh, streamingThis, onStop, canRegenerate, onRegenerate, sending, onCopy, jsonText, handleDelete, handleDeleteAll]);
 
-  const overflows = cardH > vh;
+  const overflows = vh / 2 - cardH / 2 < ACTION_STACK_H;
 
   const cards = useMemo(() => {
     const out: React.ReactElement[] = [];
@@ -550,8 +551,7 @@ export default function Carousel({
   const belowOpenStyle = useAnimatedStyle(() => {
     const open =
       appear.value >= 1 &&
-      cardH > vh &&
-      vh - (vh / 2 + cardH / 2 + pullY.value) >= 114;
+      vh - (vh / 2 + cardH / 2 + pullY.value) >= ACTION_STACK_H;
     return {
       top: vh / 2 + cardH / 2 + pullY.value + 12,
       opacity: open ? appear.value : 0,
@@ -561,16 +561,14 @@ export default function Carousel({
   const sideFadeStyle = useAnimatedStyle(() => {
     const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
     const open =
-      cardH > vh &&
-      vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= 114;
+      vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= ACTION_STACK_H;
     return {opacity: open && appear.value >= 1 ? 0 : appear.value};
   }, [cardH, vh]);
 
   const editStackStyle = useAnimatedStyle(() => {
     const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
     const open =
-      cardH <= vh ||
-      vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= 114;
+      vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= ACTION_STACK_H;
     return {
       top: vh / 2 + cardH / 2 + pullY.value - kbHalf + 12,
       opacity: open ? appear.value : 0,
