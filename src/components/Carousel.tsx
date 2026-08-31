@@ -649,7 +649,7 @@ export default function Carousel({
 
       {editing && (
         <Animated.View
-          pointerEvents={belowActions ? 'box-none' : 'none'}
+          pointerEvents={belowActions || !overflows ? 'box-none' : 'none'}
           style={[styles.belowStack, editStackStyle]}>
           <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
           <ActionButton label="Cancel" onPress={cancelEdit} color={colors.danger} />
