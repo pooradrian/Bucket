@@ -20,6 +20,7 @@ import {useAppStore, GroupChat} from './store';
 import {useTheme} from './ThemeContext';
 import {useChat, ChatMessage, QuickCharacter} from './useChat';
 import {renderFormattedText} from './textFormat';
+import {formatThinkingDuration, splitThinking} from './thinking';
 import Carousel from './components/Carousel';
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -101,6 +102,22 @@ const MessageBubble = React.memo(function MessageBubble({
   const isError = item.id === '__error__';
   const isTyping = item.id === '__typing__';
   const isEditing = editingMessageId === item.id;
+  const thought = splitThinking(item.content);
+  const [thoughtExpanded, setThoughtExpanded] = useState(false);
+  const [thinkElapsed, setThinkElapsed] = useState(0);
+  const openSinceRef = useRef(0);
+
+  useEffect(() => {
+    if (!thought.open) {
+      openSinceRef.current = 0;
+      setThinkElapsed(0);
+      return;
+    }
+    if (!openSinceRef.current) openSinceRef.current = Date.now();
+    setThinkElapsed(Date.now() - openSinceRef.current);
+    const t = setInterval(() => setThinkElapsed(Date.now() - openSinceRef.current), 500);
+    return () => clearInterval(t);
+  }, [thought.open]);
 
   if (isError) {
     return (
@@ -179,6 +196,41 @@ const MessageBubble = React.memo(function MessageBubble({
                 <Text style={st.actionBtnText}>Cancel</Text>
               </TouchableOpacity>
             </View>
+          </>
+        ) : thought.hasThinking ? (
+          <>
+            <TouchableOpacity
+              onPress={() => setThoughtExpanded(v => !v)}
+              onLongPress={() => {
+                if (!isStreamingMsg && !isEditing) {
+                  onSelect(isSelected ? null : item.id);
+                }
+              }}
+              activeOpacity={0.7}>
+              <Text style={st.thinkingLabel}>
+                {(thought.open || thoughtExpanded) ? '▾ ' : '▸ '}
+                {thought.open
+                  ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
+                  : item.thinkingMs !== undefined
+                    ? `thought for ${formatThinkingDuration(item.thinkingMs)}`
+                    : 'thought'}
+              </Text>
+            </TouchableOpacity>
+            {(thought.open || thoughtExpanded) && !!thought.thinking && (
+              <Text
+                style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+                <Text style={st.thinkingBody}>
+                  {renderFormattedText(thought.thinking, st.thinkingBody, forceItalic)}
+                </Text>
+              </Text>
+            )}
+            {!!thought.answer && (
+              <Text
+                style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+                {(thought.open || thoughtExpanded) && !!thought.thinking ? '\n\n' : null}
+                {renderFormattedText(thought.answer, st.bubbleText, forceItalic)}
+              </Text>
+            )}
           </>
         ) : (
           <>

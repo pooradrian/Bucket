@@ -12,7 +12,8 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {getAIResponse, chatCompletionsUrl, embeddingsUrl, isPlainHttpUrl} from '../src/Endpoint';
+import {getAIResponse, chatCompletionsUrl, embeddingsUrl, isPlainHttpUrl, normalizeProviderUrl, parseThinkCommand} from '../src/Endpoint';
+import {splitThinking} from '../src/thinking';
 import {DEFAULT_PROMPT_CONFIG} from '../src/PromptHandler';
 import type {ChatMessageObject} from '../src/PromptHandler';
 
@@ -121,11 +122,52 @@ describe('chatCompletionsUrl', () => {
   });
 });
 
+describe('normalizeProviderUrl', () => {
+  test('leaves the cat API url alone', () => {
+    expect(normalizeProviderUrl("cat's api")).toBe("cat's api");
+    expect(normalizeProviderUrl("  CAT'S API  ")).toBe("CAT'S API");
+  });
+
+  test('repairs a previously mangled cat API url', () => {
+    expect(normalizeProviderUrl("cat's api/v1/chat/completions")).toBe("cat's api");
+  });
+
+  test('normalizes real urls and passes through empties', () => {
+    expect(normalizeProviderUrl('http://h:8080')).toBe('http://h:8080/v1/chat/completions');
+    expect(normalizeProviderUrl('')).toBe('');
+  });
+});
 describe('isPlainHttpUrl', () => {
   test('flags http but not https', () => {
     expect(isPlainHttpUrl('http://192.168.1.2:8080')).toBe(true);
     expect(isPlainHttpUrl('  HTTP://h/v1 ')).toBe(true);
     expect(isPlainHttpUrl('https://api.openai.com/v1')).toBe(false);
     expect(isPlainHttpUrl('')).toBe(false);
+  });
+});
+
+describe('cat API think command', () => {
+  test('parses think N M', () => {
+    expect(parseThinkCommand('think 30 90')).toEqual({think: 30, answer: 90});
+    expect(parseThinkCommand('please THINK 5')).toEqual({think: 5, answer: 3});
+    expect(parseThinkCommand('meow 6')).toBeNull();
+  });
+
+  test('think 30 90 outputs 30 thinking sounds and 90 answer sounds', async () => {
+    const result = await getAIResponse(msg('think 30 90'), catConfig, undefined, false);
+    const thought = splitThinking(result.content);
+    expect(thought.hasThinking).toBe(true);
+    expect(thought.open).toBe(false);
+    expect(thought.thinking.split(' ')).toHaveLength(30);
+    expect(thought.answer.split(' ')).toHaveLength(90);
+    for (const w of [...thought.thinking.split(' '), ...thought.answer.split(' ')]) {
+      expect(CAT_SOUNDS).toContain(w);
+    }
+  });
+
+  test('plain numbers still skip thinking', async () => {
+    const result = await getAIResponse(msg('6'), catConfig, undefined, false);
+    expect(splitThinking(result.content).hasThinking).toBe(false);
+    expect(result.content.split(' ')).toHaveLength(6);
   });
 });

@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 10;
+const CURRENT_VERSION = 11;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -209,6 +209,10 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         );
       }
 
+      if (v === 11) {
+        addColumnIfMissing(conn, 'chat_messages', 'thinking_ms', 'INTEGER DEFAULT 0');
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -295,7 +299,7 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
 
 async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   const messagesResult = initDB().execute(
-    'SELECT id, role, content, timestamp, variants, request_info FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
     [sessionId],
   );
   if (!messagesResult.results) {
@@ -309,6 +313,7 @@ async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
       timestamp: msg.timestamp as number,
       variants: msg.variants ? (msg.variants as string) : undefined,
       requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
+      thinkingMs: (msg.thinking_ms as number) || undefined,
     })),
   );
 }
@@ -355,8 +360,8 @@ export async function createSession(session: ChatSession): Promise<void> {
         : '';
       const encryptedRequest = msg.requestInfo ? await encrypt(msg.requestInfo) : '';
       d.execute(
-        'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, encryptedVariants, encryptedRequest],
+        'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info, thinking_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0],
       );
     }
     d.execute('COMMIT');
@@ -387,8 +392,8 @@ export async function addMessage(sessionId: string, message: ChatMessage): Promi
     : '';
   const encryptedRequest = message.requestInfo ? await encrypt(message.requestInfo) : '';
   d.execute(
-    'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants, encryptedRequest],
+    'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info, thinking_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0],
   );
   searchCachePut(sessionId, message);
 }
@@ -492,7 +497,7 @@ export function deleteSession(sessionId: string): void {
 export async function updateMessage(messageId: string, content: string): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
-  d.execute('UPDATE chat_messages SET content = ? WHERE id = ?', [encryptedContent, messageId]);
+  d.execute('UPDATE chat_messages SET content = ?, thinking_ms = 0 WHERE id = ?', [encryptedContent, messageId]);
   const cached = searchCache.get(messageId);
   if (cached) {
     cached.content = content;
@@ -505,14 +510,15 @@ export async function updateMessageWithVariants(
   timestamp: number,
   variants: ReplyVariant[],
   requestInfo?: string,
+  thinkingMs?: number,
 ): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
   const encryptedVariants = variants.length > 0 ? await encryptVariants(variants) : '';
   const encryptedRequest = requestInfo ? await encrypt(requestInfo) : null;
   d.execute(
-    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info) WHERE id = ?',
-    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, messageId],
+    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info), thinking_ms = ? WHERE id = ?',
+    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, thinkingMs ?? 0, messageId],
   );
   const cached = searchCache.get(messageId);
   if (cached) {

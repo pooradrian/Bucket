@@ -27,7 +27,7 @@ import {
   maskKey,
 } from './SecureStore';
 import {useTheme} from './ThemeContext';
-import {chatCompletionsUrl, isPlainHttpUrl} from './Endpoint';
+import {normalizeProviderUrl, isPlainHttpUrl} from './Endpoint';
 
 interface ProvidersHandlerProps {
   activeProviderId: string;
@@ -82,7 +82,7 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
 
   const handleSaveUrl = useCallback(async (id: string) => {
     if (!editUrlText.trim()) {return;}
-    const trimmed = chatCompletionsUrl(editUrlText);
+    const trimmed = normalizeProviderUrl(editUrlText);
     const list = getProviders();
     const updated = list.map(p => p.id === id ? {...p, url: trimmed} : p);
     saveProviders(updated);
@@ -222,7 +222,7 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
       Alert.alert('Missing fields', 'Name and URL are required.');
       return;
     }
-    const trimmedUrl = chatCompletionsUrl(url);
+    const trimmedUrl = normalizeProviderUrl(url);
     const trimmedKey = apiKey.trim();
     const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
     const providers = getProviders();

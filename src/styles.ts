@@ -500,6 +500,16 @@ export function createStyles(s: AppSettings) {
     bubbleTextUser: {
       color: s.textPrimary,
     },
+    thinkingLabel: {
+      fontSize: 12,
+      color: s.textMuted,
+      fontStyle: 'italic',
+    },
+    thinkingBody: {
+      fontSize: s.fontSizeBody,
+      lineHeight: 20,
+      color: s.textMuted,
+    },
     timestampText: {
       fontSize: 11,
       color: s.textMuted,

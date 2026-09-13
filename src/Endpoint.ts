@@ -31,6 +31,25 @@ function buildCatSounds(count: number): string[] {
   );
 }
 
+export function parseThinkCommand(content: string): {think: number; answer: number} | null {
+  const match = content.match(/think\s+(\d+)(?:\s+(\d+))?/i);
+  if (!match) return null;
+  return {
+    think: parseInt(match[1], 10),
+    answer: match[2] !== undefined ? parseInt(match[2], 10) : 3,
+  };
+}
+
+function buildCatWords(messages: ChatMessageObject[]): string[] {
+  const userMessages = messages.filter(m => m.role === 'user');
+  const content = userMessages[userMessages.length - 1]?.content ?? '';
+  const think = parseThinkCommand(content);
+  if (think) {
+    return ['<think>', ...buildCatSounds(think.think), '</think>', ...buildCatSounds(think.answer)];
+  }
+  return buildCatSounds(countCatSounds(messages));
+}
+
 function streamCatSounds(
   words: string[],
   onToken: (token: string) => void,
@@ -184,6 +203,14 @@ export function isPlainHttpUrl(raw: string): boolean {
   return raw.trim().toLowerCase().startsWith('http://');
 }
 
+export function normalizeProviderUrl(raw: string): string {
+  const trimmed = raw.trim().replace(/\/+$/, '');
+  if (!trimmed || isCatApiUrl(trimmed)) return trimmed;
+  const unmangled = trimmed.replace(/\/v1\/chat\/completions$/i, '');
+  if (isCatApiUrl(unmangled)) return unmangled;
+  return chatCompletionsUrl(trimmed);
+}
+
 export function embeddingsUrl(chatUrl: string): string {  const url = chatUrl.trim().replace(/\/+$/, '');
   if (/\/chat\/completions$/i.test(url)) {
     return url.replace(/\/chat\/completions$/i, '/embeddings');
@@ -258,7 +285,7 @@ export async function getAIResponse(
   if (!configuredUrl) {
     throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
   }
-  const url = isCatApiUrl(configuredUrl) ? configuredUrl : chatCompletionsUrl(configuredUrl);
+  const url = normalizeProviderUrl(configuredUrl);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -292,7 +319,7 @@ export async function getAIResponse(
 
   if (isCatApiUrl(url)) {
     const onTokenCb = onToken ?? (() => {});
-    const words = buildCatSounds(countCatSounds(messages));
+    const words = buildCatWords(messages);
     const content = streaming
       ? await streamCatSounds(words, onTokenCb, ctrl, request)
       : words.join(' ');
