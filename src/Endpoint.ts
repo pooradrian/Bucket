@@ -173,8 +173,18 @@ function streamWithXHR(
   });
 }
 
-export function embeddingsUrl(chatUrl: string): string {
-  const url = chatUrl.trim().replace(/\/+$/, '');
+export function chatCompletionsUrl(raw: string): string {
+  const url = raw.trim().replace(/\/+$/, '');
+  if (/\/v1\/chat\/completions$/i.test(url)) return url;
+  if (/\/v1$/i.test(url)) return `${url}/chat/completions`;
+  return `${url}/v1/chat/completions`;
+}
+
+export function isPlainHttpUrl(raw: string): boolean {
+  return raw.trim().toLowerCase().startsWith('http://');
+}
+
+export function embeddingsUrl(chatUrl: string): string {  const url = chatUrl.trim().replace(/\/+$/, '');
   if (/\/chat\/completions$/i.test(url)) {
     return url.replace(/\/chat\/completions$/i, '/embeddings');
   }
@@ -244,10 +254,11 @@ export async function getAIResponse(
   streaming: boolean = true,
   controller?: AbortController,
 ): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
-  const url = config.apiUrl?.trim();
-  if (!url) {
+  const configuredUrl = config.apiUrl?.trim();
+  if (!configuredUrl) {
     throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
   }
+  const url = isCatApiUrl(configuredUrl) ? configuredUrl : chatCompletionsUrl(configuredUrl);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

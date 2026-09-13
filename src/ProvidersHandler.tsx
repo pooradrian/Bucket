@@ -27,6 +27,7 @@ import {
   maskKey,
 } from './SecureStore';
 import {useTheme} from './ThemeContext';
+import {chatCompletionsUrl, isPlainHttpUrl} from './Endpoint';
 
 interface ProvidersHandlerProps {
   activeProviderId: string;
@@ -80,8 +81,8 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
   }, [refreshProviders]);
 
   const handleSaveUrl = useCallback(async (id: string) => {
-    const trimmed = editUrlText.trim();
-    if (!trimmed) {return;}
+    if (!editUrlText.trim()) {return;}
+    const trimmed = chatCompletionsUrl(editUrlText);
     const list = getProviders();
     const updated = list.map(p => p.id === id ? {...p, url: trimmed} : p);
     saveProviders(updated);
@@ -123,6 +124,11 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
               style={st.settingsLorebookItemCount}
               numberOfLines={1}>
               {item.url}
+            </Text>
+          )}
+          {isPlainHttpUrl(isEditing ? editUrlText : item.url) && (
+            <Text style={{color: st.dangerText.color, fontSize: 12, marginTop: 4}}>
+              Unencrypted HTTP — keys and prompts can be read on the network. Only use for local servers.
             </Text>
           )}
           <Text style={st.settingsLorebookItemCount}>
@@ -212,12 +218,12 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
 
   const handleAdd = useCallback(async () => {
     const trimmedName = name.trim();
-    const trimmedUrl = url.trim();
-    const trimmedKey = apiKey.trim();
-    if (!trimmedName || !trimmedUrl) {
+    if (!trimmedName || !url.trim()) {
       Alert.alert('Missing fields', 'Name and URL are required.');
       return;
     }
+    const trimmedUrl = chatCompletionsUrl(url);
+    const trimmedKey = apiKey.trim();
     const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
     const providers = getProviders();
     providers.push({id, name: trimmedName, url: trimmedUrl});
@@ -273,6 +279,14 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              <Text style={st.settingsDefaultText}>
+                /v1/chat/completions is added automatically if missing
+              </Text>
+              {isPlainHttpUrl(url) && (
+                <Text style={{color: st.dangerText.color, fontSize: 12, marginTop: 4}}>
+                  Unencrypted HTTP — keys and prompts can be read on the network. Only use for local servers.
+                </Text>
+              )}
             </View>
             <View style={st.settingsField}>
               <Text style={st.settingsLabel}>API Key (optional for local servers)</Text>

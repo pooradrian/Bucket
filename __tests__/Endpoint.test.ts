@@ -12,7 +12,7 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {getAIResponse, embeddingsUrl} from '../src/Endpoint';
+import {getAIResponse, chatCompletionsUrl, embeddingsUrl, isPlainHttpUrl} from '../src/Endpoint';
 import {DEFAULT_PROMPT_CONFIG} from '../src/PromptHandler';
 import type {ChatMessageObject} from '../src/PromptHandler';
 
@@ -103,5 +103,29 @@ describe('embeddingsUrl', () => {
 
   test('appends to an unversioned URL', () => {
     expect(embeddingsUrl('http://h:8080')).toBe('http://h:8080/embeddings');
+  });
+});
+
+describe('chatCompletionsUrl', () => {
+  test('keeps a full completions URL as-is', () => {
+    expect(chatCompletionsUrl('https://api.openai.com/v1/chat/completions')).toBe(
+      'https://api.openai.com/v1/chat/completions',
+    );
+  });
+
+  test('appends to a versioned or bare base, trimming slashes', () => {
+    expect(chatCompletionsUrl('https://api.openai.com/v1')).toBe(
+      'https://api.openai.com/v1/chat/completions',
+    );
+    expect(chatCompletionsUrl('http://h:8080/')).toBe('http://h:8080/v1/chat/completions');
+  });
+});
+
+describe('isPlainHttpUrl', () => {
+  test('flags http but not https', () => {
+    expect(isPlainHttpUrl('http://192.168.1.2:8080')).toBe(true);
+    expect(isPlainHttpUrl('  HTTP://h/v1 ')).toBe(true);
+    expect(isPlainHttpUrl('https://api.openai.com/v1')).toBe(false);
+    expect(isPlainHttpUrl('')).toBe(false);
   });
 });
