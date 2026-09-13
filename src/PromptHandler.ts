@@ -27,12 +27,22 @@ export interface Persona {
   description: string;
 }
 
+export interface ModelPreset {
+  id: string;
+  model: string;
+  prefix: string;
+  suffix: string;
+  temperature: string;
+}
+
 export interface PromptConfig {
   prefix: string;
   suffix: string;
   userDescription: string;
   personas: Persona[];
   activePersonaId: string | null;
+  modelPresets: ModelPreset[];
+  activeModelPresetId: string | null;
   historyCutoffMode: 'tokens' | 'messages';
   historyCutoffAmount: string;
   providerId: string;
@@ -57,6 +67,8 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   userDescription: '',
   personas: [],
   activePersonaId: null,
+  modelPresets: [],
+  activeModelPresetId: null,
   historyCutoffMode: 'messages',
   historyCutoffAmount: '20',
   providerId: '',
@@ -164,6 +176,72 @@ export function activatePersona(config: PromptConfig, idx: number): PromptConfig
   const persona = config.personas?.[idx];
   if (!persona) return config;
   return {...config, activePersonaId: persona.id, userDescription: persona.description};
+}
+
+export function addModelPreset(config: PromptConfig, preset: ModelPreset): PromptConfig {
+  return {...config, modelPresets: [...(config.modelPresets ?? []), preset]};
+}
+
+export function updateModelPreset(
+  config: PromptConfig,
+  idx: number,
+  patch: Partial<Pick<ModelPreset, 'model' | 'prefix' | 'suffix' | 'temperature'>>,
+): PromptConfig {
+  const modelPresets = [...(config.modelPresets ?? [])];
+  if (!modelPresets[idx]) return config;
+  modelPresets[idx] = {...modelPresets[idx], ...patch};
+  const next = {...config, modelPresets};
+  if (modelPresets[idx].id === config.activeModelPresetId) {
+    next.model = modelPresets[idx].model;
+    next.prefix = modelPresets[idx].prefix;
+    next.suffix = modelPresets[idx].suffix;
+    next.temperature = modelPresets[idx].temperature;
+  }
+  return next;
+}
+
+export function deleteModelPreset(config: PromptConfig, idx: number): PromptConfig {
+  const modelPresets = (config.modelPresets ?? []).filter((_, i) => i !== idx);
+  const deleted = config.modelPresets?.[idx];
+  return {
+    ...config,
+    modelPresets,
+    activeModelPresetId:
+      deleted && config.activeModelPresetId === deleted.id ? null : config.activeModelPresetId,
+  };
+}
+
+export function applyModelPreset(config: PromptConfig, idx: number): PromptConfig {
+  const preset = config.modelPresets?.[idx];
+  if (!preset) return config;
+  return {
+    ...config,
+    model: preset.model,
+    prefix: preset.prefix,
+    suffix: preset.suffix,
+    temperature: preset.temperature,
+    activeModelPresetId: preset.id,
+  };
+}
+
+export function applyModelField(config: PromptConfig, model: string): PromptConfig {
+  const preset = (config.modelPresets ?? []).find(p => p.model === model);
+  if (!preset) return {...config, model, activeModelPresetId: null};
+  return {
+    ...config,
+    model,
+    prefix: preset.prefix,
+    suffix: preset.suffix,
+    temperature: preset.temperature,
+    activeModelPresetId: preset.id,
+  };
+}
+
+export function detachModelPreset(
+  config: PromptConfig,
+  patch: Partial<Pick<PromptConfig, 'prefix' | 'suffix' | 'temperature'>>,
+): PromptConfig {
+  return {...config, ...patch, activeModelPresetId: null};
 }
 
 let cachedEncoder: ReturnType<typeof encodingForModel> | null = null;

@@ -12,7 +12,7 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {estimateTokens, buildPrompt, buildContinuePrompt, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, buildContinuePrompt, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
 import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
 import type {ChatMessage} from '../src/useChat';
@@ -165,5 +165,73 @@ describe('persona helpers', () => {
   test('activatePersona is a no-op for an out-of-range index', () => {
     const next = activatePersona(base, 99);
     expect(next).toEqual(base);
+  });
+});
+
+describe('model preset helpers', () => {
+  const preset = {id: 'p1', model: 'gpt-4o', prefix: 'pre', suffix: 'suf', temperature: '0.7'};
+  const base: PromptConfig = {
+    ...DEFAULT_PROMPT_CONFIG,
+    modelPresets: [preset],
+    activeModelPresetId: null,
+  };
+
+  test('applyModelField applies the preset on exact model match', () => {
+    const next = applyModelField(base, 'gpt-4o');
+    expect(next.model).toBe('gpt-4o');
+    expect(next.prefix).toBe('pre');
+    expect(next.suffix).toBe('suf');
+    expect(next.temperature).toBe('0.7');
+    expect(next.activeModelPresetId).toBe('p1');
+  });
+
+  test('applyModelField detaches when nothing matches exactly', () => {
+    const attached = {...base, activeModelPresetId: 'p1'};
+    const next = applyModelField(attached, 'gpt-4o-mini');
+    expect(next.model).toBe('gpt-4o-mini');
+    expect(next.activeModelPresetId).toBeNull();
+    expect(next.prefix).toBe(attached.prefix);
+  });
+
+  test('applyModelPreset switches model and instructions together', () => {
+    const next = applyModelPreset(base, 0);
+    expect(next.model).toBe('gpt-4o');
+    expect(next.prefix).toBe('pre');
+    expect(next.activeModelPresetId).toBe('p1');
+  });
+
+  test('detachModelPreset clears the active preset on manual edits', () => {
+    const attached = {...base, activeModelPresetId: 'p1'};
+    const next = detachModelPreset(attached, {temperature: '0.9'});
+    expect(next.temperature).toBe('0.9');
+    expect(next.activeModelPresetId).toBeNull();
+  });
+
+  test('updateModelPreset pushes edits to live fields when active', () => {
+    const attached = {...base, activeModelPresetId: 'p1'};
+    const next = updateModelPreset(attached, 0, {temperature: '0.2'});
+    expect(next.modelPresets[0].temperature).toBe('0.2');
+    expect(next.temperature).toBe('0.2');
+    expect(next.activeModelPresetId).toBe('p1');
+  });
+
+  test('updateModelPreset leaves live fields alone when inactive', () => {
+    const next = updateModelPreset(base, 0, {temperature: '0.2'});
+    expect(next.modelPresets[0].temperature).toBe('0.2');
+    expect(next.temperature).toBe(base.temperature);
+  });
+
+  test('deleteModelPreset clears the active id when the active one is removed', () => {
+    const attached = {...base, activeModelPresetId: 'p1'};
+    const next = deleteModelPreset(attached, 0);
+    expect(next.modelPresets).toHaveLength(0);
+    expect(next.activeModelPresetId).toBeNull();
+  });
+
+  test('addModelPreset appends without mutating', () => {
+    const p2 = {id: 'p2', model: 'claude', prefix: '', suffix: '', temperature: '1'};
+    const next = addModelPreset(base, p2);
+    expect(next.modelPresets.map(p => p.id)).toEqual(['p1', 'p2']);
+    expect(base.modelPresets).toHaveLength(1);
   });
 });
