@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react';
 
 import ProvidersHandler from '../ProvidersHandler';
-import {PromptConfig, DEFAULT_PROMPT_CONFIG} from '../PromptHandler';
+import {PromptConfig, DEFAULT_PROMPT_CONFIG, applyModelField, detachModelPreset} from '../PromptHandler';
 import {getActiveProviderId} from '../SecureStore';
 import {useAppStore} from '../store';
 import {TextField} from './ui';
@@ -35,7 +35,7 @@ export default function ProvidersView({
       <TextField
         label="Model"
         value={promptValues.model}
-        onChangeText={text => setPromptValues(prev => ({...prev, model: text}))}
+        onChangeText={text => setPromptValues(prev => applyModelField(prev, text))}
         placeholder={DEFAULT_PROMPT_CONFIG.model}
       />
 
@@ -43,7 +43,7 @@ export default function ProvidersView({
         label="Temperature"
         value={promptValues.temperature}
         onChangeText={text =>
-          setPromptValues(prev => ({...prev, temperature: text}))
+          setPromptValues(prev => detachModelPreset(prev, {temperature: text}))
         }
         placeholder={DEFAULT_PROMPT_CONFIG.temperature}
         keyboardType="decimal-pad"

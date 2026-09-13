@@ -1,5 +1,5 @@
 import {Text, TouchableOpacity, View} from 'react-native';
-import {PromptConfig, DEFAULT_PROMPT_CONFIG, PLACEHOLDERS} from '../PromptHandler';
+import {PromptConfig, DEFAULT_PROMPT_CONFIG, PLACEHOLDERS, detachModelPreset} from '../PromptHandler';
 import {useTheme} from '../ThemeContext';
 import {
   AutoGrowTextInput,
@@ -8,6 +8,7 @@ import {
   SectionHeader,
   TextField,
 } from './ui';
+import ModelPresetsView from './ModelPresetsView';
 
 interface PromptViewProps {
   promptValues: PromptConfig;
@@ -21,16 +22,33 @@ export default function PromptView({
   accent,
 }: PromptViewProps) {
   const st = useTheme();
+  const activePreset =
+    promptValues.modelPresets?.find(p => p.id === promptValues.activeModelPresetId) ?? null;
   return (
     <>
+      <SectionHeader title="Model Presets" />
+      <ModelPresetsView
+        promptValues={promptValues}
+        setPromptValues={setPromptValues}
+        accent={accent}
+      />
+
       <SectionHeader title="System Prompt" />
+      {activePreset ? (
+        <View style={st.settingsField}>
+          <MutedNote>
+            {`Controlled by the "${activePreset.model}" preset. Edit it above to change these instructions.`}
+          </MutedNote>
+        </View>
+      ) : (
+      <>
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Prefix (start of system message)</Text>
         <AutoGrowTextInput
           style={st.settingsInput}
           value={promptValues.prefix}
           onChangeText={text =>
-            setPromptValues(prev => ({...prev, prefix: text}))
+            setPromptValues(prev => detachModelPreset(prev, {prefix: text}))
           }
           placeholder={DEFAULT_PROMPT_CONFIG.prefix}
           placeholderTextColor={st.textMuted.color}
@@ -55,7 +73,7 @@ export default function PromptView({
           style={st.settingsInput}
           value={promptValues.suffix}
           onChangeText={text =>
-            setPromptValues(prev => ({...prev, suffix: text}))
+            setPromptValues(prev => detachModelPreset(prev, {suffix: text}))
           }
           placeholder={DEFAULT_PROMPT_CONFIG.suffix}
           placeholderTextColor={st.textMuted.color}
@@ -73,6 +91,8 @@ export default function PromptView({
           <Text style={st.settingsDefaultText}>reset to default</Text>
         </TouchableOpacity>
       </View>
+      </>
+      )}
 
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Available Placeholders</Text>
