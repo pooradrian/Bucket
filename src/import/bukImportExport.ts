@@ -2,7 +2,7 @@ import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
 import {Character} from '../CharacterEditor';
 import {parseCustomFields, getCustomField} from '../CustomFields';
-import {LorebookState} from '../RAGHandler';
+import {LorebookState, lorebookDisplayName, lorebookExportName} from '../RAGHandler';
 import {ChatSession} from '../useChat';
 import {DEFAULT_PROMPT_CONFIG} from '../PromptHandler';
 import {DEFAULT_APP_SETTINGS} from '../store';
@@ -84,7 +84,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
             id: generateId(),
             entries,
             entryCount: entries.length,
-            fileName: file.name.split('/').pop() || 'lorebook.txt',
+            fileName: lorebookDisplayName(file.name.split('/').pop() || 'lorebook'),
           };
           if (origId) {
             origLorebookIdToNewId.set(origId, lorebook.id);
@@ -397,7 +397,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     for (const lorebook of lorebooks) {
       const entries = await getLorebookEntriesFromDB(lorebook.id);
       const content = JSON.stringify({id: lorebook.id, entries});
-      lorebookFolder?.file(`${lorebook.fileName}`, content);
+      lorebookFolder?.file(lorebookExportName(lorebook.fileName), content);
     }
   }
 

@@ -23,11 +23,35 @@ export interface LorebookState {
 }
 
 export function parseLorebook(raw: string): LorebookEntry[] {
+  return splitBulkLines(raw).map((text, i) => ({id: i, text}));
+}
+
+export function splitBulkLines(raw: string): string[] {
   return raw
     .split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .map((text, i) => ({id: i, text}));
+    .filter(line => line.length > 0);
+}
+
+export function buildLorebookState(id: string, fileName: string, texts: string[]): LorebookState {
+  const entries = texts.map((text, i) => ({id: i, text}));
+  return {id, entries, entryCount: entries.length, fileName};
+}
+
+export function lorebookExportName(fileName: string): string {
+  return fileName.toLowerCase().endsWith('.txt') ? fileName : `${fileName}.txt`;
+}
+
+export function lorebookDisplayName(fileName: string): string {
+  const stripped = fileName.toLowerCase().endsWith('.txt')
+    ? fileName.slice(0, -'.txt'.length)
+    : fileName;
+  return stripped.trim().length > 0 ? stripped : fileName;
+}
+
+export async function saveLorebookState(lorebook: LorebookState): Promise<LorebookState[]> {
+  await saveLorebookToDB(lorebook);
+  return await getAllLorebooksFromDB();
 }
 
 export async function loadLorebook(): Promise<LorebookState | null> {
@@ -43,7 +67,7 @@ export async function loadLorebook(): Promise<LorebookState | null> {
     if (entries.length === 0) {
       return null;
     }
-    return {id: generateId(), entries, entryCount: entries.length, fileName: file.name || 'lorebook.txt'};
+    return {id: generateId(), entries, entryCount: entries.length, fileName: lorebookDisplayName(file.name || 'lorebook')};
   } catch (e: unknown) {
     if (e && typeof e === 'object' && 'code' in e && (e as {code: string}).code === 'OPERATION_CANCELED') {
       return null;

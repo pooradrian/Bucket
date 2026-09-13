@@ -5,7 +5,7 @@ import {PromptConfig} from '../PromptHandler';
 import {AppSettings, GroupChat} from '../store';
 import {DBQuickCharacter} from '../Database';
 
-export type ImportFormat = 'ccv1' | 'ccv2' | 'buk' | 'perchance';
+export type ImportFormat = 'ccv1' | 'ccv2' | 'buk' | 'perchance' | 'lorebook';
 export type ExportFormat = 'ccv1' | 'ccv2' | 'buk';
 
 export interface BukImportResult {

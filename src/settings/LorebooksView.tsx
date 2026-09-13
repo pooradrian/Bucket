@@ -1,11 +1,12 @@
 import {useState, useCallback} from 'react';
 import {Alert, Text, TouchableOpacity, View} from 'react-native';
-import {loadLorebook, addLorebook, removeLorebook} from '../RAGHandler';
+import {loadLorebook, addLorebook, removeLorebook, LorebookState} from '../RAGHandler';
 import {useAppStore} from '../store';
 import {PromptConfig} from '../PromptHandler';
 import {logEvent} from '../EventLogger';
 import {useTheme} from '../ThemeContext';
 import {SectionHeader, TextField} from './ui';
+import LorebookEditor from '../components/LorebookEditor';
 
 interface LorebooksViewProps {
   promptValues: PromptConfig;
@@ -20,6 +21,8 @@ export default function LorebooksView({
   const lorebooks = useAppStore(s => s.lorebooks);
   const setLorebooks = useAppStore(s => s.setLorebooks);
   const [lorebookLoading, setLorebookLoading] = useState(false);
+  const [editorVisible, setEditorVisible] = useState(false);
+  const [editingBook, setEditingBook] = useState<LorebookState | null>(null);
 
   const handleLoadLorebook = useCallback(async () => {
     setLorebookLoading(true);
@@ -68,6 +71,19 @@ export default function LorebooksView({
     <>
       <TouchableOpacity
         style={st.card}
+        onPress={() => {
+          setEditingBook(null);
+          setEditorVisible(true);
+        }}
+      >
+        <Text style={st.cardTitle}>New Lorebook</Text>
+        <Text style={st.cardDescription}>
+          Create and edit entries in the app
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={st.card}
         onPress={handleLoadLorebook}
         disabled={lorebookLoading}
       >
@@ -81,12 +97,17 @@ export default function LorebooksView({
 
       {lorebooks.map(lorebook => (
         <View key={lorebook.id} style={st.settingsLorebookItem}>
-          <View style={st.settingsLorebookItemInfo}>
+          <TouchableOpacity
+            style={st.settingsLorebookItemInfo}
+            onPress={() => {
+              setEditingBook(lorebook);
+              setEditorVisible(true);
+            }}>
             <Text style={st.settingsLorebookItemName}>{lorebook.fileName}</Text>
             <Text style={st.settingsLorebookItemCount}>
-              {lorebook.entryCount} entries
+              {lorebook.entryCount} entries · tap to edit
             </Text>
-          </View>
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => handleRemoveLorebook(lorebook.id)}
             style={st.settingsLorebookRemoveBtn}
@@ -98,9 +119,25 @@ export default function LorebooksView({
 
       {lorebooks.length === 0 && (
         <Text style={st.settingsLorebookEmptyText}>
-          No lorebooks imported yet.
+          No lorebooks yet. Create one or import a .txt file.
         </Text>
       )}
+
+      <LorebookEditor
+        visible={editorVisible}
+        lorebook={editingBook}
+        onClose={() => setEditorVisible(false)}
+        onSaved={(updated, savedId) => {
+          setLorebooks(updated);
+          const saved = updated.find(l => l.id === savedId);
+          logEvent('lorebook_saved', {
+            entryCount: saved?.entryCount ?? 0,
+            fileNameLen: saved?.fileName.length ?? 0,
+            isNew: editingBook === null,
+          });
+          setEditorVisible(false);
+        }}
+      />
 
       <SectionHeader title="RAG Settings" />
 
