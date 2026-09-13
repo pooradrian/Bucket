@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -177,6 +177,8 @@ export default function HistoryModal({
       data={sessions}
       keyExtractor={item => item.id}
       renderItem={renderSessionRow}
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets
       ListHeaderComponent={
         <TouchableOpacity onPress={onNewChat} style={st.newChatBtn}>
           <Text style={st.newChatBtnText}>+ New Chat</Text>
@@ -187,7 +189,9 @@ export default function HistoryModal({
   );
 
   const renderCharactersTab = () => (
-    <ScrollView>
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      automaticallyAdjustKeyboardInsets>
       {isGroupChat ? (
         <>
           <Text style={st.historySectionTitle}>Members</Text>
@@ -305,6 +309,10 @@ export default function HistoryModal({
       animationType="none"
       transparent
       onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{flex: 1}}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}>
       <View style={st.historyModalOverlay}>
         <Animated.View style={[st.historyModalContent, historyContentStyle]}>
           <View style={st.historyHeader}>
@@ -371,6 +379,7 @@ export default function HistoryModal({
           </View>
         )}
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

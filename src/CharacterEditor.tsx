@@ -207,8 +207,12 @@ export default function CharacterEditor({
 
       <KeyboardAvoidingView
         style={st.editorKeyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={st.editorScroll}>
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}>
+        <ScrollView
+          contentContainerStyle={st.editorScroll}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets>
           {/* Icon */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Avatar</Text>

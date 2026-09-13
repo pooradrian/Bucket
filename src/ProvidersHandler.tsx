@@ -2,7 +2,10 @@ import {useEffect, useState, useCallback} from 'react';
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
@@ -230,6 +233,10 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
 
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{flex: 1}}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}>
       <View style={st.groupEditorOverlay}>
         <Animated.View style={[st.groupEditorContent, contentStyle]}>
           <View style={st.groupEditorHeader}>
@@ -238,7 +245,11 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
               <Text style={st.groupEditorCloseBtnText}>×</Text>
             </TouchableOpacity>
           </View>
-          <View style={[st.groupEditorBody, {paddingBottom: 24}]}>
+          <ScrollView
+            style={st.groupEditorBody}
+            contentContainerStyle={{paddingBottom: 24}}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets>
             <View style={st.settingsField}>
               <Text style={st.settingsLabel}>Name</Text>
               <TextInput
@@ -285,9 +296,10 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
               style={[st.groupEditorSaveBtn, (!name.trim() || !url.trim()) && {opacity: 0.4}]}>
               <Text style={st.groupEditorSaveBtnText}>Add Provider</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </Animated.View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
