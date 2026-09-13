@@ -10,6 +10,7 @@ import {ImportFormat, ImportResult} from './types';
 
 export async function detectImportFormat(fileUri: string, fileName: string): Promise<ImportFormat> {
   if (fileName.endsWith('.buk')) return 'buk';
+  if (fileName.toLowerCase().endsWith('.txt')) return 'lorebook';
 
   try {
     const response = await fetch(fileUri);
@@ -45,6 +46,9 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
 
   if (format === 'buk') {
     throw new Error('Use importBuk() for .buk files');
+  }
+  if (format === 'lorebook') {
+    throw new Error('Use the lorebook import for .txt files');
   }
 
   const response = await fetch(fileUri);

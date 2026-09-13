@@ -25,7 +25,9 @@ import {
   ExportFormat,
   ExportOptions,
 } from './ImportExport';
-import {getAllCharactersFromDB, getAllGroupChatsFromDB} from './Database';
+import {getAllCharactersFromDB, getAllGroupChatsFromDB, generateId} from './Database';
+import {addLorebook, buildLorebookState, lorebookDisplayName, parseLorebook} from './RAGHandler';
+import {logEvent} from './EventLogger';
 
 interface ImportExportHandlerProps {
   bottomInset: number;
@@ -34,6 +36,7 @@ interface ImportExportHandlerProps {
 export default function ImportExportHandler({bottomInset}: ImportExportHandlerProps) {
   const st = useTheme();
   const {loadCharacters, loadGroupChats, loadLorebooks, loadSettings, appSettings, bumpPromptConfigVersion} = useAppStore();
+  const setLorebooks = useAppStore(s => s.setLorebooks);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
@@ -124,6 +127,24 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         await loadCharacters();
 
         Alert.alert('Import Complete', message);
+      } else if (format === 'lorebook') {
+        const response = await fetch(file.uri);
+        const entries = parseLorebook(await response.text());
+        if (entries.length === 0) {
+          Alert.alert('Import lorebook', 'No entries found in this file (one fact per line).');
+        } else {
+          const state = buildLorebookState(
+            generateId(),
+            lorebookDisplayName(file.name || 'lorebook'),
+            entries.map(e => e.text),
+          );
+          setLorebooks(await addLorebook(state));
+          logEvent('lorebook_imported', {
+            entryCount: entries.length,
+            fileNameLen: state.fileName.length,
+          });
+          Alert.alert('Import Complete', `Imported lorebook "${state.fileName}" with ${entries.length} entries`);
+        }
       } else {
         const imported = await importCharacter(file.uri);
         await loadCharacters();
@@ -137,7 +158,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
     } finally {
       setImporting(false);
     }
-  }, [loadCharacters, loadGroupChats, loadLorebooks, loadSettings, bumpPromptConfigVersion]);
+  }, [loadCharacters, loadGroupChats, loadLorebooks, loadSettings, bumpPromptConfigVersion, setLorebooks]);
 
   const handleShowExport = useCallback(async () => {
     const allChars = await getAllCharactersFromDB();
@@ -295,7 +316,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
           {importing ? 'Importing...' : 'Import'}
         </Text>
         <Text style={st.cardDescription}>
-          Supports Character Card V1, V2, .buk, and Perchance exports
+          Supports Character Card V1, V2, .buk, Perchance exports, and .txt lorebooks
         </Text>
       </TouchableOpacity>
 
