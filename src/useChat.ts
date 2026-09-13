@@ -5,6 +5,7 @@ import {Character} from './CharacterEditor';
 import {loadPromptConfig, sendToLLM, sendToGroupLLM, sendToQCLLM, PromptConfig} from './PromptHandler';
 import {RawRequest} from './Endpoint';
 import {LorebookState} from './RAGHandler';
+import {splitThinking} from './thinking';
 import {useAppStore, GroupChat} from './store';
 import {
   getSessionById,
@@ -28,6 +29,7 @@ export interface ReplyVariant {
   content: string;
   timestamp: number;
   characterId?: string;
+  thinkingMs?: number;
 }
 
 function serializeRequest(request: RawRequest): string {
@@ -44,6 +46,7 @@ export interface ChatMessage {
   characterId?: string;
   variants?: ReplyVariant[];
   requestInfo?: string;
+  thinkingMs?: number;
 }
 
 export interface ChatSession {
@@ -82,6 +85,7 @@ function makeVariantEntry(id: string, msg: ChatMessage): ReplyVariant {
     content: msg.content,
     timestamp: msg.timestamp,
     ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    ...(msg.thinkingMs !== undefined ? {thinkingMs: msg.thinkingMs} : {}),
   };
 }
 
@@ -212,6 +216,8 @@ export function useChat({
   const streamingContentRef = useRef('');
   const rawStreamRef = useRef('');
   const streamingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const thinkStartRef = useRef(0);
+  const thinkMsRef = useRef<number | null>(null);
   const replacingMessageIdRef = useRef<string | null>(null);
   const [replacingMessageId, setReplacingMessageId] = useState<string | null>(null);
   // Always tracks the id of the session currently shown in the UI. Used to
@@ -286,6 +292,12 @@ export function useChat({
         const displaced = applyDisplacements(rawStreamRef.current, displacementRulesRef.current, displacementSeedRef.current);
         streamingContentRef.current = displaced;
         setStreamingContent(displaced);
+        if (thinkMsRef.current == null) {
+          const split = splitThinking(displaced);
+          if (split.hasThinking && !split.open) {
+            thinkMsRef.current = Math.round(Date.now() - thinkStartRef.current);
+          }
+        }
       }, 50);
     }
   }, []);
@@ -455,6 +467,8 @@ export function useChat({
         displacementRulesRef.current = parseDisplacements(promptConfig.wordDisplacements);
         rawStreamRef.current = '';
         streamingContentRef.current = '';
+        thinkStartRef.current = Date.now();
+        thinkMsRef.current = null;
         setIsStreaming(true);
         const ctrl = new AbortController();
         abortControllerRef.current = ctrl;
@@ -510,6 +524,14 @@ export function useChat({
             : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
         const assistantUpdatedAt = Date.now();
         const requestInfo = serializeRequest(result.request);
+        let thinkingMs: number | null = thinkMsRef.current;
+        if (thinkingMs == null) {
+          const split = splitThinking(content);
+          if (split.hasThinking && !split.open) {
+            thinkingMs = Math.round(result.metrics.totalMs);
+          }
+        }
+        const thinkingMsValue = thinkingMs ?? undefined;
         if (opts.replaceMessageId) {
           const replaceId = opts.replaceMessageId;
           updateSessionIfCurrent(startSessionId, prev => ({
@@ -523,6 +545,7 @@ export function useChat({
                     characterId: replyCharId ?? m.characterId,
                     variants: opts.existingVariants ?? m.variants,
                     requestInfo,
+                    thinkingMs: thinkingMsValue,
                   }
                 : m,
             ),
@@ -534,6 +557,7 @@ export function useChat({
             assistantUpdatedAt,
             opts.existingVariants ?? [],
             requestInfo,
+            thinkingMsValue,
           );
           updateSessionTimestamp(startSessionId, assistantUpdatedAt);
         } else {
@@ -544,6 +568,7 @@ export function useChat({
             timestamp: assistantUpdatedAt,
             requestInfo,
             ...(replyCharId ? {characterId: replyCharId} : {}),
+            ...(thinkingMsValue !== undefined ? {thinkingMs: thinkingMsValue} : {}),
           };
           updateSessionIfCurrent(startSessionId, prev => ({
             ...prev,
@@ -581,6 +606,9 @@ export function useChat({
           const partial = streamingContentRef.current;
           const cancelledRequest = (e as Error & {request?: RawRequest}).request;
           const cancelRequestInfo = cancelledRequest ? serializeRequest(cancelledRequest) : undefined;
+          const partialSplit = splitThinking(partial);
+          const cancelledThinkingMs =
+            partialSplit.hasThinking && !partialSplit.open ? thinkMsRef.current ?? undefined : undefined;
           if (opts.replaceMessageId) {
             const replaceId = opts.replaceMessageId;
             const existingVariants = opts.existingVariants ?? [];
@@ -590,12 +618,12 @@ export function useChat({
                 ...prev,
                 messages: prev.messages.map(m =>
                   m.id === replaceId
-                    ? {...m, content: partial, timestamp: cancelUpdatedAt, variants: existingVariants, requestInfo: cancelRequestInfo}
+                    ? {...m, content: partial, timestamp: cancelUpdatedAt, variants: existingVariants, requestInfo: cancelRequestInfo, thinkingMs: cancelledThinkingMs}
                     : m,
                 ),
                 updatedAt: cancelUpdatedAt,
               }));
-              updateMessageWithVariants(replaceId, partial, cancelUpdatedAt, existingVariants, cancelRequestInfo);
+              updateMessageWithVariants(replaceId, partial, cancelUpdatedAt, existingVariants, cancelRequestInfo, cancelledThinkingMs);
               updateSessionTimestamp(startSessionId, cancelUpdatedAt);
             }
           } else if (partial.length > 0) {
@@ -611,6 +639,7 @@ export function useChat({
               timestamp: Date.now(),
               requestInfo: cancelRequestInfo,
               ...(cancelReplyCharId ? {characterId: cancelReplyCharId} : {}),
+              ...(cancelledThinkingMs !== undefined ? {thinkingMs: cancelledThinkingMs} : {}),
             };
             const cancelUpdatedAt = Date.now();
             updateSessionIfCurrent(startSessionId, prev => ({
@@ -784,6 +813,7 @@ export function useChat({
       content: lastMsg.content,
       timestamp: lastMsg.timestamp,
       ...(lastMsg.characterId ? {characterId: lastMsg.characterId} : {}),
+      ...(lastMsg.thinkingMs !== undefined ? {thinkingMs: lastMsg.thinkingMs} : {}),
     };
     const existingVariants = [...(lastMsg.variants ?? []), archivedVariant];
 
@@ -823,6 +853,8 @@ export function useChat({
           updatedMsg.content,
           updatedMsg.timestamp,
           updatedMsg.variants ?? [],
+          undefined,
+          updatedMsg.thinkingMs,
         );
       } catch (e) {
         console.warn('Failed to update message variants:', e);
@@ -870,6 +902,7 @@ export function useChat({
       timestamp: newContent.timestamp,
       characterId: newContent.characterId ?? msg.characterId,
       variants: newVariants,
+      thinkingMs: newContent.thinkingMs,
     };
     await commitVariantUpdate(session, msgId, updatedMsg, newIdx);
   }, [session, commitVariantUpdate]);
@@ -908,6 +941,7 @@ export function useChat({
       timestamp: newContent.timestamp,
       characterId: newContent.characterId ?? msg.characterId,
       variants: newVariants,
+      thinkingMs: newContent.thinkingMs,
     };
     await commitVariantUpdate(session, msgId, updatedMsg, clamped);
   }, [session, commitVariantUpdate]);
@@ -926,12 +960,12 @@ export function useChat({
     }
     let updatedMsg: ChatMessage;
     if (entryKey === 'live') {
-      updatedMsg = {...msg, content: trimmed, timestamp: Date.now()};
+      updatedMsg = {...msg, content: trimmed, timestamp: Date.now(), thinkingMs: undefined};
     } else {
       updatedMsg = {
         ...msg,
         variants: (msg.variants ?? []).map(v =>
-          v.id === entryKey ? {...v, content: trimmed, timestamp: Date.now()} : v,
+          v.id === entryKey ? {...v, content: trimmed, timestamp: Date.now(), thinkingMs: undefined} : v,
         ),
       };
     }
@@ -949,11 +983,13 @@ export function useChat({
     const sourceVariant = sourceKey === 'live' ? null : (msg.variants ?? []).find(v => v.id === sourceKey);
     const sourceContent = sourceKey === 'live' ? msg.content : (sourceVariant?.content ?? msg.content);
     const sourceCharId = sourceKey === 'live' ? msg.characterId : (sourceVariant?.characterId ?? msg.characterId);
+    const sourceThinkingMs = sourceKey === 'live' ? msg.thinkingMs : (sourceVariant?.thinkingMs ?? msg.thinkingMs);
     const newVariant: ReplyVariant = {
       id: generateId(),
       content: sourceContent,
       timestamp: Date.now(),
       ...(sourceCharId ? {characterId: sourceCharId} : {}),
+      ...(sourceThinkingMs !== undefined ? {thinkingMs: sourceThinkingMs} : {}),
     };
     const oldEntry = makeVariantEntry(generateId(), msg);
     const newVariants = [...(msg.variants ?? []), oldEntry];
@@ -963,6 +999,7 @@ export function useChat({
       timestamp: newVariant.timestamp,
       characterId: newVariant.characterId ?? msg.characterId,
       variants: newVariants,
+      thinkingMs: newVariant.thinkingMs,
     };
     await commitVariantUpdate(session, msgId, updatedMsg, undefined, 'variant_forked');
     return 'live';
@@ -984,6 +1021,7 @@ export function useChat({
       timestamp: Date.now(),
       characterId: msg.characterId,
       variants: newVariants,
+      thinkingMs: undefined,
     };
     await commitVariantUpdate(session, msgId, updatedMsg, undefined, 'variant_fresh');
     return 'live';
@@ -1020,6 +1058,7 @@ export function useChat({
         timestamp: promoted.timestamp,
         characterId: promoted.characterId ?? msg.characterId,
         variants: remaining.filter(v => v.id !== promoted.id),
+        thinkingMs: promoted.thinkingMs,
       };
     } else {
       updatedMsg = {

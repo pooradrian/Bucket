@@ -31,6 +31,7 @@ import Animated, {
 import {useAppStore} from '../store';
 import {ChatMessage, ReplyVariant} from '../useChat';
 import {renderFormattedText} from '../textFormat';
+import {formatThinkingDuration, splitThinking} from '../thinking';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -79,6 +80,7 @@ interface CardItem {
   content: string;
   timestamp: number;
   live: boolean;
+  thinkingMs?: number;
 }
 
 interface Colors {
@@ -160,12 +162,14 @@ export default function Carousel({
       content: v.content,
       timestamp: v.timestamp,
       live: false,
+      ...(v.thinkingMs !== undefined ? {thinkingMs: v.thinkingMs} : {}),
     }));
     list.push({
       key: 'live',
       content: message.content,
       timestamp: message.timestamp,
       live: true,
+      ...(message.thinkingMs !== undefined ? {thinkingMs: message.thinkingMs} : {}),
     });
     list.sort((a, b) => a.timestamp - b.timestamp);
     return list;
@@ -743,6 +747,9 @@ function CarouselCard({
 }) {
   const [cardW, setCardW] = useState(0);
   const didSyncRef = useRef(false);
+  const [thoughtExpanded, setThoughtExpanded] = useState(false);
+  const [thinkElapsed, setThinkElapsed] = useState(0);
+  const openSinceRef = useRef(0);
   const animatedStyle = useAnimatedStyle(() => {
     const rel = i - pos.value;
     const absRel = Math.abs(rel);
@@ -806,6 +813,20 @@ function CarouselCard({
   const textColor = isUser ? colors.textPrimary : colors.textSecondary;
   const showTyping = liveStreamText != null && liveStreamText.length === 0;
   const displayContent = liveStreamText ?? item.content;
+  const thought = splitThinking(displayContent);
+  const thoughtDuration = liveStreamText != null ? undefined : item.thinkingMs;
+
+  useEffect(() => {
+    if (!thought.open) {
+      openSinceRef.current = 0;
+      setThinkElapsed(0);
+      return;
+    }
+    if (!openSinceRef.current) openSinceRef.current = Date.now();
+    setThinkElapsed(Date.now() - openSinceRef.current);
+    const t = setInterval(() => setThinkElapsed(Date.now() - openSinceRef.current), 500);
+    return () => clearInterval(t);
+  }, [thought.open]);
 
   const measureCard = (ev: {nativeEvent: {layout: {width: number; height: number}}}) => {
     const next = Math.round(ev.nativeEvent.layout.width);
@@ -859,6 +880,40 @@ function CarouselCard({
               <>
                 {showTyping ? (
                   <TypingDots color={textColor} />
+                ) : thought.hasThinking ? (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => setThoughtExpanded(v => !v)}
+                      activeOpacity={0.7}>
+                      <Text style={{color: colors.textMuted, fontSize: 12, fontStyle: 'italic'}}>
+                        {(thought.open || thoughtExpanded) ? '▾ ' : '▸ '}
+                        {thought.open
+                          ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
+                          : thoughtDuration !== undefined
+                            ? `thought for ${formatThinkingDuration(thoughtDuration)}`
+                            : 'thought'}
+                      </Text>
+                    </TouchableOpacity>
+                    {(thought.open || thoughtExpanded) && !!thought.thinking && (
+                      <Text
+                        style={[
+                          styles.cardText,
+                          {color: colors.textMuted, fontSize: colors.fontSizeBody, lineHeight: 20},
+                        ]}>
+                        {renderFormattedText(thought.thinking, {color: colors.textMuted, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
+                      </Text>
+                    )}
+                    {!!thought.answer && (
+                      <Text
+                        style={[
+                          styles.cardText,
+                          {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
+                        ]}>
+                        {(thought.open || thoughtExpanded) && !!thought.thinking ? '\n\n' : null}
+                        {renderFormattedText(thought.answer, {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
+                      </Text>
+                    )}
+                  </>
                 ) : (
                   <Text
                     style={[
