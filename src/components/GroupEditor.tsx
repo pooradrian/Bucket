@@ -1,7 +1,9 @@
 import {useEffect, useState} from 'react';
 import {
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   Text,
   TextInput,
@@ -93,6 +95,10 @@ export default function GroupEditor({
       animationType="none"
       transparent
       onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{flex: 1}}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}>
       <View style={st.groupEditorOverlay}>
         <Animated.View style={[st.groupEditorContent, contentStyle]}>
           <View style={st.groupEditorHeader}>
@@ -104,7 +110,10 @@ export default function GroupEditor({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={st.groupEditorBody}>
+          <ScrollView
+            style={st.groupEditorBody}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets>
             <View style={st.groupEditorField}>
               <Text style={st.groupEditorLabel}>Group Name</Text>
               <TextInput
@@ -180,6 +189,7 @@ export default function GroupEditor({
           </ScrollView>
         </Animated.View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

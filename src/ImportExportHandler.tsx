@@ -343,7 +343,11 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{padding: 16}} contentContainerStyle={{paddingBottom: 20}}>
+            <ScrollView
+              style={{padding: 16}}
+              contentContainerStyle={{paddingBottom: 20}}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets>
               <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginBottom: 10}}>
                 Format
               </Text>

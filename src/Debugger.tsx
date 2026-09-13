@@ -231,6 +231,8 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
         renderItem={renderLogEntry}
         contentContainerStyle={st.debugOutput}
         style={st.debugFlatList}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({animated: false})}
         onLayout={() => flatListRef.current?.scrollToEnd({animated: false})}
       />

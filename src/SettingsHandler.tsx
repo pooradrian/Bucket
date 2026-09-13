@@ -1,5 +1,5 @@
 import {useEffect, useState, useCallback, useRef, useMemo} from 'react';
-import {AppState, ScrollView, Text, TouchableOpacity, View} from 'react-native';
+import {AppState, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View} from 'react-native';
 import {
   PromptConfig,
   DEFAULT_PROMPT_CONFIG,
@@ -237,8 +237,13 @@ export default function SettingsHandler({
           {settingsView === 'main' ? 'Settings' : VIEW_TITLES[settingsView]}
         </Text>
       </View>
+      <KeyboardAvoidingView
+        style={{flex: 1}}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={[
           st.settingsContent,
           {paddingBottom: bottomInset + 60},
@@ -294,6 +299,7 @@ export default function SettingsHandler({
           <DeveloperView accent={values.accentColor} onOpenDebugger={onOpenDebugger} />
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

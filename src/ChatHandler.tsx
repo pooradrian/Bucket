@@ -537,6 +537,8 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         style={{flex: 1}}
         contentContainerStyle={st.chatContent}
         onScroll={handleScroll}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
         onScrollBeginDrag={() => {
           if (selectedMessageId) {setSelectedMessageId(null);}
           if (carouselMessageId) {setCarouselMessageIdInner(null);}
