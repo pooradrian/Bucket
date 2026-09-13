@@ -1,6 +1,6 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
-import {ActivityIndicator, BackHandler, FlatList, Text, View} from 'react-native';
-import {useNavigation, useRoute, RouteProp} from '@react-navigation/native';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {ActivityIndicator, BackHandler, FlatList, Keyboard, Platform, Text, ToastAndroid, View} from 'react-native';
+import {useFocusEffect, useNavigation, useRoute, RouteProp} from '@react-navigation/native';
 import {createNativeStackNavigator, NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Character} from './CharacterEditor';
@@ -83,35 +83,40 @@ function HomeScreen() {
   const [showConvertGroup, setShowConvertGroup] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(true);
+  const lastBackRef = useRef(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (showHistory) {
+          setShowHistory(false);
+          return true;
+        }
+        if (editingGroup !== null) {
+          setEditingGroup(null);
+          return true;
+        }
+        if (showConvertGroup) {
+          setShowConvertGroup(false);
+          return true;
+        }
+        if (Platform.OS !== 'android') return false;
+        const now = Date.now();
+        if (now - lastBackRef.current < 2000) {
+          return false;
+        }
+        lastBackRef.current = now;
+        ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+        return true;
+      });
+      return () => sub.remove();
+    }, [showHistory, editingGroup, showConvertGroup]),
+  );
 
   useEffect(() => {
     const v = getKV('welcome_dismissed');
     setWelcomeDismissed(v === 'true');
   }, []);
-
-  useEffect(() => {
-    if (showHistory) {
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        setShowHistory(false);
-        return true;
-      });
-      return () => sub.remove();
-    }
-    if (editingGroup !== null) {
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        setEditingGroup(null);
-        return true;
-      });
-      return () => sub.remove();
-    }
-    if (showConvertGroup) {
-      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-        setShowConvertGroup(false);
-        return true;
-      });
-      return () => sub.remove();
-    }
-  }, [showHistory, editingGroup, showConvertGroup]);
 
   const reloadQCs = useCallback(async (sessionId: string | null) => {
     if (activeChatCharacter) {
@@ -551,6 +556,12 @@ function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Navigation>();
   const setAppSettings = useAppStore(s => s.setAppSettings);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => Keyboard.dismiss();
+    }, []),
+  );
 
   return (
     <View style={st.screen}>
