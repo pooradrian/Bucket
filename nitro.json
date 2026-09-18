@@ -1,0 +1,20 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": ["crypto"],
+  "ios": {
+    "iosModuleName": "NitroCrypto"
+  },
+  "android": {
+    "androidNamespace": ["crypto"],
+    "androidCxxLibName": "NitroCrypto"
+  },
+  "autolinking": {
+    "NativeCrypto": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridNativeCrypto"
+      }
+    }
+  },
+  "ignorePaths": ["**/node_modules"]
+}

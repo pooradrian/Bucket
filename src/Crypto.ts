@@ -1,6 +1,8 @@
 import * as Keychain from 'react-native-keychain';
-import {gcm} from '@noble/ciphers/aes.js';
-import {randomBytes, bytesToHex, hexToBytes, utf8ToBytes, bytesToUtf8} from '@noble/ciphers/utils.js';
+import {NitroModules} from 'react-native-nitro-modules';
+import type {NativeCrypto} from './NativeCrypto.nitro';
+
+const NativeCryptoModule = NitroModules.createHybridObject<NativeCrypto>('NativeCrypto');
 
 /**
  * ── Threat model ──────────────────────────────────────────────────
@@ -28,9 +30,25 @@ import {randomBytes, bytesToHex, hexToBytes, utf8ToBytes, bytesToUtf8} from '@no
 
 const KEYCHAIN_SERVICE = 'bucket-db-encryption';
 const KEY_LENGTH = 32;
-const NONCE_LENGTH = 12;
 
 let cachedKey: Uint8Array | null = null;
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) {
+    throw new Error('Invalid hex string');
+  }
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
 
 async function getKey(): Promise<Uint8Array> {
   if (cachedKey) {
@@ -43,7 +61,7 @@ async function getKey(): Promise<Uint8Array> {
   if (existing) {
     rawKey = existing.password;
   } else {
-    const bytes = randomBytes(KEY_LENGTH);
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(KEY_LENGTH));
     rawKey = bytesToHex(bytes);
     await Keychain.setGenericPassword('bucket', rawKey, {
       service: KEYCHAIN_SERVICE,
@@ -59,21 +77,16 @@ export async function encrypt(plaintext: string): Promise<string> {
   if (!plaintext) {
     return plaintext;
   }
-  const key = await getKey();
-  const nonce = randomBytes(NONCE_LENGTH);
-  const cipher = gcm(key, nonce);
-  const ciphertext = cipher.encrypt(utf8ToBytes(plaintext));
-  return bytesToHex(nonce) + bytesToHex(ciphertext);
+  const keyBytes = await getKey();
+  const keyHex = bytesToHex(keyBytes);
+  return NativeCryptoModule.encrypt(plaintext, keyHex);
 }
 
 export async function decrypt(data: string): Promise<string> {
   if (!data) {
     return data;
   }
-  const key = await getKey();
-  const nonce = hexToBytes(data.slice(0, NONCE_LENGTH * 2));
-  const ciphertext = hexToBytes(data.slice(NONCE_LENGTH * 2));
-  const cipher = gcm(key, nonce);
-  const plaintext = cipher.decrypt(ciphertext);
-  return bytesToUtf8(plaintext);
+  const keyBytes = await getKey();
+  const keyHex = bytesToHex(keyBytes);
+  return NativeCryptoModule.decrypt(data, keyHex);
 }
