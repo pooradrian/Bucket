@@ -101,6 +101,23 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 10703
         versionName "1.7.3"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-frtti -fexceptions -Wall -fstack-protector-all"
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "../CMakeLists.txt"
+        }
+    }
+    sourceSets {
+        main {
+            java.srcDirs += ["../../nitrogen/generated/android/kotlin"]
+        }
     }
     signingConfigs {
         debug {

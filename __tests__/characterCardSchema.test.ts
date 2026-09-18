@@ -1,5 +1,4 @@
 jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
-jest.mock('react-native-nitro-modules', () => ({}));
 
 import {parseV1Json, parseV2Json, serializeV1, serializeV2} from '../src/import/characterCardSchema';
 import {Character} from '../src/CharacterEditor';
