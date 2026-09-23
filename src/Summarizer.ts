@@ -121,6 +121,10 @@ export async function checkAndSummarize(
 
   processedMessages = [newSummary, ...processedMessages.slice(splitIndex + 1)];
 
+  try {
+    await addMessage(session.id, newSummary, true);
+  } catch (e) { console.warn('Failed to add new summary:', e); }
+
   let existingSummaries = processedMessages.filter(m => isSummaryMessage(m));
 
   while (existingSummaries.length > config.maxSummaries) {
@@ -148,15 +152,11 @@ export async function checkAndSummarize(
     processedMessages.unshift(mergedSummary);
 
     try {
-      await addMessage(session.id, mergedSummary);
+      await addMessage(session.id, mergedSummary, true);
     } catch (e) { console.warn('Failed to add merged summary:', e); }
 
     existingSummaries = processedMessages.filter(m => isSummaryMessage(m));
   }
-
-  try {
-    await addMessage(session.id, newSummary);
-  } catch (e) { console.warn('Failed to add summary:', e); }
 
   return {
     ...session,
