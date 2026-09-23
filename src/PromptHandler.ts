@@ -59,6 +59,7 @@ export interface PromptConfig {
   summarizationMaxSummaries: string;
   summarizationModel: string;
   wordDisplacements: string;
+  extraBody: string;
 }
 
 export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
@@ -85,6 +86,7 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   summarizationMaxSummaries: '3',
   summarizationModel: '',
   wordDisplacements: '',
+  extraBody: '',
 };
 
 export const PLACEHOLDERS = [
