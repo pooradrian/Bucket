@@ -102,6 +102,38 @@ function streamWithXHR(
     let lineBuffer = '';
     let settled = false;
     let startTime = 0;
+    let thinkOpened = false;
+    let thinkClosed = false;
+
+    function emit(text: string) {
+      if (!text) return;
+      if (firstToken) {
+        ttfbMs = performance.now() - startTime;
+        firstToken = false;
+      }
+      content += text;
+      onToken(text);
+    }
+
+    function pushReasoning(text: string) {
+      if (thinkClosed) {
+        emit(text);
+        return;
+      }
+      if (!thinkOpened) {
+        emit('<think>');
+        thinkOpened = true;
+      }
+      emit(text);
+    }
+
+    function pushContent(text: string) {
+      if (thinkOpened && !thinkClosed) {
+        emit('</think>');
+        thinkClosed = true;
+      }
+      emit(text);
+    }
 
     // Single idempotent settle point — every completion path funnels
     // through here, guaranteeing the promise is settled exactly once
@@ -149,14 +181,17 @@ function streamWithXHR(
 
         try {
           const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (typeof delta === 'string') {
-            if (firstToken) {
-              ttfbMs = performance.now() - startTime;
-              firstToken = false;
-            }
-            content += delta;
-            onToken(delta);
+          const delta = parsed.choices?.[0]?.delta;
+          const reasoning = typeof delta?.reasoning_content === 'string'
+            ? delta.reasoning_content
+            : typeof delta?.reasoning === 'string'
+              ? delta.reasoning
+              : '';
+          if (reasoning) {
+            pushReasoning(reasoning);
+          }
+          if (typeof delta?.content === 'string' && delta.content) {
+            pushContent(delta.content);
           }
         } catch {
           // skip malformed JSON lines
@@ -312,6 +347,20 @@ export async function getAIResponse(
     body.temperature = tempNum;
   }
 
+  const extraBody = config.extraBody?.trim();
+  if (extraBody) {
+    let parsedExtra: unknown;
+    try {
+      parsedExtra = JSON.parse(extraBody);
+    } catch {
+      throw new Error('Extra body must be valid JSON');
+    }
+    if (!parsedExtra || typeof parsedExtra !== 'object' || Array.isArray(parsedExtra)) {
+      throw new Error('Extra body must be a valid JSON object');
+    }
+    Object.assign(body, parsedExtra);
+  }
+
   const request: RawRequest = {url, body};
 
   const ctrl = controller || new AbortController();
@@ -353,7 +402,16 @@ export async function getAIResponse(
         signal: ctrl.signal,
       });
       ttfbMs = performance.now() - t0;
-      content = response.data.choices?.[0]?.message?.content || '';
+      const message = response.data.choices?.[0]?.message;
+      content = message?.content || '';
+      const reasoning = typeof message?.reasoning_content === 'string'
+        ? message.reasoning_content
+        : typeof message?.reasoning === 'string'
+          ? message.reasoning
+          : '';
+      if (reasoning) {
+        content = `<think>${reasoning}</think>${content}`;
+      }
     }
   } catch (e: unknown) {
     if (e instanceof Error && (e.name === 'AbortError' || e.message === 'Request was cancelled' || axios.isCancel(e))) {

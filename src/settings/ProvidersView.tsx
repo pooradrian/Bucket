@@ -48,6 +48,14 @@ export default function ProvidersView({
         placeholder={DEFAULT_PROMPT_CONFIG.temperature}
         keyboardType="decimal-pad"
       />
+
+      <TextField
+        label="Extra body"
+        note={'Merged into every request body (your keys win). JSON object only, e.g. {"reasoning_effort": "high"}'}
+        value={promptValues.extraBody}
+        onChangeText={text => setPromptValues(prev => ({...prev, extraBody: text}))}
+        placeholder="{}"
+      />
     </>
   );
 }
