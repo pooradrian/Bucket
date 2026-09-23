@@ -12,7 +12,7 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {estimateTokens, buildPrompt, buildContinuePrompt, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, buildContinuePrompt, historyWithoutLatestUserTurn, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
 import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
 import type {ChatMessage} from '../src/useChat';
@@ -75,6 +75,33 @@ describe('buildPrompt', () => {
     const msgs = buildPrompt(char, 'hello', history, cfg);
     expect(msgs.length).toBe(3);
     expect(msgs[1].content).toBe('u2');
+  });
+});
+
+describe('historyWithoutLatestUserTurn', () => {
+  test('drops a trailing user turn that repeats the new message', () => {
+    const withNewTurn = [...history, {id: '4', role: 'user' as const, content: 'hello', timestamp: 4}];
+    expect(historyWithoutLatestUserTurn(withNewTurn, 'hello')).toEqual(history);
+  });
+
+  test('keeps history when the new message is not in it', () => {
+    expect(historyWithoutLatestUserTurn(history, 'hello')).toEqual(history);
+  });
+
+  test('keeps history for an empty user message (continue mode)', () => {
+    expect(historyWithoutLatestUserTurn(history, '')).toEqual(history);
+  });
+
+  test('keeps a trailing assistant message even if it matches the new message', () => {
+    const endsWithAssistant = history.slice(0, 2);
+    expect(historyWithoutLatestUserTurn(endsWithAssistant, 'a1')).toEqual(endsWithAssistant);
+  });
+
+  test('buildPrompt over a session that already holds the new turn sends it once', () => {
+    const withNewTurn = [...history, {id: '4', role: 'user' as const, content: 'hello', timestamp: 4}];
+    const msgs = buildPrompt(char, 'hello', historyWithoutLatestUserTurn(withNewTurn, 'hello'), DEFAULT_PROMPT_CONFIG);
+    expect(msgs.filter(m => m.role === 'user' && m.content === 'hello')).toHaveLength(1);
+    expect(msgs[msgs.length - 1]).toEqual({role: 'user', content: 'hello'});
   });
 });
 

@@ -347,6 +347,17 @@ function sliceHistory(
   return sliced;
 }
 
+export function historyWithoutLatestUserTurn(
+  history: ChatMessage[],
+  userMessage: string,
+): ChatMessage[] {
+  const last = history[history.length - 1];
+  if (userMessage && last && last.role === 'user' && last.content === userMessage) {
+    return history.slice(0, -1);
+  }
+  return history;
+}
+
 export function buildPrompt(
   character: Character,
   userMessage: string,
@@ -546,6 +557,7 @@ export async function sendToLLM(
   const buildStart = performance.now();
 
   const resolved = await resolveProvider(config);
+  history = historyWithoutLatestUserTurn(history, userMessage);
 
   let lorebookContext: string | undefined;
   if (lorebooks && lorebooks.length > 0) {
@@ -605,6 +617,7 @@ export async function sendToGroupLLM(
 ): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
+  history = historyWithoutLatestUserTurn(history, userMessage);
 
   const messages = continueMode
     ? buildGroupContinuePrompt(allCharacters, selectedCharacter, history, resolved)
@@ -628,6 +641,7 @@ export async function sendToQCLLM(
 ): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
+  history = historyWithoutLatestUserTurn(history, userMessage);
 
   const qcAsCharacter: Character = {
     id: qc.id,
