@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 11;
+const CURRENT_VERSION = 12;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -213,6 +213,17 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         addColumnIfMissing(conn, 'chat_messages', 'thinking_ms', 'INTEGER DEFAULT 0');
       }
 
+      if (v === 12) {
+        addColumnIfMissing(conn, 'chat_messages', 'seq', 'INTEGER NOT NULL DEFAULT 0');
+        conn.execute(`
+          UPDATE chat_messages
+          SET seq = (
+            SELECT COUNT(*) FROM chat_messages AS m
+            WHERE m.session_id = chat_messages.session_id AND m.rowid <= chat_messages.rowid
+          )
+        `);
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -299,7 +310,7 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
 
 async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   const messagesResult = initDB().execute(
-    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms FROM chat_messages WHERE session_id = ? ORDER BY timestamp ASC',
+    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
     [sessionId],
   );
   if (!messagesResult.results) {
@@ -360,8 +371,9 @@ export async function createSession(session: ChatSession): Promise<void> {
         : '';
       const encryptedRequest = msg.requestInfo ? await encrypt(msg.requestInfo) : '';
       d.execute(
-        'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info, thinking_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0],
+        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms)
+         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?)`,
+        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, session.id, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0],
       );
     }
     d.execute('COMMIT');
@@ -384,16 +396,20 @@ export function setLastReplyCharacterId(sessionId: string, characterId: string):
   d.execute('UPDATE chat_sessions SET last_reply_character_id = ? WHERE id = ?', [characterId, sessionId]);
 }
 
-export async function addMessage(sessionId: string, message: ChatMessage): Promise<void> {
+export async function addMessage(sessionId: string, message: ChatMessage, atStart = false): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(message.content);
   const encryptedVariants = message.variants && message.variants.length > 0
     ? await encryptVariants(message.variants)
     : '';
   const encryptedRequest = message.requestInfo ? await encrypt(message.requestInfo) : '';
+  const position = atStart
+    ? 'COALESCE(MIN(seq), 1) - 1'
+    : 'COALESCE(MAX(seq), 0) + 1';
   d.execute(
-    'INSERT INTO chat_messages (id, session_id, role, content, timestamp, variants, request_info, thinking_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0],
+    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms)
+     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?)`,
+    [message.id, sessionId, message.role, encryptedContent, message.timestamp, sessionId, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0],
   );
   searchCachePut(sessionId, message);
 }
@@ -412,7 +428,7 @@ export interface SessionSummary {
 const SESSION_SUMMARY_SELECT = `
   SELECT s.id, s.character_id, s.group_chat_id, s.name, s.created_at, s.updated_at,
     COUNT(m.id) as message_count,
-    (SELECT content FROM chat_messages WHERE session_id = s.id ORDER BY timestamp DESC LIMIT 1) AS last_content
+    (SELECT content FROM chat_messages WHERE session_id = s.id ORDER BY seq DESC, rowid DESC LIMIT 1) AS last_content
   FROM chat_sessions s
   LEFT JOIN chat_messages m ON m.session_id = s.id
 `;
