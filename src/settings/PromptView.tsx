@@ -95,6 +95,34 @@ export default function PromptView({
       )}
 
       <View style={st.settingsField}>
+        <Text style={st.settingsLabel}>Quick Character System Prompt</Text>
+        <MutedNote>
+          {'Used instead of the prefix when you send a message as a quick character. Placeholders resolve to the quick character; $CHARDESC$ also includes the base character.'}
+        </MutedNote>
+        <AutoGrowTextInput
+          style={st.settingsInput}
+          value={promptValues.quickCharacterPrompt}
+          onChangeText={text =>
+            setPromptValues(prev => ({...prev, quickCharacterPrompt: text}))
+          }
+          placeholder={DEFAULT_PROMPT_CONFIG.quickCharacterPrompt}
+          placeholderTextColor={st.textMuted.color}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          onPress={() =>
+            setPromptValues(prev => ({
+              ...prev,
+              quickCharacterPrompt: DEFAULT_PROMPT_CONFIG.quickCharacterPrompt,
+            }))
+          }
+        >
+          <Text style={st.settingsDefaultText}>reset to default</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Available Placeholders</Text>
         <View style={st.settingsPlaceholderList}>
           {PLACEHOLDERS.map(p => (
