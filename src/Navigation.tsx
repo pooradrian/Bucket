@@ -84,6 +84,8 @@ function HomeScreen() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(true);
   const lastBackRef = useRef(0);
+  const qcReloadRef = useRef(0);
+  const dataVersion = useAppStore(s => s.dataVersion);
 
   useFocusEffect(
     useCallback(() => {
@@ -119,34 +121,28 @@ function HomeScreen() {
   }, []);
 
   const reloadQCs = useCallback(async (sessionId: string | null) => {
-    if (activeChatCharacter) {
-      const dbQCs = await getQuickCharactersForCharacter(activeChatCharacter.id, sessionId ?? '');
-      setQuickCharacters(dbQCs.map(dbQc => ({
-        id: dbQc.id,
-        session_id: dbQc.session_id,
-        name: dbQc.name,
-        description: dbQc.description,
-        personality: dbQc.personality,
-        starred: dbQc.starred === 1,
-      })));
-    } else if (sessionId) {
-      const dbQCs = await getQuickCharactersForSession(sessionId);
-      setQuickCharacters(dbQCs.map(dbQc => ({
-        id: dbQc.id,
-        session_id: dbQc.session_id,
-        name: dbQc.name,
-        description: dbQc.description,
-        personality: dbQc.personality,
-        starred: dbQc.starred === 1,
-      })));
-    } else {
-      setQuickCharacters([]);
+    const request = ++qcReloadRef.current;
+    const dbQCs = activeChatCharacter
+      ? await getQuickCharactersForCharacter(activeChatCharacter.id, sessionId ?? '')
+      : sessionId
+      ? await getQuickCharactersForSession(sessionId)
+      : [];
+    if (request !== qcReloadRef.current) {
+      return;
     }
+    setQuickCharacters(dbQCs.map(dbQc => ({
+      id: dbQc.id,
+      session_id: dbQc.session_id,
+      name: dbQc.name,
+      description: dbQc.description,
+      personality: dbQc.personality,
+      starred: dbQc.starred === 1,
+    })));
   }, [activeChatCharacter]);
 
   useEffect(() => {
     reloadQCs(activeSessionId);
-  }, [activeSessionId, reloadQCs]);
+  }, [activeSessionId, reloadQCs, dataVersion]);
 
   const hasChat = !!(activeChatCharacter || activeGroupChat || showWelcome);
   const isChat = activeTab === 'chat' && hasChat;

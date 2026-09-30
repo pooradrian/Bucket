@@ -5,7 +5,7 @@ import {parseCustomFields, getCustomField} from '../CustomFields';
 import {LorebookState, lorebookDisplayName, lorebookExportName} from '../RAGHandler';
 import {ChatSession} from '../useChat';
 import {DEFAULT_PROMPT_CONFIG} from '../PromptHandler';
-import {DEFAULT_APP_SETTINGS} from '../store';
+import {DEFAULT_APP_SETTINGS, GroupChat} from '../store';
 import {
   generateId,
   saveCharacterToDB,
@@ -19,15 +19,37 @@ import {
   getAllSessionsForCharacter,
   getSessionsForGroupChat,
   getSessionById,
+  getQuickCharactersForCharacter,
   getQuickCharactersForSession,
   saveQuickCharacter,
   getAllGroupChatsFromDB,
   saveGroupChatToDB,
+  getDbConnection,
+  SessionSummary,
   DBQuickCharacter,
 } from '../Database';
 import {readIconFile} from './util';
 import {parseV1Json, parseV2Json, serializeV2} from './characterCardSchema';
 import {BukImportResult, ExportOptions} from './types';
+
+function normalizeQuickCharacter(
+  qc: Partial<DBQuickCharacter>,
+  sessionId: string,
+  characterId: string,
+): DBQuickCharacter | null {
+  if (!qc.id) {
+    return null;
+  }
+  return {
+    id: qc.id,
+    session_id: sessionId,
+    character_id: characterId,
+    name: qc.name ?? '',
+    description: qc.description ?? '',
+    personality: qc.personality ?? '',
+    starred: qc.starred ?? 0,
+  };
+}
 
 export async function importBuk(fileUri: string): Promise<BukImportResult> {
   const response = await fetch(fileUri);
@@ -96,6 +118,10 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   }
 
   const origIdToNewId = new Map<string, string>();
+  const existingCharacterIdsByName = new Map<string, string>();
+  for (const row of getDbConnection().execute('SELECT id, name FROM characters').results ?? []) {
+    existingCharacterIdsByName.set(row.name as string, row.id as string);
+  }
   const charDir = zip.folder('characters');
   if (charDir) {
     const charFiles = charDir.filter(() => true);
@@ -107,15 +133,19 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         const origId = file.name.split('/').pop()?.split('.')[0];
         const char = json.spec === 'chara_card_v2' ? parseV2Json(json) : parseV1Json(json);
 
-        if (origId) {
-          origIdToNewId.set(origId, char.id);
-        }
-
-        const existing = await getAllCharactersFromDB();
-        if (existing.some(c => c.name === char.name)) {
+        const existingId = existingCharacterIdsByName.get(char.name);
+        if (existingId) {
+          if (origId) {
+            origIdToNewId.set(origId, existingId);
+          }
           result.skippedCharacters.push(char.name);
           continue;
         }
+
+        if (origId) {
+          origIdToNewId.set(origId, char.id);
+        }
+        existingCharacterIdsByName.set(char.name, char.id);
 
         if (!char.lorebookIds || char.lorebookIds.length === 0) {
           const assignedLorebook = result.lorebooks.find(l =>
@@ -171,7 +201,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         const text = await file.async('string');
         const parsed = JSON.parse(text);
         const session: ChatSession = parsed;
-        const qcs: DBQuickCharacter[] | undefined = parsed.quickCharacters;
+        const qcs = parsed.quickCharacters as Array<Partial<DBQuickCharacter>> | undefined;
         const newCharId = origIdToNewId.get(session.characterId);
         if (newCharId) {
           session.characterId = newCharId;
@@ -197,19 +227,33 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         result.sessions.push(session);
         if (qcs) {
           for (const qc of qcs) {
-            const mappedCharId = origIdToNewId.get(qc.character_id);
-            result.quickCharacters.push({
-              id: qc.id,
-              session_id: session.id,
-              character_id: mappedCharId ?? qc.character_id,
-              name: qc.name,
-              description: qc.description,
-              personality: qc.personality,
-              starred: qc.starred,
-            });
+            const mappedCharId = qc.character_id ? origIdToNewId.get(qc.character_id) : undefined;
+            const normalized = normalizeQuickCharacter(qc, session.id, mappedCharId ?? qc.character_id ?? '');
+            if (normalized) {
+              result.quickCharacters.push(normalized);
+            }
           }
         }
       } catch (e) { console.warn('Failed to import chat session:', e); }
+    }
+  }
+
+  const charQcDir = zip.folder('quickcharacters');
+  if (charQcDir) {
+    const charQcFiles = charQcDir.filter(() => true);
+    for (const [, file] of Object.entries(charQcFiles)) {
+      if (file.dir) continue;
+      try {
+        const parsed = JSON.parse(await file.async('string'));
+        const mappedCharId = origIdToNewId.get(parsed.characterId);
+        const qcs = (parsed.quickCharacters ?? []) as Array<Partial<DBQuickCharacter>>;
+        for (const qc of qcs) {
+          const normalized = normalizeQuickCharacter(qc, '', mappedCharId ?? parsed.characterId ?? '');
+          if (normalized) {
+            result.quickCharacters.push(normalized);
+          }
+        }
+      } catch (e) { console.warn('Failed to import quick characters:', e); }
     }
   }
 
@@ -253,8 +297,24 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     });
   }
 
-  const validCharIds = new Set((await getAllCharactersFromDB()).map(c => c.id));
+  const validCharIds = new Set(
+    (getDbConnection().execute('SELECT id FROM characters').results ?? []).map(row => row.id as string),
+  );
+  const existingGroupIds = new Set(
+    (getDbConnection().execute('SELECT id FROM group_chats').results ?? []).map(row => row.id as string),
+  );
+  const existingQcIds = new Set(
+    (getDbConnection().execute('SELECT id FROM quick_characters').results ?? []).map(row => row.id as string),
+  );
+  const existingSessionIds = new Set(
+    (getDbConnection().execute('SELECT id FROM chat_sessions').results ?? []).map(row => row.id as string),
+  );
+
+  const importedGroups: GroupChat[] = [];
   for (const group of result.groups) {
+    if (existingGroupIds.has(group.id)) {
+      continue;
+    }
     const memberIds = group.characterIds
       .map(id => origIdToNewId.get(id) ?? id)
       .filter(id => validCharIds.has(id));
@@ -270,20 +330,34 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         icon: group.icon || '',
         characterIds: memberIds,
       });
+      importedGroups.push(group);
     } catch (e) { console.warn('Failed to import group:', e); }
   }
+  result.groups = importedGroups;
 
+  const importedSessions: ChatSession[] = [];
   for (const session of result.sessions) {
+    if (existingSessionIds.has(session.id)) {
+      continue;
+    }
     try {
       await createSession(session);
+      importedSessions.push(session);
     } catch (e) { console.warn('Failed to create session:', e); }
   }
+  result.sessions = importedSessions;
 
+  const importedQcs: DBQuickCharacter[] = [];
   for (const qc of result.quickCharacters) {
+    if (existingQcIds.has(qc.id)) {
+      continue;
+    }
     try {
       await saveQuickCharacter(qc);
+      importedQcs.push(qc);
     } catch (e) { console.warn('Failed to create quick character:', e); }
   }
+  result.quickCharacters = importedQcs;
 
   if (result.settings) {
     const currentSettings = JSON.parse(getKV('settings') || '{}');
@@ -418,30 +492,46 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     }
   }
 
+  const exportedSessionIds = new Set<string>();
+  const exportedQcIds = new Set<string>();
   if (options.includeChats) {
     const chatFolder = zip.folder('chats');
-    for (const charId of options.characterIds) {
-      const sessions = await getAllSessionsForCharacter(charId);
-      for (const summary of sessions) {
+    const exportSessions = async (summaries: SessionSummary[]) => {
+      for (const summary of summaries) {
         const session = await getSessionById(summary.id);
-        if (session) {
-          const quickCharacters = await getQuickCharactersForSession(session.id);
-          const payload = stripRequestInfo({...session, quickCharacters});
-          chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
+        if (!session) continue;
+        const quickCharacters = await getQuickCharactersForSession(session.id);
+        const payload = stripRequestInfo({...session, quickCharacters});
+        chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
+        exportedSessionIds.add(session.id);
+        for (const qc of quickCharacters) {
+          exportedQcIds.add(qc.id);
         }
       }
+    };
+    for (const charId of options.characterIds) {
+      await exportSessions(await getAllSessionsForCharacter(charId));
     }
     for (const groupId of options.groupIds) {
-      const sessions = await getSessionsForGroupChat(groupId);
-      for (const summary of sessions) {
-        const session = await getSessionById(summary.id);
-        if (session) {
-          const quickCharacters = await getQuickCharactersForSession(session.id);
-          const payload = stripRequestInfo({...session, quickCharacters});
-          chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
-        }
-      }
+      await exportSessions(await getSessionsForGroupChat(groupId));
     }
+  }
+
+  for (const charId of options.characterIds) {
+    const dangling = (await getQuickCharactersForCharacter(charId, '')).filter(
+      qc => qc.starred && !exportedSessionIds.has(qc.session_id) && !exportedQcIds.has(qc.id),
+    );
+    if (dangling.length === 0) continue;
+    for (const qc of dangling) {
+      exportedQcIds.add(qc.id);
+    }
+    zip.folder('quickcharacters')?.file(
+      `${charId}.json`,
+      JSON.stringify({
+        characterId: charId,
+        quickCharacters: dangling.map(qc => ({...qc, session_id: ''})),
+      }, null, 2),
+    );
   }
 
   const now = new Date();
