@@ -35,7 +35,7 @@ interface ImportExportHandlerProps {
 
 export default function ImportExportHandler({bottomInset}: ImportExportHandlerProps) {
   const st = useTheme();
-  const {loadCharacters, loadGroupChats, loadLorebooks, loadSettings, appSettings, bumpPromptConfigVersion} = useAppStore();
+  const {loadCharacters, loadGroupChats, loadLorebooks, loadSettings, appSettings, bumpPromptConfigVersion, bumpDataVersion} = useAppStore();
   const setLorebooks = useAppStore(s => s.setLorebooks);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -90,6 +90,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         if (imported.settings || imported.promptConfig) {
           bumpPromptConfigVersion();
         }
+        bumpDataVersion();
 
         Alert.alert('Import Complete', message);
       } else if (format === 'perchance') {
@@ -158,7 +159,7 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
     } finally {
       setImporting(false);
     }
-  }, [loadCharacters, loadGroupChats, loadLorebooks, loadSettings, bumpPromptConfigVersion, setLorebooks]);
+  }, [loadCharacters, loadGroupChats, loadLorebooks, loadSettings, bumpPromptConfigVersion, bumpDataVersion, setLorebooks]);
 
   const handleShowExport = useCallback(async () => {
     const allChars = await getAllCharactersFromDB();

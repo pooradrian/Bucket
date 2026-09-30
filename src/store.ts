@@ -128,6 +128,9 @@ interface AppStore {
   promptConfigVersion: number;
   bumpPromptConfigVersion: () => void;
 
+  dataVersion: number;
+  bumpDataVersion: () => void;
+
   showSysStats: boolean;
   toggleSysStats: () => void;
 
@@ -372,6 +375,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set(s => ({promptConfigVersion: s.promptConfigVersion + 1}));
     logEvent('prompt_config_saved', {changedKeys: 1});
   },
+
+  dataVersion: 0,
+  bumpDataVersion: () => set(s => ({dataVersion: s.dataVersion + 1})),
 
   showSysStats: false,
   toggleSysStats: () => set(s => ({showSysStats: !s.showSysStats})),
