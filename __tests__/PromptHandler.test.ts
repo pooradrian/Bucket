@@ -12,7 +12,7 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {estimateTokens, buildPrompt, buildContinuePrompt, historyWithoutLatestUserTurn, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, buildContinuePrompt, buildQuickCharacterPrompt, historyWithoutLatestUserTurn, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
 import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
 import type {ChatMessage} from '../src/useChat';
@@ -34,6 +34,111 @@ const history: ChatMessage[] = [
   {id: '2', role: 'assistant', content: 'a1', timestamp: 2},
   {id: '3', role: 'user', content: 'u2', timestamp: 3},
 ];
+
+describe('buildQuickCharacterPrompt', () => {
+  const qc = {id: 'qc-4', name: 'Viktor', description: 'a rival smuggler', personality: 'cold'};
+
+  test('the selected quick character is the only persona in the system prompt', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'who are you', history, DEFAULT_PROMPT_CONFIG);
+    const system = msgs[0].content;
+    expect(system).toContain('Viktor');
+    expect(system).toContain('a rival smuggler');
+  });
+
+  test('the default quick character prompt names who to write as', () => {
+    const system = buildQuickCharacterPrompt(qc, char, 'hi', [], DEFAULT_PROMPT_CONFIG)[0].content;
+    expect(system).toContain('You are roleplaying as Viktor');
+    expect(system).toContain('Write this reply as Viktor and nobody else');
+    expect(system).toContain('never write as them');
+  });
+
+  test('the quick character prompt replaces the prefix', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      prefix: 'PREFIX FOR THE BASE CHARACTER',
+      quickCharacterPrompt: 'ONLY VIKTOR PLEASE',
+    });
+    expect(msgs[0].content).toContain('ONLY VIKTOR PLEASE');
+    expect(msgs[0].content).not.toContain('PREFIX FOR THE BASE CHARACTER');
+  });
+
+  test('a custom quick character prompt resolves placeholders', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      quickCharacterPrompt: 'You are $CHARNAME$, who is $CHARDESC$. Stay cold.',
+    });
+    const system = msgs[0].content;
+    expect(system).toContain('You are Viktor, who is a rival smuggler');
+    expect(system).toContain('Stay cold.');
+  });
+
+  test('an emptied quick character prompt is respected instead of falling back', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      prefix: 'PREFIX',
+      quickCharacterPrompt: '',
+    });
+    expect(msgs[0].content).not.toContain('PREFIX');
+    expect(msgs[0].content).not.toContain('nobody else');
+  });
+
+  test('the base character is always present', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'who are you', history, DEFAULT_PROMPT_CONFIG);
+    expect(msgs[0].content).toContain(`Base character: ${char.name}`);
+    expect(msgs[0].content).toContain(char.description);
+  });
+
+  test('the base character shows up even when the quick character has no description', () => {
+    const bare = {...qc, description: ''};
+    const msgs = buildQuickCharacterPrompt(bare, char, 'hi', [], DEFAULT_PROMPT_CONFIG);
+    expect(msgs[0].content).toContain('Viktor');
+    expect(msgs[0].content).toContain(char.description);
+  });
+
+  test('it does not name or describe the other quick characters', () => {
+    const others = ['Vera', 'Nadia', 'Bram'];
+    const allQCs = [qc, ...others.map((name, i) => ({id: `qc-${i}`, name, description: `${name} bio`, personality: 'x'}))];
+    const msgs = buildQuickCharacterPrompt(allQCs[0], char, 'hi', history, DEFAULT_PROMPT_CONFIG);
+    for (const other of allQCs.slice(1)) {
+      expect(msgs[0].content).not.toContain(other.name);
+      expect(msgs[0].content).not.toContain(other.description);
+    }
+  });
+
+  test('it does not repeat the base character block', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], DEFAULT_PROMPT_CONFIG);
+    const system = msgs[0].content;
+    expect(system.split(`Base character: ${char.name}`).length - 1).toBe(1);
+  });
+
+  test('it keeps the parent character scenario and writing style', () => {
+    const parent: Character = {
+      ...char,
+      customFields: [{id: 'writingStyle', value: 'noir, terse'}],
+      scenario: 'a rainy city',
+    };
+    const msgs = buildQuickCharacterPrompt(qc, parent, 'hi', [], DEFAULT_PROMPT_CONFIG);
+    expect(msgs[0].content).toContain('a rainy city');
+    expect(msgs[0].content).toContain('noir, terse');
+  });
+
+  test('history is not prefixed with character names', () => {
+    const qcHistory: ChatMessage[] = [
+      {id: '1', role: 'user', content: 'hey', timestamp: 1},
+      {id: '2', role: 'assistant', content: 'hello', timestamp: 2, characterId: 'qc-2'},
+    ];
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', qcHistory, DEFAULT_PROMPT_CONFIG);
+    expect(msgs[msgs.length - 1].content).toBe('hi');
+    expect(msgs.some(m => m.role === 'assistant')).toBe(true);
+    expect(msgs.every(m => !m.content.includes(']:'))).toBe(true);
+    expect(msgs.find(m => m.role === 'assistant')!.content).toBe('hello');
+  });
+
+  test('continue mode asks for a continuation of the same reply', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, '', history, DEFAULT_PROMPT_CONFIG, true);
+    expect(msgs[msgs.length - 1].content).toContain('Continue your previous reply');
+  });
+});
 
 describe('estimateTokens', () => {
   test('empty string is zero', () => {

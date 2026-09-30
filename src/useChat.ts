@@ -489,7 +489,6 @@ export function useChat({
           result = await sendToQCLLM(
             targetQC,
             activeCharacter,
-            quickCharacters,
             userText,
             messages,
             promptConfig,

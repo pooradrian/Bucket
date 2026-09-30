@@ -38,6 +38,7 @@ export interface ModelPreset {
 export interface PromptConfig {
   prefix: string;
   suffix: string;
+  quickCharacterPrompt: string;
   userDescription: string;
   personas: Persona[];
   activePersonaId: string | null;
@@ -62,9 +63,18 @@ export interface PromptConfig {
   extraBody: string;
 }
 
+export const DEFAULT_QUICK_CHARACTER_PROMPT = `You are roleplaying as $CHARNAME$.
+
+Write this reply as $CHARNAME$ and nobody else:
+- $CHARNAME$ is a persona of the base character described below. The base character is context only, never write as them.
+- Do not imitate, continue or switch to any other character's voice, no matter who spoke earlier in the conversation.
+- Do not write dialogue, actions or thoughts for the user.
+- Stay in $CHARNAME$'s personality and voice from the first word to the last.`;
+
 export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   prefix: 'You are a roleplay companion.',
   suffix: 'Now write the next message as the assistant.',
+  quickCharacterPrompt: DEFAULT_QUICK_CHARACTER_PROMPT,
   userDescription: '',
   personas: [],
   activePersonaId: null,
@@ -628,10 +638,42 @@ export async function sendToGroupLLM(
   return result;
 }
 
+export function buildQuickCharacterPrompt(
+  qc: {id: string; name: string; description: string; personality: string},
+  parentChar: Character,
+  userMessage: string,
+  history: ChatMessage[],
+  config: PromptConfig = DEFAULT_PROMPT_CONFIG,
+  continueMode: boolean = false,
+): ChatMessageObject[] {
+  const baseDescription = parentChar.description
+    ? `Base character: ${parentChar.name}\n${parentChar.description}`
+    : '';
+  const qcAsCharacter: Character = {
+    id: qc.id,
+    name: qc.name,
+    description: [qc.description, baseDescription].filter(Boolean).join('\n\n'),
+    personality: qc.personality,
+    customFields: parentChar.customFields,
+    scenario: parentChar.scenario,
+    exampleMessages: parentChar.exampleMessages,
+    initialMessage: '',
+    lorebookIds: [],
+    personaId: parentChar.personaId,
+  };
+  const trimmed = historyWithoutLatestUserTurn(history, userMessage);
+  const qcConfig: PromptConfig = {
+    ...config,
+    prefix: config.quickCharacterPrompt ?? DEFAULT_QUICK_CHARACTER_PROMPT,
+  };
+  return continueMode
+    ? buildContinuePrompt(qcAsCharacter, trimmed, qcConfig)
+    : buildPrompt(qcAsCharacter, userMessage, trimmed, qcConfig);
+}
+
 export async function sendToQCLLM(
   qc: {id: string; name: string; description: string; personality: string},
   parentChar: Character,
-  allQCs: {id: string; name: string; description: string; personality: string}[],
   userMessage: string,
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
@@ -641,40 +683,7 @@ export async function sendToQCLLM(
 ): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
-  history = historyWithoutLatestUserTurn(history, userMessage);
-
-  const qcAsCharacter: Character = {
-    id: qc.id,
-    name: qc.name,
-    description: qc.description,
-    personality: qc.personality,
-    customFields: parentChar.customFields,
-    scenario: parentChar.scenario,
-    exampleMessages: parentChar.exampleMessages,
-    initialMessage: '',
-    lorebookIds: [],
-    personaId: parentChar.personaId,
-  };
-
-  const allChars: Character[] = [
-    parentChar,
-    ...allQCs.map(q => ({
-      id: q.id,
-      name: q.name,
-      description: q.description,
-      personality: q.personality,
-      customFields: parentChar.customFields,
-      scenario: parentChar.scenario,
-      exampleMessages: parentChar.exampleMessages,
-      initialMessage: '',
-      lorebookIds: [],
-      personaId: parentChar.personaId,
-    })),
-  ];
-
-  const messages = continueMode
-    ? buildGroupContinuePrompt(allChars, qcAsCharacter, history, resolved)
-    : buildGroupPrompt(allChars, qcAsCharacter, userMessage, history, resolved);
+  const messages = buildQuickCharacterPrompt(qc, parentChar, userMessage, history, resolved, continueMode);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
   result.metrics.promptBuildMs = promptBuildMs;
