@@ -39,7 +39,13 @@ describe('toDraft', () => {
 describe('key sets', () => {
   it('CUSTOMIZATION_KEYS excludes toggles', () => {
     expect(CUSTOMIZATION_KEYS).not.toContain('showCharacterIcons');
+    expect(CUSTOMIZATION_KEYS).not.toContain('showThinking');
     expect(CUSTOMIZATION_KEYS).not.toContain('dynamicIcon');
+  });
+
+  it('carries showThinking through the draft', () => {
+    expect(SETTINGS_KEYS).toContain('showThinking');
+    expect(toDraft({...DEFAULT_APP_SETTINGS, showThinking: false}).showThinking).toBe('false');
   });
 
   it('NUMERIC_KEYS are a subset of SETTINGS_KEYS', () => {

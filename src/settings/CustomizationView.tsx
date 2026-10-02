@@ -141,6 +141,14 @@ export default function CustomizationView({
       />
 
       <BoolToggle
+        label={LABELS.showThinking}
+        note="Shows the model's reasoning above replies. Turn off to display answers only."
+        value={values.showThinking === 'true'}
+        accent={values.accentColor}
+        onChange={next => handleChange('showThinking', next ? 'true' : 'false')}
+      />
+
+      <BoolToggle
         label={LABELS.forceItalic}
         note="Skews *italic* text geometrically for fonts without an italic face."
         value={values.forceItalic === 'true'}

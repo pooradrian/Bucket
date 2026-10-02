@@ -32,3 +32,9 @@ export function splitThinking(content: string): SplitThinking {
     open: false,
   };
 }
+
+export function visibleContent(content: string, showThinking: boolean): string {
+  if (showThinking) return content;
+  const split = splitThinking(content);
+  return split.hasThinking ? split.answer : content;
+}

@@ -1,4 +1,4 @@
-import {formatThinkingDuration, splitThinking} from '../src/thinking';
+import {formatThinkingDuration, splitThinking, visibleContent} from '../src/thinking';
 
 describe('splitThinking', () => {
   it('reports no thinking for plain content', () => {
@@ -47,5 +47,31 @@ describe('formatThinkingDuration', () => {
     expect(formatThinkingDuration(300)).toBe('0.3s');
     expect(formatThinkingDuration(9800)).toBe('9.8s');
     expect(formatThinkingDuration(12000)).toBe('12s');
+  });
+});
+
+describe('visibleContent', () => {
+  it('keeps the raw content when thinking is shown', () => {
+    const raw = '<think>hmm</think>the answer';
+    expect(visibleContent(raw, true)).toBe(raw);
+  });
+
+  it('strips the think block when thinking is hidden', () => {
+    expect(visibleContent('<think>hmm</think>the answer', false)).toBe('the answer');
+  });
+
+  it('leaves plain content untouched when thinking is hidden', () => {
+    expect(visibleContent('hello there', false)).toBe('hello there');
+  });
+
+  it('never leaks think tags when thinking is hidden', () => {
+    const shown = visibleContent('<THINK>secret</THINK>answer', false);
+    expect(shown).toBe('answer');
+    expect(shown.toLowerCase()).not.toContain('think');
+    expect(shown.toLowerCase()).not.toContain('secret');
+  });
+
+  it('yields an empty string while a block is still open', () => {
+    expect(visibleContent('<think>still going', false)).toBe('');
   });
 });
