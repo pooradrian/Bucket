@@ -39,6 +39,14 @@ describe('parseSavedSettings', () => {
     expect(parseSavedSettings({showCharacterIcons: 'no'}).showCharacterIcons).toBe(false);
   });
 
+  test('defaults showThinking on and coerces it like other boolean toggles', () => {
+    expect(DEFAULT_APP_SETTINGS.showThinking).toBe(true);
+    expect(parseSavedSettings({}).showThinking).toBe(true);
+    expect(parseSavedSettings({showThinking: 'true'}).showThinking).toBe(true);
+    expect(parseSavedSettings({showThinking: false}).showThinking).toBe(false);
+    expect(parseSavedSettings({showThinking: 'false'}).showThinking).toBe(false);
+  });
+
   test('coerces forceItalic like other boolean toggles', () => {
     expect(parseSavedSettings({forceItalic: true}).forceItalic).toBe(true);
     expect(parseSavedSettings({forceItalic: 'true'}).forceItalic).toBe(true);

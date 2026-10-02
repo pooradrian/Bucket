@@ -31,7 +31,7 @@ import Animated, {
 import {useAppStore} from '../store';
 import {ChatMessage, ReplyVariant} from '../useChat';
 import {renderFormattedText} from '../textFormat';
-import {formatThinkingDuration, splitThinking} from '../thinking';
+import {formatThinkingDuration, splitThinking, visibleContent} from '../thinking';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -96,6 +96,7 @@ interface Colors {
   bubbleRadius: number;
   fontSizeBody: number;
   forceItalic: boolean;
+  showThinking: boolean;
   blurType: 'dark' | 'light';
   overlay: string;
 }
@@ -151,9 +152,10 @@ export default function Carousel({
     bubbleRadius: theme.bubbleRadius,
     fontSizeBody: theme.fontSizeBody,
     forceItalic: theme.forceItalic,
+    showThinking: theme.showThinking,
     blurType: isDarkTheme(theme.bgPrimary, theme.textMuted) ? ('dark' as const) : ('light' as const),
     overlay: overlayColor(theme.bgPrimary),
-  }), [theme.accentColor, theme.dangerColor, theme.bgPrimary, theme.bgSecondary, theme.borderPrimary, theme.userBubbleBg, theme.textPrimary, theme.textSecondary, theme.textMuted, theme.bubbleRadius, theme.fontSizeBody, theme.forceItalic]);
+  }), [theme.accentColor, theme.dangerColor, theme.bgPrimary, theme.bgSecondary, theme.borderPrimary, theme.userBubbleBg, theme.textPrimary, theme.textSecondary, theme.textMuted, theme.bubbleRadius, theme.fontSizeBody, theme.forceItalic, theme.showThinking]);
 
   const items = useMemo<CardItem[]>(() => {
     const variants: ReplyVariant[] = message.variants ?? [];
@@ -815,6 +817,7 @@ function CarouselCard({
   const displayContent = liveStreamText ?? item.content;
   const thought = splitThinking(displayContent);
   const thoughtDuration = liveStreamText != null ? undefined : item.thinkingMs;
+  const showThoughtBlock = thought.hasThinking && (colors.showThinking || !thought.answer);
 
   useEffect(() => {
     if (!thought.open) {
@@ -880,7 +883,7 @@ function CarouselCard({
               <>
                 {showTyping ? (
                   <TypingDots color={textColor} />
-                ) : thought.hasThinking ? (
+                ) : showThoughtBlock ? (
                   <>
                     <TouchableOpacity
                       onPress={() => setThoughtExpanded(v => !v)}
@@ -894,7 +897,7 @@ function CarouselCard({
                             : 'thought'}
                       </Text>
                     </TouchableOpacity>
-                    {(thought.open || thoughtExpanded) && !!thought.thinking && (
+                    {(thought.open || thoughtExpanded) && !!thought.thinking && colors.showThinking && (
                       <Text
                         style={[
                           styles.cardText,
@@ -909,7 +912,7 @@ function CarouselCard({
                           styles.cardText,
                           {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
                         ]}>
-                        {(thought.open || thoughtExpanded) && !!thought.thinking ? '\n\n' : null}
+                        {(thought.open || thoughtExpanded) && !!thought.thinking && colors.showThinking ? '\n\n' : null}
                         {renderFormattedText(thought.answer, {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
                       </Text>
                     )}
@@ -920,7 +923,7 @@ function CarouselCard({
                       styles.cardText,
                       {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
                     ]}>
-                    {renderFormattedText(displayContent, {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
+                    {renderFormattedText(visibleContent(displayContent, colors.showThinking), {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
                   </Text>
                 )}
                 <View style={styles.cardMetaRow}>

@@ -20,7 +20,7 @@ import {useAppStore, GroupChat} from './store';
 import {useTheme} from './ThemeContext';
 import {useChat, ChatMessage, QuickCharacter} from './useChat';
 import {renderFormattedText} from './textFormat';
-import {formatThinkingDuration, splitThinking} from './thinking';
+import {formatThinkingDuration, splitThinking, visibleContent} from './thinking';
 import Carousel from './components/Carousel';
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -97,12 +97,14 @@ const MessageBubble = React.memo(function MessageBubble({
   onCopy, onDelete, onRegenerate, onRetry,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
+  const showThinking = useAppStore(s => s.appSettings.showThinking);
   const isUser = item.role === 'user';
   const isStreamingMsg = item.id === '__streaming__' || isLiveStreaming;
   const isError = item.id === '__error__';
   const isTyping = item.id === '__typing__';
   const isEditing = editingMessageId === item.id;
   const thought = splitThinking(item.content);
+  const showThoughtBlock = thought.hasThinking && (showThinking || !thought.answer);
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [thinkElapsed, setThinkElapsed] = useState(0);
   const openSinceRef = useRef(0);
@@ -197,7 +199,7 @@ const MessageBubble = React.memo(function MessageBubble({
               </TouchableOpacity>
             </View>
           </>
-        ) : thought.hasThinking ? (
+        ) : showThoughtBlock ? (
           <>
             <TouchableOpacity
               onPress={() => setThoughtExpanded(v => !v)}
@@ -216,7 +218,7 @@ const MessageBubble = React.memo(function MessageBubble({
                     : 'thought'}
               </Text>
             </TouchableOpacity>
-            {(thought.open || thoughtExpanded) && !!thought.thinking && (
+            {(thought.open || thoughtExpanded) && !!thought.thinking && showThinking && (
               <Text
                 style={[st.bubbleText, isUser && st.bubbleTextUser]}>
                 <Text style={st.thinkingBody}>
@@ -227,7 +229,7 @@ const MessageBubble = React.memo(function MessageBubble({
             {!!thought.answer && (
               <Text
                 style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-                {(thought.open || thoughtExpanded) && !!thought.thinking ? '\n\n' : null}
+                {(thought.open || thoughtExpanded) && !!thought.thinking && showThinking ? '\n\n' : null}
                 {renderFormattedText(thought.answer, st.bubbleText, forceItalic)}
               </Text>
             )}
@@ -236,7 +238,7 @@ const MessageBubble = React.memo(function MessageBubble({
           <>
             <Text
               style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-              {renderFormattedText(item.content, st.bubbleText, forceItalic)}
+              {renderFormattedText(visibleContent(item.content, showThinking), st.bubbleText, forceItalic)}
             </Text>
             {!isStreamingMsg && (
               <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'space-between'}}>

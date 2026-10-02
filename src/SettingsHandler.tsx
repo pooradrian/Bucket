@@ -204,6 +204,7 @@ export default function SettingsHandler({
         }
       }
       converted.showCharacterIcons = draft.showCharacterIcons === 'true';
+      converted.showThinking = draft.showThinking === 'true';
       converted.forceItalic = draft.forceItalic === 'true';
       converted.dynamicIcon = draft.dynamicIcon === 'true';
       onApply?.(converted as unknown as AppSettings);
