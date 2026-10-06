@@ -29,6 +29,7 @@ interface HistoryModalProps {
   onEditGroup?: () => void;
   onClose: () => void;
   onCreateQC: (qc: {name: string; description: string; personality: string; icon?: string}) => void;
+  onUpdateQC: (id: string, qc: {name: string; description: string; personality: string; icon?: string}) => void;
   onToggleQCStar: (id: string) => void;
   onDeleteQC: (id: string) => void;
 }
@@ -48,6 +49,7 @@ export default function HistoryModal({
   onEditGroup,
   onClose,
   onCreateQC,
+  onUpdateQC,
   onToggleQCStar,
   onDeleteQC,
 }: HistoryModalProps) {
@@ -60,6 +62,7 @@ export default function HistoryModal({
   const [qcDesc, setQcDesc] = useState('');
   const [qcPersonality, setQcPersonality] = useState('');
   const [qcIcon, setQcIcon] = useState('');
+  const [editingQcId, setEditingQcId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{id: string; draft: string} | null>(null);
 
@@ -78,6 +81,7 @@ export default function HistoryModal({
       setQcDesc('');
       setQcPersonality('');
       setQcIcon('');
+      setEditingQcId(null);
       setConfirmingDeleteId(null);
       setRenaming(null);
     }
@@ -106,17 +110,23 @@ export default function HistoryModal({
 
   const handleCreateQC = () => {
     if (!qcName.trim()) return;
-    onCreateQC({
+    const data = {
       name: qcName.trim(),
       description: qcDesc.trim(),
       personality: qcPersonality.trim(),
       icon: qcIcon || undefined,
-    });
+    };
+    if (editingQcId) {
+      onUpdateQC(editingQcId, data);
+    } else {
+      onCreateQC(data);
+    }
     setQcFormVisible(false);
     setQcName('');
     setQcDesc('');
     setQcPersonality('');
     setQcIcon('');
+    setEditingQcId(null);
   };
 
   const handleRenameSave = () => {
@@ -247,6 +257,18 @@ export default function HistoryModal({
                 </View>
               </View>
               <TouchableOpacity
+                onPress={() => {
+                  setEditingQcId(qc.id);
+                  setQcName(qc.name);
+                  setQcDesc(qc.description);
+                  setQcPersonality(qc.personality);
+                  setQcIcon(qc.icon || '');
+                  setQcFormVisible(true);
+                }}
+                style={st.historyQCActionBtn}>
+                <Text style={st.historyQCActionBtnText}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 onPress={() => onToggleQCStar(qc.id)}
                 style={st.historyQCActionBtn}>
                 <Text
@@ -297,18 +319,32 @@ export default function HistoryModal({
               />
               <View style={st.historyQCFormActions}>
                 <TouchableOpacity
-                  onPress={() => setQcFormVisible(false)}
+                  onPress={() => {
+                    setQcFormVisible(false);
+                    setQcName('');
+                    setQcDesc('');
+                    setQcPersonality('');
+                    setQcIcon('');
+                    setEditingQcId(null);
+                  }}
                   style={st.historyQCFormBtn}>
                   <Text style={st.historyQCFormBtnText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleCreateQC} style={st.historyQCFormBtn}>
-                  <Text style={st.historyQCFormBtnText}>Add</Text>
+                  <Text style={st.historyQCFormBtnText}>{editingQcId ? 'Save' : 'Add'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : (
             <TouchableOpacity
-              onPress={() => setQcFormVisible(true)}
+              onPress={() => {
+                setQcName('');
+                setQcDesc('');
+                setQcPersonality('');
+                setQcIcon('');
+                setEditingQcId(null);
+                setQcFormVisible(true);
+              }}
               style={st.newChatBtn}>
               <Text style={st.newChatBtnText}>+ Quick Character</Text>
             </TouchableOpacity>
@@ -332,7 +368,7 @@ export default function HistoryModal({
       onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={{flex: 1}}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
         keyboardVerticalOffset={0}>
       <View style={st.historyModalOverlay}>
         <Animated.View style={[st.historyModalContent, historyContentStyle]}>
