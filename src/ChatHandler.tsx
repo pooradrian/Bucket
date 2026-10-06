@@ -690,7 +690,12 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
                       key={qc.id}
                       onPress={makeSelectorPress(qc.id, () => setSelectedQC(qc), {qc})}
                       style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
-                      {showAvatar ? (
+                      {showAvatar && showCharacterIcons && qc.icon ? (
+                        <Image
+                          source={{uri: qc.icon}}
+                          style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive]}
+                        />
+                      ) : showAvatar ? (
                         <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
                           <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
                             {qc.name[0]}
@@ -727,9 +732,16 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
           </View>
         ) : (selectedQC && !isGroupChat) ? (
           <View style={{marginRight: 8}}>
-            <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: bgSecondary, justifyContent: 'center', alignItems: 'center'}}>
-              <Text style={{color: st.textMuted.color, fontSize: 12}}>{selectedQC.name[0]}</Text>
-            </View>
+            {showCharacterIcons && selectedQC.icon ? (
+              <Image
+                source={{uri: selectedQC.icon}}
+                style={{width: 28, height: 28, borderRadius: 14}}
+              />
+            ) : (
+              <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: bgSecondary, justifyContent: 'center', alignItems: 'center'}}>
+                <Text style={{color: st.textMuted.color, fontSize: 12}}>{selectedQC.name[0]}</Text>
+              </View>
+            )}
           </View>
         ) : null}
         <TextInput

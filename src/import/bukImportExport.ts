@@ -48,6 +48,7 @@ function normalizeQuickCharacter(
     description: qc.description ?? '',
     personality: qc.personality ?? '',
     starred: qc.starred ?? 0,
+    icon: qc.icon ?? '',
   };
 }
 

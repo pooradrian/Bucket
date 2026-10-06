@@ -1,5 +1,6 @@
 import {useEffect, useState} from 'react';
-import {FlatList, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {launchImageLibrary} from 'react-native-image-picker';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,7 +28,7 @@ interface HistoryModalProps {
   onConvertToGroup?: () => void;
   onEditGroup?: () => void;
   onClose: () => void;
-  onCreateQC: (qc: {name: string; description: string; personality: string}) => void;
+  onCreateQC: (qc: {name: string; description: string; personality: string; icon?: string}) => void;
   onToggleQCStar: (id: string) => void;
   onDeleteQC: (id: string) => void;
 }
@@ -58,6 +59,7 @@ export default function HistoryModal({
   const [qcName, setQcName] = useState('');
   const [qcDesc, setQcDesc] = useState('');
   const [qcPersonality, setQcPersonality] = useState('');
+  const [qcIcon, setQcIcon] = useState('');
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{id: string; draft: string} | null>(null);
 
@@ -75,6 +77,7 @@ export default function HistoryModal({
       setQcName('');
       setQcDesc('');
       setQcPersonality('');
+      setQcIcon('');
       setConfirmingDeleteId(null);
       setRenaming(null);
     }
@@ -89,17 +92,31 @@ export default function HistoryModal({
     }
   };
 
+  const handlePickQcIcon = async () => {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      maxWidth: 256,
+      maxHeight: 256,
+      quality: 0.8,
+    });
+    if (result.assets && result.assets.length > 0 && result.assets[0].uri) {
+      setQcIcon(result.assets[0].uri);
+    }
+  };
+
   const handleCreateQC = () => {
     if (!qcName.trim()) return;
     onCreateQC({
       name: qcName.trim(),
       description: qcDesc.trim(),
       personality: qcPersonality.trim(),
+      icon: qcIcon || undefined,
     });
     setQcFormVisible(false);
     setQcName('');
     setQcDesc('');
     setQcPersonality('');
+    setQcIcon('');
   };
 
   const handleRenameSave = () => {
@@ -213,90 +230,94 @@ export default function HistoryModal({
         </>
       ) : (
         <>
-          {activeSessionId ? (
-            <>
-              <Text style={st.historySectionTitle}>Quick Characters</Text>
-              {quickCharacters.map(qc => (
-                <View key={qc.id} style={st.historyQCItem}>
-                  <View style={st.historyQCInfo}>
-                    <Text style={st.historyQCName}>{qc.name}</Text>
-                    {qc.description ? (
-                      <Text style={st.historyQCDesc} numberOfLines={1}>
-                        {qc.description}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => onToggleQCStar(qc.id)}
-                    style={st.historyQCActionBtn}>
-                    <Text
-                      style={[
-                        st.historyQCActionBtnText,
-                        {color: qc.starred ? '#f39c12' : st.textMuted.color},
-                      ]}>
-                      {qc.starred ? '★' : '☆'}
+          <Text style={st.historySectionTitle}>Quick Characters</Text>
+          {quickCharacters.map(qc => (
+            <View key={qc.id} style={st.historyQCItem}>
+              <View style={st.historyQCInfo}>
+                {qc.icon ? (
+                  <Image source={{uri: qc.icon}} style={st.historyQCRowIcon} />
+                ) : null}
+                <View style={{flex: 1}}>
+                  <Text style={st.historyQCName}>{qc.name}</Text>
+                  {qc.description ? (
+                    <Text style={st.historyQCDesc} numberOfLines={1}>
+                      {qc.description}
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => onDeleteQC(qc.id)}
-                    style={st.historyQCActionBtn}>
-                    <Text style={[st.historyQCActionBtnText, {color: st.dangerText.color}]}>×</Text>
-                  </TouchableOpacity>
+                  ) : null}
                 </View>
-              ))}
+              </View>
+              <TouchableOpacity
+                onPress={() => onToggleQCStar(qc.id)}
+                style={st.historyQCActionBtn}>
+                <Text
+                  style={[
+                    st.historyQCActionBtnText,
+                    {color: qc.starred ? '#f39c12' : st.textMuted.color},
+                  ]}>
+                  {qc.starred ? '★' : '☆'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onDeleteQC(qc.id)}
+                style={st.historyQCActionBtn}>
+                <Text style={[st.historyQCActionBtnText, {color: st.dangerText.color}]}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
 
-              {qcFormVisible ? (
-                <View style={st.historyQCForm}>
-                  <TextInput
-                    style={st.historyQCInput}
-                    placeholder="Name..."
-                    placeholderTextColor={st.textMuted.color}
-                    value={qcName}
-                    onChangeText={setQcName}
-                  />
-                  <TextInput
-                    style={st.historyQCInput}
-                    placeholder="Description..."
-                    placeholderTextColor={st.textMuted.color}
-                    value={qcDesc}
-                    onChangeText={setQcDesc}
-                  />
-                  <TextInput
-                    style={st.historyQCInput}
-                    placeholder="Personality..."
-                    placeholderTextColor={st.textMuted.color}
-                    value={qcPersonality}
-                    onChangeText={setQcPersonality}
-                  />
-                  <View style={st.historyQCFormActions}>
-                    <TouchableOpacity
-                      onPress={() => setQcFormVisible(false)}
-                      style={st.historyQCFormBtn}>
-                      <Text style={st.historyQCFormBtnText}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleCreateQC} style={st.historyQCFormBtn}>
-                      <Text style={st.historyQCFormBtnText}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
+          {qcFormVisible ? (
+            <View style={st.historyQCForm}>
+              <TouchableOpacity onPress={handlePickQcIcon} style={st.historyQCIcon}>
+                {qcIcon ? (
+                  <Image source={{uri: qcIcon}} style={st.historyQCIconImage} />
+                ) : (
+                  <Text style={st.historyQCIconPlaceholder}>Tap to pick image</Text>
+                )}
+              </TouchableOpacity>
+              <TextInput
+                style={st.historyQCInput}
+                placeholder="Name..."
+                placeholderTextColor={st.textMuted.color}
+                value={qcName}
+                onChangeText={setQcName}
+              />
+              <TextInput
+                style={st.historyQCInput}
+                placeholder="Description..."
+                placeholderTextColor={st.textMuted.color}
+                value={qcDesc}
+                onChangeText={setQcDesc}
+              />
+              <TextInput
+                style={st.historyQCInput}
+                placeholder="Personality..."
+                placeholderTextColor={st.textMuted.color}
+                value={qcPersonality}
+                onChangeText={setQcPersonality}
+              />
+              <View style={st.historyQCFormActions}>
                 <TouchableOpacity
-                  onPress={() => setQcFormVisible(true)}
-                  style={st.newChatBtn}>
-                  <Text style={st.newChatBtnText}>+ Quick Character</Text>
+                  onPress={() => setQcFormVisible(false)}
+                  style={st.historyQCFormBtn}>
+                  <Text style={st.historyQCFormBtnText}>Cancel</Text>
                 </TouchableOpacity>
-              )}
-
-              {activeSessionId && onConvertToGroup && (
-                <TouchableOpacity onPress={onConvertToGroup} style={st.newChatBtn}>
-                  <Text style={st.newChatBtnText}>Convert to Group</Text>
+                <TouchableOpacity onPress={handleCreateQC} style={st.historyQCFormBtn}>
+                  <Text style={st.historyQCFormBtnText}>Add</Text>
                 </TouchableOpacity>
-              )}
-            </>
+              </View>
+            </View>
           ) : (
-            <Text style={st.emptyHistoryText}>
-              Send the first message to manage quick characters.
-            </Text>
+            <TouchableOpacity
+              onPress={() => setQcFormVisible(true)}
+              style={st.newChatBtn}>
+              <Text style={st.newChatBtnText}>+ Quick Character</Text>
+            </TouchableOpacity>
+          )}
+
+          {activeSessionId && onConvertToGroup && (
+            <TouchableOpacity onPress={onConvertToGroup} style={st.newChatBtn}>
+              <Text style={st.newChatBtnText}>Convert to Group</Text>
+            </TouchableOpacity>
           )}
         </>
       )}
