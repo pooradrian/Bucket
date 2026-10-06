@@ -476,6 +476,25 @@ export function createStyles(s: AppSettings) {
       alignSelf: 'flex-start',
       alignItems: 'flex-start',
     },
+    messageSenderRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      marginBottom: 4,
+      marginLeft: 2,
+    },
+    messageSenderAvatar: {
+      width: 16,
+      height: 16,
+      borderRadius: 8,
+    },
+    messageSenderAvatarFallback: {
+      backgroundColor: s.bgSecondary,
+    },
+    messageSenderName: {
+      fontSize: 12,
+      color: s.textMuted,
+      fontWeight: '500' as const,
+    },
     bubble: {
       borderRadius: s.bubbleRadius,
       paddingHorizontal: 14,
