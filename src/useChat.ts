@@ -495,6 +495,7 @@ export function useChat({
             flushStreamingContent,
             ctrl,
             opts.continueMode,
+            quickCharacters,
           );
         } else if (activeCharacter) {
           result = await sendToLLM(
@@ -506,6 +507,7 @@ export function useChat({
             await loadChatLorebooks(),
             ctrl,
             opts.continueMode,
+            quickCharacters,
           );
         } else {
           return;

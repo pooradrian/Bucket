@@ -66,7 +66,7 @@ export interface PromptConfig {
 export const DEFAULT_QUICK_CHARACTER_PROMPT = `You are roleplaying as $QUICKCHARNAME$.
 
 Write this reply as $QUICKCHARNAME$ and nobody else:
-- $QUICKCHARNAME$ is a persona of $CHARNAME$, the base character described below. The base character is context only, never write as them.
+- $QUICKCHARNAME$ is a quick character of $CHARNAME$, the base character described below. The base character is context only, never write as them.
 - Do not imitate, continue or switch to any other character's voice, no matter who spoke earlier in the conversation.
 - Do not write dialogue, actions or thoughts for the user.
 - Stay in $QUICKCHARNAME$'s personality and voice from the first word to the last.
@@ -85,7 +85,7 @@ $GROUPINSTRUCTION$
 $CHARBLOCK$
 
 $LOREBOOK$`,
-  suffix: 'Now write the next message as the assistant.',
+  suffix: 'Now write the next message as $QUICKCHARNAME$.',
   quickCharacterPrompt: DEFAULT_QUICK_CHARACTER_PROMPT,
   userDescription: '',
   personas: [],
@@ -163,6 +163,22 @@ const PROMPT_MIGRATED_KEY = 'promptConfigMigrated';
 
 const LEGACY_PREFIX = 'You are a roleplay companion.';
 
+const LEGACY_SUFFIX = 'Now write the next message as the assistant.';
+
+const PREVIOUS_QUICK_CHARACTER_PROMPT = `You are roleplaying as $QUICKCHARNAME$.
+
+Write this reply as $QUICKCHARNAME$ and nobody else:
+- $QUICKCHARNAME$ is a persona of $CHARNAME$, the base character described below. The base character is context only, never write as them.
+- Do not imitate, continue or switch to any other character's voice, no matter who spoke earlier in the conversation.
+- Do not write dialogue, actions or thoughts for the user.
+- Stay in $QUICKCHARNAME$'s personality and voice from the first word to the last.
+
+$USRDESC$
+
+$QUICKCHARBLOCK$
+
+$CHARBLOCK$`;
+
 const LEGACY_QUICK_CHARACTER_PROMPT = `You are roleplaying as $CHARNAME$.
 
 Write this reply as $CHARNAME$ and nobody else:
@@ -172,21 +188,42 @@ Write this reply as $CHARNAME$ and nobody else:
 - Stay in $CHARNAME$'s personality and voice from the first word to the last.`;
 
 function migratePromptConfig(config: PromptConfig): boolean {
-  if (getKV(PROMPT_MIGRATED_KEY)) return false;
-  setKV(PROMPT_MIGRATED_KEY, '1');
   let changed = false;
+  if (config.suffix === LEGACY_SUFFIX) {
+    config.suffix = DEFAULT_PROMPT_CONFIG.suffix;
+    changed = true;
+  }
+  if (config.quickCharacterPrompt === PREVIOUS_QUICK_CHARACTER_PROMPT) {
+    config.quickCharacterPrompt = DEFAULT_QUICK_CHARACTER_PROMPT;
+    changed = true;
+  }
+  if (getKV(PROMPT_MIGRATED_KEY)) return changed;
+  setKV(PROMPT_MIGRATED_KEY, '1');
   if (config.prefix === LEGACY_PREFIX) {
     config.prefix = DEFAULT_PROMPT_CONFIG.prefix;
     changed = true;
   }
   const qc = config.quickCharacterPrompt;
-  if (typeof qc === 'string') {
+  const corrupted = [
+    '- $QUICKCHARNAME$ is a persona of $QUICKCHARNAME$,',
+    '- $QUICKCHARNAME$ is a quick character of $QUICKCHARNAME$,',
+  ];
+  if (typeof qc === 'string' && corrupted.some(c => qc.includes(c))) {
+    config.quickCharacterPrompt = qc
+      .split('- $QUICKCHARNAME$ is a persona of $QUICKCHARNAME$,')
+      .join('- $QUICKCHARNAME$ is a quick character of $CHARNAME$,')
+      .split('- $QUICKCHARNAME$ is a quick character of $QUICKCHARNAME$,')
+      .join('- $QUICKCHARNAME$ is a quick character of $CHARNAME$,');
+    changed = true;
+  } else if (typeof qc === 'string') {
     const migrated =
       qc === LEGACY_QUICK_CHARACTER_PROMPT
         ? DEFAULT_QUICK_CHARACTER_PROMPT
-        : qc
-            .split('$CHARNAME$').join('$QUICKCHARNAME$')
-            .split('$PERSONALITY$').join('$QUICKCHARPERSONALITY$');
+        : qc.includes('$QUICKCHAR')
+          ? qc
+          : qc
+              .split('$CHARNAME$').join('$QUICKCHARNAME$')
+              .split('$PERSONALITY$').join('$QUICKCHARPERSONALITY$');
     if (migrated !== qc) {
       config.quickCharacterPrompt = migrated;
       changed = true;
@@ -444,6 +481,22 @@ function joinSystem(prefix: string, suffix: string): string {
   return [prefix, suffix].filter(Boolean).join('\n\n');
 }
 
+function speakerName(
+  msg: ChatMessage,
+  character: Character,
+  qc?: QuickCharacterFields,
+  quickCharacters?: QuickCharacterFields[],
+): string {
+  const id = msg.characterId;
+  if (id) {
+    if (id === character.id) return character.name;
+    if (qc && id === qc.id) return qc.name;
+    const found = (quickCharacters ?? []).find(q => q.id === id);
+    if (found) return found.name;
+  }
+  return character.name;
+}
+
 function sliceHistory(
   history: ChatMessage[],
   mode: 'tokens' | 'messages',
@@ -484,6 +537,7 @@ export function buildPrompt(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
   qc?: QuickCharacterFields,
+  quickCharacters?: QuickCharacterFields[],
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(character, config);
   const extras: PromptExtras = {qc, lorebook: lorebookContext};
@@ -499,10 +553,14 @@ export function buildPrompt(
   const slicedHistory = sliceHistory(history, config.historyCutoffMode, cutoffAmount);
 
   for (const msg of slicedHistory) {
-    messages.push({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    });
+    if (msg.role === 'user') {
+      messages.push({role: 'user', content: msg.content});
+    } else {
+      messages.push({
+        role: 'assistant',
+        content: `[${speakerName(msg, character, qc, quickCharacters)}]: ${msg.content}`,
+      });
+    }
   }
 
   messages.push({role: 'user', content: userMessage});
@@ -556,6 +614,7 @@ export function buildContinuePrompt(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
   qc?: QuickCharacterFields,
+  quickCharacters?: QuickCharacterFields[],
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(character, config);
   const extras: PromptExtras = {qc, lorebook: lorebookContext};
@@ -571,10 +630,14 @@ export function buildContinuePrompt(
   const slicedHistory = sliceHistory(history, config.historyCutoffMode, cutoffAmount);
 
   for (const msg of slicedHistory) {
-    messages.push({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content,
-    });
+    if (msg.role === 'user') {
+      messages.push({role: 'user', content: msg.content});
+    } else {
+      messages.push({
+        role: 'assistant',
+        content: `[${speakerName(msg, character, qc, quickCharacters)}]: ${msg.content}`,
+      });
+    }
   }
 
   messages.push({
@@ -635,6 +698,7 @@ export async function sendToLLM(
   lorebooks?: LorebookState[],
   controller?: AbortController,
   continueMode: boolean = false,
+  quickCharacters?: QuickCharacterFields[],
 ): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
 
@@ -679,8 +743,8 @@ export async function sendToLLM(
   }
 
   const messages = continueMode
-    ? buildContinuePrompt(character, history, resolved, lorebookContext)
-    : buildPrompt(character, userMessage, history, resolved, lorebookContext);
+    ? buildContinuePrompt(character, history, resolved, lorebookContext, undefined, quickCharacters)
+    : buildPrompt(character, userMessage, history, resolved, lorebookContext, undefined, quickCharacters);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
   result.metrics.promptBuildMs = promptBuildMs;
@@ -717,6 +781,7 @@ export function buildQuickCharacterPrompt(
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   continueMode: boolean = false,
+  quickCharacters?: QuickCharacterFields[],
 ): ChatMessageObject[] {
   const trimmed = historyWithoutLatestUserTurn(history, userMessage);
   const qcConfig: PromptConfig = {
@@ -724,8 +789,8 @@ export function buildQuickCharacterPrompt(
     prefix: config.quickCharacterPrompt ?? DEFAULT_QUICK_CHARACTER_PROMPT,
   };
   return continueMode
-    ? buildContinuePrompt(parentChar, trimmed, qcConfig, undefined, qc)
-    : buildPrompt(parentChar, userMessage, trimmed, qcConfig, undefined, qc);
+    ? buildContinuePrompt(parentChar, trimmed, qcConfig, undefined, qc, quickCharacters)
+    : buildPrompt(parentChar, userMessage, trimmed, qcConfig, undefined, qc, quickCharacters);
 }
 
 export async function sendToQCLLM(
@@ -737,10 +802,11 @@ export async function sendToQCLLM(
   onToken?: (token: string) => void,
   controller?: AbortController,
   continueMode: boolean = false,
+  quickCharacters?: QuickCharacterFields[],
 ): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
-  const messages = buildQuickCharacterPrompt(qc, parentChar, userMessage, history, resolved, continueMode);
+  const messages = buildQuickCharacterPrompt(qc, parentChar, userMessage, history, resolved, continueMode, quickCharacters);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
   result.metrics.promptBuildMs = promptBuildMs;
