@@ -342,6 +342,23 @@ function HomeScreen() {
     reloadQCs(sessionId);
   }, [activeSessionId, activeChatCharacter, activeGroupChat, reloadQCs, loadHistorySessions]);
 
+  const handleUpdateQC = useCallback(async (qcId: string, qcData: {name: string; description: string; personality: string; icon?: string}) => {
+    const qc = quickCharacters.find(q => q.id === qcId);
+    if (!qc) return;
+    await saveQuickCharacter({
+      id: qc.id,
+      session_id: qc.session_id || activeSessionId || '',
+      character_id: qc.starred ? (activeChatCharacter?.id || '') : '',
+      name: qcData.name,
+      description: qcData.description,
+      personality: qcData.personality,
+      starred: qc.starred ? 1 : 0,
+      icon: qcData.icon || '',
+    });
+    logEvent('qc_updated', {nameLen: qcData.name.length});
+    reloadQCs(activeSessionId);
+  }, [quickCharacters, activeSessionId, activeChatCharacter, reloadQCs]);
+
   const handleToggleQCStar = useCallback(async (qcId: string) => {
     const qc = quickCharacters.find(q => q.id === qcId);
     if (!qc) return;
@@ -550,6 +567,7 @@ function HomeScreen() {
           }
           onClose={() => setShowHistory(false)}
           onCreateQC={handleCreateQC}
+          onUpdateQC={handleUpdateQC}
           onToggleQCStar={handleToggleQCStar}
           onDeleteQC={handleDeleteQC}
         />

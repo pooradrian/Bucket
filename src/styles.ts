@@ -1560,7 +1560,8 @@ export function createStyles(s: AppSettings) {
       marginLeft: 8,
     },
     historyQCActionBtnText: {
-      fontSize: 18,
+      fontSize: 15,
+      color: s.textSecondary,
     },
     historyQCRowIcon: {
       width: 32,
