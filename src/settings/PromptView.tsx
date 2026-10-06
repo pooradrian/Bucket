@@ -44,6 +44,9 @@ export default function PromptView({
       <>
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Prefix (start of system message)</Text>
+        <MutedNote>
+          {'Nothing is added to this unless you ask for it. No character block, no persona, no lorebook unless the placeholders below pull them in.'}
+        </MutedNote>
         <AutoGrowTextInput
           style={st.settingsInput}
           value={promptValues.prefix}
@@ -69,6 +72,9 @@ export default function PromptView({
 
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Suffix (end of system message)</Text>
+        <MutedNote>
+          {'Always appended after the prefix. Placeholders work here too.'}
+        </MutedNote>
         <AutoGrowTextInput
           style={st.settingsInput}
           value={promptValues.suffix}
@@ -97,7 +103,7 @@ export default function PromptView({
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Quick Character System Prompt</Text>
         <MutedNote>
-          {'Used instead of the prefix when you send a message as a quick character. Placeholders resolve to the quick character; $CHARDESC$ also includes the base character.'}
+          {'Used instead of the prefix when you send a message as a quick character. Nothing is added unless you ask for it: $CHAR… placeholders describe the base character, $QUICKCHAR… placeholders describe the quick character you picked, so the two are never glued together. With no quick character selected the $QUICKCHAR… fields fall back to the character you are chatting with, and $QUICKCHARBLOCK$ is empty.'}
         </MutedNote>
         <AutoGrowTextInput
           style={st.settingsInput}
@@ -125,10 +131,15 @@ export default function PromptView({
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Available Placeholders</Text>
         <View style={st.settingsPlaceholderList}>
-          {PLACEHOLDERS.map(p => (
-            <View key={p.key} style={st.settingsPlaceholderRow}>
-              <Text style={st.settingsPlaceholderKey}>{p.key}</Text>
-              <Text style={st.settingsPlaceholderDesc}>{p.description}</Text>
+          {PLACEHOLDERS.map((p, i) => (
+            <View key={p.key}>
+              {i === 0 || PLACEHOLDERS[i - 1].group !== p.group ? (
+                <Text style={st.settingsPlaceholderGroup}>{p.group}</Text>
+              ) : null}
+              <View style={st.settingsPlaceholderRow}>
+                <Text style={st.settingsPlaceholderKey}>{p.key}</Text>
+                <Text style={st.settingsPlaceholderDesc}>{p.description}</Text>
+              </View>
             </View>
           ))}
         </View>
