@@ -17,7 +17,7 @@ jest.mock('../src/Database', () => ({
   setKV: jest.fn(),
 }));
 
-import {estimateTokens, buildPrompt, buildContinuePrompt, buildGroupPrompt, buildQuickCharacterPrompt, historyWithoutLatestUserTurn, DEFAULT_PROMPT_CONFIG, DEFAULT_QUICK_CHARACTER_PROMPT, loadPromptConfig, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, buildContinuePrompt, buildGroupPrompt, buildQuickCharacterPrompt, historyWithoutLatestUserTurn, stripSpeakerNamePrefixes, DEFAULT_PROMPT_CONFIG, DEFAULT_QUICK_CHARACTER_PROMPT, loadPromptConfig, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
 import {getKV, setKV} from '../src/Database';
 import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
@@ -176,6 +176,14 @@ describe('buildQuickCharacterPrompt', () => {
     expect(msgs.some(m => m.role === 'assistant')).toBe(true);
     expect(msgs.find(m => m.content.includes('hello'))!.content).toBe('[Viktor]: hello');
     expect(msgs.find(m => m.content.includes('base reply'))!.content).toBe('[Bob]: base reply');
+  });
+
+  test('stripSpeakerNamePrefixes removes echoed speaker markers', () => {
+    expect(stripSpeakerNamePrefixes('[Bob]: hello there', ['Bob'])).toBe('hello there');
+    expect(stripSpeakerNamePrefixes('[Viktor]: hello', ['Bob', 'Viktor'])).toBe('hello');
+    expect(stripSpeakerNamePrefixes('  [Other]: hi', ['Other'])).toBe('hi');
+    expect(stripSpeakerNamePrefixes('[Note]: not a speaker', ['Bob'])).toBe('[Note]: not a speaker');
+    expect(stripSpeakerNamePrefixes('normal text', ['Bob'])).toBe('normal text');
   });
 
   test('continue mode asks for a continuation of the same reply', () => {

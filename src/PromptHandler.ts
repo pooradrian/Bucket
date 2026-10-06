@@ -481,6 +481,19 @@ function joinSystem(prefix: string, suffix: string): string {
   return [prefix, suffix].filter(Boolean).join('\n\n');
 }
 
+export function stripSpeakerNamePrefixes(
+  content: string,
+  names: (string | undefined | null)[],
+): string {
+  let result = content;
+  for (const name of names) {
+    if (!name) continue;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp('^\\s*\\[\\s*' + escaped + '\\s*\\]:\\s*'), '');
+  }
+  return result;
+}
+
 function speakerName(
   msg: ChatMessage,
   character: Character,
@@ -747,6 +760,7 @@ export async function sendToLLM(
     : buildPrompt(character, userMessage, history, resolved, lorebookContext, undefined, quickCharacters);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
+  result.content = stripSpeakerNamePrefixes(result.content, [character.name, ...(quickCharacters ?? []).map(q => q.name)]);
   result.metrics.promptBuildMs = promptBuildMs;
   return result;
 }
@@ -770,6 +784,7 @@ export async function sendToGroupLLM(
     : buildGroupPrompt(allCharacters, selectedCharacter, userMessage, history, resolved);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
+  result.content = stripSpeakerNamePrefixes(result.content, allCharacters.map(c => c.name));
   result.metrics.promptBuildMs = promptBuildMs;
   return result;
 }
@@ -809,6 +824,7 @@ export async function sendToQCLLM(
   const messages = buildQuickCharacterPrompt(qc, parentChar, userMessage, history, resolved, continueMode, quickCharacters);
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(messages, resolved, onToken, true, controller);
+  result.content = stripSpeakerNamePrefixes(result.content, [qc.name, parentChar.name, ...(quickCharacters ?? []).map(q => q.name)]);
   result.metrics.promptBuildMs = promptBuildMs;
   return result;
 }
