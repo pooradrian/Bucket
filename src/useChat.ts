@@ -21,6 +21,7 @@ import {
 } from './Database';
 import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
 import {applyDisplacements, DisplacementRule, parseDisplacements} from './displacement';
+import {stripSpeakerNamePrefixes} from './PromptHandler';
 import {logEvent} from './EventLogger';
 import {playNotificationSound, vibrateDevice} from './NotificationModule';
 
@@ -249,6 +250,7 @@ export function useChat({
   // Sessions created in memory but not yet written to the DB. A session row is
   // only inserted once it actually has content, so empty threads never appear.
   const unpersistedRef = useRef<Set<string>>(new Set());
+  const speakerNamesRef = useRef<(string | undefined)[]>([]);
 
   const ensureSessionPersisted = useCallback(
     async (s: ChatSession) => {
@@ -291,10 +293,11 @@ export function useChat({
       streamingTimerRef.current = setTimeout(() => {
         streamingTimerRef.current = null;
         const displaced = applyDisplacements(rawStreamRef.current, displacementRulesRef.current, displacementSeedRef.current);
-        streamingContentRef.current = displaced;
-        setStreamingContent(displaced);
+        const cleaned = stripSpeakerNamePrefixes(displaced, speakerNamesRef.current);
+        streamingContentRef.current = cleaned;
+        setStreamingContent(cleaned);
         if (thinkMsRef.current == null) {
-          const split = splitThinking(displaced);
+          const split = splitThinking(cleaned);
           if (split.hasThinking && !split.open) {
             thinkMsRef.current = Math.round(Date.now() - thinkStartRef.current);
           }
@@ -319,6 +322,13 @@ export function useChat({
     return groupChat.characterIds.map(id => allCharacters.find(c => c.id === id)).filter(Boolean) as Character[];
   }, [isGroupChat, groupChat, allCharacters]);
   const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
+  speakerNamesRef.current = [
+    activeCharacter?.name,
+    selectedQC?.name,
+    selectedReplyCharacter?.name,
+    ...quickCharacters.map(q => q?.name),
+    ...groupMembers.map(c => c.name),
+  ];
 
   const persistMessage = useCallback(async (sessionId: string, message: ChatMessage, updatedAt: number) => {
     try {
