@@ -1520,6 +1520,8 @@ export function createStyles(s: AppSettings) {
     },
     historyQCInfo: {
       flex: 1,
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
     },
     historyQCName: {
       color: s.textPrimary,
@@ -1540,6 +1542,34 @@ export function createStyles(s: AppSettings) {
     },
     historyQCActionBtnText: {
       fontSize: 18,
+    },
+    historyQCRowIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      marginRight: 8,
+    },
+    historyQCIcon: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: s.bgPrimary,
+      borderWidth: 1,
+      borderColor: s.borderPrimary,
+      alignItems: 'center' as const,
+      justifyContent: 'center' as const,
+      marginBottom: 8,
+      overflow: 'hidden' as const,
+    },
+    historyQCIconImage: {
+      width: 64,
+      height: 64,
+    },
+    historyQCIconPlaceholder: {
+      color: s.textMuted,
+      fontSize: 11,
+      textAlign: 'center' as const,
+      paddingHorizontal: 8,
     },
     historyQCForm: {
       padding: 16,

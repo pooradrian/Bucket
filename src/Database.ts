@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 13;
+const CURRENT_VERSION = 14;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -226,6 +226,10 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
 
       if (v === 13) {
         addColumnIfMissing(conn, 'chat_messages', 'character_id', 'TEXT DEFAULT ""');
+      }
+
+      if (v === 14) {
+        addColumnIfMissing(conn, 'quick_characters', 'icon', 'TEXT DEFAULT ""');
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -876,6 +880,7 @@ export interface DBQuickCharacter {
   description: string;
   personality: string;
   starred: number;
+  icon?: string;
 }
 
 export async function saveQuickCharacter(qc: DBQuickCharacter): Promise<void> {
@@ -883,21 +888,21 @@ export async function saveQuickCharacter(qc: DBQuickCharacter): Promise<void> {
   const encryptedDesc = await encrypt(qc.description);
   const encryptedPers = await encrypt(qc.personality);
   d.execute(
-    'INSERT OR REPLACE INTO quick_characters (id, session_id, character_id, name, description, personality, starred) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [qc.id, qc.session_id, qc.character_id, qc.name, encryptedDesc, encryptedPers, qc.starred],
+    'INSERT OR REPLACE INTO quick_characters (id, session_id, character_id, name, description, personality, starred, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [qc.id, qc.session_id, qc.character_id, qc.name, encryptedDesc, encryptedPers, qc.starred, qc.icon ?? ''],
   );
 }
 
 export async function getQuickCharactersForSession(sessionId: string): Promise<DBQuickCharacter[]> {
   return queryQuickCharacters(
-    'SELECT id, session_id, character_id, name, description, personality, starred FROM quick_characters WHERE session_id = ? ORDER BY rowid',
+    'SELECT id, session_id, character_id, name, description, personality, starred, icon FROM quick_characters WHERE session_id = ? ORDER BY rowid',
     [sessionId],
   );
 }
 
 export async function getQuickCharactersForCharacter(characterId: string, sessionId: string): Promise<DBQuickCharacter[]> {
   return queryQuickCharacters(
-    'SELECT id, session_id, character_id, name, description, personality, starred FROM quick_characters WHERE character_id = ? OR session_id = ? ORDER BY rowid',
+    'SELECT id, session_id, character_id, name, description, personality, starred, icon FROM quick_characters WHERE character_id = ? OR session_id = ? ORDER BY rowid',
     [characterId, sessionId],
   );
 }
@@ -916,6 +921,7 @@ async function queryQuickCharacters(query: string, params: (string | number)[]):
       description: await decrypt((row.description as string) || ''),
       personality: await decrypt((row.personality as string) || ''),
       starred: (row.starred as number) ?? 0,
+      icon: (row.icon as string) || '',
     }))
   );
 }

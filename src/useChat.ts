@@ -67,6 +67,7 @@ export interface QuickCharacter {
   personality: string;
   starred: boolean;
   session_id?: string;
+  icon?: string;
 }
 
 function liveDeckIndex(msg: ChatMessage): number {

@@ -20,6 +20,7 @@ import {
   saveQuickCharacter,
   deleteQuickCharacter,
   generateId,
+  createSession,
 } from './Database';
 import {QuickCharacter} from './useChat';
 import {logEvent} from './EventLogger';
@@ -137,6 +138,7 @@ function HomeScreen() {
       description: dbQc.description,
       personality: dbQc.personality,
       starred: dbQc.starred === 1,
+      icon: dbQc.icon || undefined,
     })));
   }, [activeChatCharacter]);
 
@@ -296,24 +298,49 @@ function HomeScreen() {
     setActiveTab('menu');
   }, []);
 
-  const handleCreateQC = useCallback(async (qcData: {name: string; description: string; personality: string}) => {
-    if (!activeSessionId) return;
+  const handleCreateQC = useCallback(async (qcData: {name: string; description: string; personality: string; icon?: string}) => {
+    let sessionId = activeSessionId;
+    if (!sessionId && (activeChatCharacter || activeGroupChat)) {
+      const newSession = {
+        id: generateId(),
+        characterId: activeGroupChat ? '' : activeChatCharacter!.id,
+        groupChatId: activeGroupChat?.id,
+        messages: activeChatCharacter?.initialMessage
+          ? [
+              {
+                id: generateId(),
+                role: 'assistant' as const,
+                content: activeChatCharacter.initialMessage,
+                timestamp: Date.now(),
+              },
+            ]
+          : [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await createSession(newSession);
+      sessionId = newSession.id;
+      setActiveSessionId(newSession.id);
+      loadHistorySessions();
+    }
+    if (!sessionId) return;
     await saveQuickCharacter({
       id: generateId(),
-      session_id: activeSessionId,
+      session_id: sessionId,
       character_id: '',
       name: qcData.name,
       description: qcData.description,
       personality: qcData.personality,
       starred: 0,
+      icon: qcData.icon || '',
     });
     logEvent('qc_created', {
       nameLen: qcData.name.length,
       descLen: qcData.description?.length || 0,
       hasPersonality: !!qcData.personality,
     });
-    reloadQCs(activeSessionId);
-  }, [activeSessionId, reloadQCs]);
+    reloadQCs(sessionId);
+  }, [activeSessionId, activeChatCharacter, activeGroupChat, reloadQCs, loadHistorySessions]);
 
   const handleToggleQCStar = useCallback(async (qcId: string) => {
     const qc = quickCharacters.find(q => q.id === qcId);
@@ -327,6 +354,7 @@ function HomeScreen() {
         description: qc.description,
         personality: qc.personality,
         starred: 1,
+        icon: qc.icon || '',
       });
     } else if (activeSessionId) {
       await saveQuickCharacter({
@@ -337,6 +365,7 @@ function HomeScreen() {
         description: qc.description,
         personality: qc.personality,
         starred: 0,
+        icon: qc.icon || '',
       });
     } else {
       deleteQuickCharacter(qc.id);
