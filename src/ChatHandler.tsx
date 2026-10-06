@@ -44,6 +44,7 @@ interface MessageBubbleProps {
   isLiveStreaming: boolean;
   st: ReturnType<typeof useTheme>;
   variantIndexMap: Record<string, number>;
+  speaker?: {name: string; icon?: string} | null;
   onSelect: (id: string | null) => void;
   onOpenCarousel: (id: string) => void;
   registerBubble: (id: string, ref: View | null) => void;
@@ -92,12 +93,14 @@ function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
 }
 
 const MessageBubble = React.memo(function MessageBubble({
-  item, hidden, isSelected, isLastAssistant, sending, isLiveStreaming, st, variantIndexMap,
+  item, hidden, isSelected, isLastAssistant, sending, isLiveStreaming, st, variantIndexMap, speaker,
   onSelect, onOpenCarousel, registerBubble, onBubbleLayout, onEdit, onEditSave, onEditCancel, editingMessageId, editingText, onEditingTextChange,
   onCopy, onDelete, onRegenerate, onRetry,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const showThinking = useAppStore(s => s.appSettings.showThinking);
+  const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
+  const groupCharDisplay = useAppStore(s => s.appSettings.showGroupCharNames);
   const isUser = item.role === 'user';
   const isStreamingMsg = item.id === '__streaming__' || isLiveStreaming;
   const isError = item.id === '__error__';
@@ -152,12 +155,31 @@ const MessageBubble = React.memo(function MessageBubble({
     return <TypingIndicator st={st} />;
   }
 
+  const showAvatar = !!speaker && groupCharDisplay !== 'name' && showCharacterIcons;
+  const showName = !!speaker && groupCharDisplay !== 'avatar';
+
   return (
     <View style={[
       st.messageContainer,
       isUser ? st.messageContainerUser : st.messageContainerAssistant,
       hidden && {opacity: 0},
     ]}>
+      {speaker ? (
+        <View style={st.messageSenderRow}>
+          {showAvatar ? (
+            speaker.icon ? (
+              <Image source={{uri: speaker.icon}} style={st.messageSenderAvatar} />
+            ) : (
+              <View style={[st.messageSenderAvatar, st.messageSenderAvatarFallback, {justifyContent: 'center', alignItems: 'center'}]}>
+                <Text style={{color: st.bubbleText.color, fontSize: 10}}>{speaker.name[0]}</Text>
+              </View>
+            )
+          ) : null}
+          {showName ? (
+            <Text style={[st.messageSenderName, showAvatar && {marginLeft: 6}]}>{speaker.name}</Text>
+          ) : null}
+        </View>
+      ) : null}
       <TouchableOpacity
         activeOpacity={0.8}
         ref={ref => registerBubble(item.id, ref)}
@@ -511,6 +533,26 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     }
   }, [streamingContent, isStreaming, flatListRef]);
 
+  const resolveSpeaker = useCallback((item: ChatMessage): {name: string; icon?: string} | null => {
+    if (item.role === 'user') return null;
+    if (isGroupChat) {
+      const c = item.characterId
+        ? groupMembers.find(m => m.id === item.characterId)
+        : item.id === '__streaming__'
+          ? selectedReplyCharacter
+          : undefined;
+      return c ? {name: c.name, icon: c.icon || undefined} : null;
+    }
+    if (quickCharacters.length === 0) return null;
+    const qc = item.characterId
+      ? quickCharacters.find(q => q.id === item.characterId)
+      : item.id === '__streaming__'
+        ? selectedQC
+        : undefined;
+    if (qc) return {name: qc.name, icon: qc.icon};
+    return character ? {name: character.name, icon: character.icon || undefined} : null;
+  }, [isGroupChat, groupMembers, quickCharacters, selectedReplyCharacter, selectedQC, character]);
+
   const renderMessage = useCallback(({item}: {item: ChatMessage}) => {
     const isUser = item.role === 'user';
     const isLastAssistant = !isUser && session && session.messages.length > 0 &&
@@ -526,6 +568,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         isLiveStreaming={item.id === replacingMessageId && isStreaming}
         st={st}
         variantIndexMap={variantIndexMap}
+        speaker={resolveSpeaker(item)}
         onSelect={setSelectedMessageId}
         onOpenCarousel={openCarousel}
         registerBubble={registerBubble}
@@ -542,7 +585,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
         onRetry={handleRetryError}
       />
     );
-  }, [session, selectedMessageId, sending, isStreaming, replacingMessageId, st, variantIndexMap, carouselMessageId, carouselReady, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, openCarousel, registerBubble, handleBubbleLayout, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleRetryError]);
+  }, [session, selectedMessageId, sending, isStreaming, replacingMessageId, st, variantIndexMap, carouselMessageId, carouselReady, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, openCarousel, registerBubble, handleBubbleLayout, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleRetryError, resolveSpeaker]);
 
   return (
     <>
