@@ -92,11 +92,11 @@ beforeAll(async () => {
   }
 });
 
-test('upgrade runs the v12 migration', () => {
+test('upgrade runs the v12 and v13 migrations', () => {
   const result = db.execute('PRAGMA user_version');
   expect(result.results?.[0]?.user_version).toBe(11);
   initDB();
-  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(12);
+  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(13);
 });
 
 test('backfill restores insertion order for threads whose timestamps were rewritten', async () => {

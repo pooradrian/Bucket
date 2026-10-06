@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 12;
+const CURRENT_VERSION = 13;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -224,6 +224,10 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         `);
       }
 
+      if (v === 13) {
+        addColumnIfMissing(conn, 'chat_messages', 'character_id', 'TEXT DEFAULT ""');
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -310,7 +314,7 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
 
 async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   const messagesResult = initDB().execute(
-    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
+    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms, character_id FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
     [sessionId],
   );
   if (!messagesResult.results) {
@@ -325,6 +329,7 @@ async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
       variants: msg.variants ? (msg.variants as string) : undefined,
       requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
       thinkingMs: (msg.thinking_ms as number) || undefined,
+      characterId: (msg.character_id as string) || undefined,
     })),
   );
 }
@@ -371,9 +376,9 @@ export async function createSession(session: ChatSession): Promise<void> {
         : '';
       const encryptedRequest = msg.requestInfo ? await encrypt(msg.requestInfo) : '';
       d.execute(
-        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms)
-         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?)`,
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, session.id, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0],
+        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id)
+         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?)`,
+        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, session.id, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0, msg.characterId ?? ''],
       );
     }
     d.execute('COMMIT');
@@ -407,9 +412,9 @@ export async function addMessage(sessionId: string, message: ChatMessage, atStar
     ? 'COALESCE(MIN(seq), 1) - 1'
     : 'COALESCE(MAX(seq), 0) + 1';
   d.execute(
-    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms)
-     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?)`,
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp, sessionId, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0],
+    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id)
+     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?)`,
+    [message.id, sessionId, message.role, encryptedContent, message.timestamp, sessionId, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0, message.characterId ?? ''],
   );
   searchCachePut(sessionId, message);
 }

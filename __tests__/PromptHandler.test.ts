@@ -165,16 +165,17 @@ describe('buildQuickCharacterPrompt', () => {
     expect(msgs[0].content).toContain('noir, terse');
   });
 
-  test('history is not prefixed with character names', () => {
+  test('history assistant messages are prefixed with the speaker name', () => {
     const qcHistory: ChatMessage[] = [
       {id: '1', role: 'user', content: 'hey', timestamp: 1},
-      {id: '2', role: 'assistant', content: 'hello', timestamp: 2, characterId: 'qc-2'},
+      {id: '2', role: 'assistant', content: 'hello', timestamp: 2, characterId: 'qc-4'},
+      {id: '3', role: 'assistant', content: 'base reply', timestamp: 3},
     ];
     const msgs = buildQuickCharacterPrompt(qc, char, 'hi', qcHistory, DEFAULT_PROMPT_CONFIG);
     expect(msgs[msgs.length - 1].content).toBe('hi');
     expect(msgs.some(m => m.role === 'assistant')).toBe(true);
-    expect(msgs.every(m => !m.content.includes(']:'))).toBe(true);
-    expect(msgs.find(m => m.role === 'assistant')!.content).toBe('hello');
+    expect(msgs.find(m => m.content.includes('hello'))!.content).toBe('[Viktor]: hello');
+    expect(msgs.find(m => m.content.includes('base reply'))!.content).toBe('[Bob]: base reply');
   });
 
   test('continue mode asks for a continuation of the same reply', () => {
