@@ -11,10 +11,17 @@ jest.mock('react-native-keychain', () => ({
   resetGenericPassword: jest.fn().mockResolvedValue(true),
   ACCESSIBLE: {},
 }));
+jest.mock('../src/Database', () => ({
+  ...jest.requireActual('../src/Database'),
+  getKV: jest.fn(),
+  setKV: jest.fn(),
+}));
 
-import {estimateTokens, buildPrompt, buildContinuePrompt, buildQuickCharacterPrompt, historyWithoutLatestUserTurn, DEFAULT_PROMPT_CONFIG, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
+import {estimateTokens, buildPrompt, buildContinuePrompt, buildGroupPrompt, buildQuickCharacterPrompt, historyWithoutLatestUserTurn, DEFAULT_PROMPT_CONFIG, DEFAULT_QUICK_CHARACTER_PROMPT, loadPromptConfig, addPersona, updatePersona, deletePersona, activatePersona, addModelPreset, updateModelPreset, deleteModelPreset, applyModelPreset, applyModelField, detachModelPreset} from '../src/PromptHandler';
+import {getKV, setKV} from '../src/Database';
 import type {PromptConfig} from '../src/PromptHandler';
 import type {Character} from '../src/CharacterEditor';
+import {getCustomField} from '../src/CustomFields';
 import type {ChatMessage} from '../src/useChat';
 
 const char: Character = {
@@ -65,11 +72,47 @@ describe('buildQuickCharacterPrompt', () => {
   test('a custom quick character prompt resolves placeholders', () => {
     const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], {
       ...DEFAULT_PROMPT_CONFIG,
-      quickCharacterPrompt: 'You are $CHARNAME$, who is $CHARDESC$. Stay cold.',
+      quickCharacterPrompt: 'You are $QUICKCHARNAME$, who is $QUICKCHARDESC$. Stay cold.',
     });
     const system = msgs[0].content;
     expect(system).toContain('You are Viktor, who is a rival smuggler');
     expect(system).toContain('Stay cold.');
+  });
+
+  test('quick character placeholders resolve to the quick character only', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      quickCharacterPrompt: 'NAME=$QUICKCHARNAME$ DESC=$QUICKCHARDESC$ TRAITS=$QUICKCHARPERSONALITY$',
+    });
+    expect(msgs[0].content).toContain('NAME=Viktor DESC=a rival smuggler TRAITS=cold');
+  });
+
+  test('character placeholders resolve to the base character only', () => {
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      quickCharacterPrompt:
+        'NAME=$CHARNAME$ DESC=$CHARDESC$ TRAITS=$CHARPERSONALITY$ STYLE=$CHARWRITINGSTYLE$',
+    });
+    const system = msgs[0].content;
+    expect(system).toContain(`NAME=${char.name} DESC=${char.description} TRAITS=${char.personality}`);
+    expect(system).toContain(`STYLE=${getCustomField(char, 'writingStyle')}`);
+  });
+
+  test('the quick character description is not glued onto the base description', () => {
+    const system = buildQuickCharacterPrompt(qc, char, 'hi', [], DEFAULT_PROMPT_CONFIG)[0].content;
+    expect(system).not.toContain(`Description: ${qc.description}\nBase character`);
+    expect(system).toContain('Quick character: Viktor');
+    expect(system).toContain('Base character: Bob');
+  });
+
+  test('quick character placeholders fall back to the character when no quick character is used', () => {
+    const msgs = buildPrompt(char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      prefix: 'NAME=$QUICKCHARNAME$ DESC=$QUICKCHARDESC$ TRAITS=$QUICKCHARPERSONALITY$',
+    });
+    expect(msgs[0].content).toContain(
+      `NAME=${char.name} DESC=${char.description} TRAITS=${char.personality}`,
+    );
   });
 
   test('an emptied quick character prompt is respected instead of falling back', () => {
@@ -137,6 +180,183 @@ describe('buildQuickCharacterPrompt', () => {
   test('continue mode asks for a continuation of the same reply', () => {
     const msgs = buildQuickCharacterPrompt(qc, char, '', history, DEFAULT_PROMPT_CONFIG, true);
     expect(msgs[msgs.length - 1].content).toContain('Continue your previous reply');
+  });
+});
+
+describe('stored prompt migration after the placeholder split', () => {
+  const stored = (over: Partial<PromptConfig>) =>
+    JSON.stringify({...DEFAULT_PROMPT_CONFIG, ...over});
+  const mockStore = (values: Record<string, string>) => {
+    (getKV as jest.Mock).mockImplementation((key: string) => values[key] ?? null);
+  };
+
+  test('a saved quick character prompt that meant the quick character is rewritten once', async () => {
+    mockStore({
+      promptConfig: stored({quickCharacterPrompt: 'You are $CHARNAME$. Traits: $PERSONALITY$'}),
+    });
+    const loaded = await loadPromptConfig();
+    expect(loaded.quickCharacterPrompt).toBe('You are $QUICKCHARNAME$. Traits: $QUICKCHARPERSONALITY$');
+    expect(setKV).toHaveBeenCalledWith('promptConfig', expect.stringContaining('$QUICKCHARNAME$'));
+  });
+
+  test('an untouched old default prefix gains the character block placeholder', async () => {
+    mockStore({promptConfig: stored({prefix: 'You are a roleplay companion.'})});
+    const loaded = await loadPromptConfig();
+    expect(loaded.prefix).toBe(DEFAULT_PROMPT_CONFIG.prefix);
+    expect(loaded.prefix).toContain('$CHARBLOCK$');
+  });
+
+  test('an untouched old default quick character prompt is replaced', async () => {
+    mockStore({
+      promptConfig: stored({
+        quickCharacterPrompt:
+          'You are roleplaying as $CHARNAME$.\n\nWrite this reply as $CHARNAME$ and nobody else:\n- $CHARNAME$ is a persona of the base character described below. The base character is context only, never write as them.\n- Do not imitate, continue or switch to any other character\'s voice, no matter who spoke earlier in the conversation.\n- Do not write dialogue, actions or thoughts for the user.\n- Stay in $CHARNAME$\'s personality and voice from the first word to the last.',
+      }),
+    });
+    const loaded = await loadPromptConfig();
+    expect(loaded.quickCharacterPrompt).toBe(DEFAULT_QUICK_CHARACTER_PROMPT);
+    expect(loaded.quickCharacterPrompt).toContain('$CHARBLOCK$');
+  });
+
+  test('a later deliberate $CHARNAME$ is left alone', async () => {
+    mockStore({
+      promptConfig: stored({quickCharacterPrompt: 'Base is $CHARNAME$, I am $QUICKCHARNAME$.'}),
+      promptConfigMigrated: '1',
+    });
+    const loaded = await loadPromptConfig();
+    expect(loaded.quickCharacterPrompt).toBe('Base is $CHARNAME$, I am $QUICKCHARNAME$.');
+  });
+});
+
+describe('nothing is inserted that a prompt did not ask for', () => {
+  const bare = {prefix: 'Be brief.', suffix: ''};
+
+  test('a plain prompt sends only itself', () => {
+    const system = buildPrompt(char, 'hi', [], {...DEFAULT_PROMPT_CONFIG, ...bare})[0].content;
+    expect(system).toBe('Be brief.');
+  });
+
+  test('a plain quick character prompt sends only itself', () => {
+    const qc = {id: 'qc-4', name: 'Viktor', description: 'a rival smuggler', personality: 'cold'};
+    const system = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...bare,
+      quickCharacterPrompt: 'Be brief.',
+    })[0].content;
+    expect(system).toBe('Be brief.');
+    expect(system).not.toContain('Name: Bob');
+    expect(system).not.toContain('Quick character');
+  });
+
+  test('a plain group prompt sends only itself', () => {
+    const other = {...char, id: '2', name: 'Ada'};
+    const system = buildGroupPrompt([char, other], char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...bare,
+    })[0].content;
+    expect(system).toBe('Be brief.');
+    expect(system).not.toContain('Name: Ada');
+    expect(system).not.toContain('group conversation');
+  });
+
+  test('the character block only appears when $CHARBLOCK$ is used', () => {
+    const system = buildPrompt(char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      prefix: 'Be $CHARNAME$.',
+      suffix: '$CHARBLOCK$',
+    })[0].content;
+    expect(system).toContain('Be Bob.');
+    expect(system).toContain('Name: Bob');
+    expect(system).toContain('a description');
+  });
+
+  test('the quick character block only appears when $QUICKCHARBLOCK$ is used', () => {
+    const qc = {id: 'qc-4', name: 'Viktor', description: 'a rival smuggler', personality: 'cold'};
+    const system = buildQuickCharacterPrompt(qc, char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...bare,
+      quickCharacterPrompt: '$QUICKCHARBLOCK$',
+    })[0].content;
+    expect(system).toBe('Quick character: Viktor\nDescription: a rival smuggler\nPersonality: cold');
+  });
+
+  test('$QUICKCHARBLOCK$ is empty when no quick character is selected', () => {
+    const system = buildPrompt(char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...bare,
+      prefix: '[$QUICKCHARBLOCK$]',
+    })[0].content;
+    expect(system).toBe('[]');
+  });
+
+  test('the persona is not injected unless $USRDESC$ is used', () => {
+    const withPersona = {
+      ...DEFAULT_PROMPT_CONFIG,
+      personas: [{id: 'p', name: 'Ann', description: 'a courier'}],
+      activePersonaId: 'p',
+      userDescription: 'a courier',
+    };
+    const silent = buildPrompt(char, 'hi', [], {...withPersona, ...bare})[0].content;
+    expect(silent).toBe('Be brief.');
+
+    const asked = buildPrompt(char, 'hi', [], {
+      ...withPersona,
+      prefix: '$USRDESC$',
+      suffix: '',
+    })[0].content;
+    expect(asked).toContain('a courier');
+  });
+
+  test('$LOREBOOK$ is empty when no lorebook context was retrieved', () => {
+    const system = buildPrompt(char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...bare,
+      prefix: 'Facts: [$LOREBOOK$]',
+    })[0].content;
+    expect(system).toBe('Facts: []');
+  });
+
+  test('$LOREBOOK$ resolves when context was retrieved', () => {
+    const system = buildPrompt(
+      char,
+      'hi',
+      [],
+      {...DEFAULT_PROMPT_CONFIG, ...bare, prefix: 'Facts: $LOREBOOK$'},
+      '[Lorebook Context]\n1. the city is sinking',
+    )[0].content;
+    expect(system).toContain('1. the city is sinking');
+  });
+
+  test('$GROUPINSTRUCTION$ resolves in a group and is empty otherwise', () => {
+    const other = {...char, id: '2', name: 'Ada'};
+    const cfg = {...DEFAULT_PROMPT_CONFIG, prefix: '[$GROUPINSTRUCTION$]', suffix: ''};
+    expect(buildPrompt(char, 'hi', [], cfg)[0].content).toBe('[]');
+    expect(buildGroupPrompt([char, other], char, 'hi', [], cfg)[0].content).toContain(
+      'Write ONLY as Bob',
+    );
+  });
+
+  test('the default prompts still send the character block', () => {
+    expect(buildPrompt(char, 'hi', [], DEFAULT_PROMPT_CONFIG)[0].content).toContain('Name: Bob');
+    const groupSystem = buildGroupPrompt(
+      [char, {...char, id: '2', name: 'Ada'}],
+      char,
+      'hi',
+      [],
+      DEFAULT_PROMPT_CONFIG,
+    )[0].content;
+    expect(groupSystem).toContain('Name: Bob');
+    expect(groupSystem).toContain('Name: Ada');
+    expect(groupSystem).toContain('Write ONLY as Bob');
+  });
+
+  test('blank lines left by unused placeholders are collapsed', () => {
+    const system = buildPrompt(char, 'hi', [], {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...bare,
+      prefix: 'Start.\n\n$LOREBOOK$\n\n$USRDESC$\n\nEnd.',
+    })[0].content;
+    expect(system).toBe('Start.\n\nEnd.');
   });
 });
 

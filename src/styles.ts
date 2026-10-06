@@ -1117,6 +1117,13 @@ export function createStyles(s: AppSettings) {
       borderRadius: s.cardRadius,
       padding: 12,
     },
+    settingsPlaceholderGroup: {
+      color: s.accentColor,
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: 6,
+      marginBottom: 6,
+    },
     settingsPlaceholderRow: {
       flexDirection: 'row',
       marginBottom: 8,
@@ -1126,7 +1133,7 @@ export function createStyles(s: AppSettings) {
       fontSize: 13,
       fontFamily: monospace,
       marginRight: 10,
-      minWidth: 120,
+      minWidth: 150,
     },
     settingsPlaceholderDesc: {
       color: s.textMuted,

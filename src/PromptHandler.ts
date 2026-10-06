@@ -63,16 +63,28 @@ export interface PromptConfig {
   extraBody: string;
 }
 
-export const DEFAULT_QUICK_CHARACTER_PROMPT = `You are roleplaying as $CHARNAME$.
+export const DEFAULT_QUICK_CHARACTER_PROMPT = `You are roleplaying as $QUICKCHARNAME$.
 
-Write this reply as $CHARNAME$ and nobody else:
-- $CHARNAME$ is a persona of the base character described below. The base character is context only, never write as them.
+Write this reply as $QUICKCHARNAME$ and nobody else:
+- $QUICKCHARNAME$ is a persona of $CHARNAME$, the base character described below. The base character is context only, never write as them.
 - Do not imitate, continue or switch to any other character's voice, no matter who spoke earlier in the conversation.
 - Do not write dialogue, actions or thoughts for the user.
-- Stay in $CHARNAME$'s personality and voice from the first word to the last.`;
+- Stay in $QUICKCHARNAME$'s personality and voice from the first word to the last.
+
+$USRDESC$
+
+$QUICKCHARBLOCK$
+
+$CHARBLOCK$`;
 
 export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
-  prefix: 'You are a roleplay companion.',
+  prefix: `You are a roleplay companion.
+$USRDESC$
+$GROUPINSTRUCTION$
+
+$CHARBLOCK$
+
+$LOREBOOK$`,
   suffix: 'Now write the next message as the assistant.',
   quickCharacterPrompt: DEFAULT_QUICK_CHARACTER_PROMPT,
   userDescription: '',
@@ -99,16 +111,39 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   extraBody: '',
 };
 
-export const PLACEHOLDERS = [
-  {key: '$CHARNAME$', description: 'Character name'},
-  {key: '$CHARDESC$', description: 'Character description'},
-  {key: '$PERSONALITY$', description: 'Character personality traits'},
-  {key: '$WRITINGSTYLE$', description: 'Character writing style'},
-  {key: '$SCENARIO$', description: 'Character scenario / setting'},
-  {key: '$EXAMPLES$', description: 'Character example messages'},
-  {key: '$USRDESC$', description: 'User description (set in Prompt Settings)'},
-  {key: '$LOREBOOK$', description: 'RAG-retrieved lorebook context (auto-filled)'},
+export interface Placeholder {
+  group: string;
+  key: string;
+  description: string;
+}
+
+export const PLACEHOLDERS: Placeholder[] = [
+  {group: 'Base character', key: '$CHARNAME$', description: 'Base character name'},
+  {group: 'Base character', key: '$CHARDESC$', description: 'Base character description'},
+  {group: 'Base character', key: '$CHARPERSONALITY$', description: 'Base character personality traits'},
+  {group: 'Base character', key: '$CHARWRITINGSTYLE$', description: 'Base character writing style'},
+  {group: 'Base character', key: '$CHARSCENARIO$', description: 'Base character scenario / setting'},
+  {group: 'Base character', key: '$CHAREXAMPLES$', description: 'Base character example messages'},
+  {group: 'Base character', key: '$CHARBLOCK$', description: 'Every base character field above as one block. In a group chat, every group member'},
+  {group: 'Quick character', key: '$QUICKCHARNAME$', description: 'Quick character name. Same as $CHARNAME$ when no quick character is selected'},
+  {group: 'Quick character', key: '$QUICKCHARDESC$', description: 'Quick character description. Same as $CHARDESC$ when no quick character is selected'},
+  {group: 'Quick character', key: '$QUICKCHARPERSONALITY$', description: 'Quick character personality traits. Same as $CHARPERSONALITY$ when no quick character is selected'},
+  {group: 'Quick character', key: '$QUICKCHARBLOCK$', description: 'Quick character name, description and personality as one block. Empty when no quick character is selected'},
+  {group: 'Conversation', key: '$USRDESC$', description: 'Your active persona / user description. Empty when you have none'},
+  {group: 'Conversation', key: '$LOREBOOK$', description: 'RAG-retrieved lorebook entries for this message. Empty when RAG is off or finds nothing'},
+  {group: 'Conversation', key: '$GROUPINSTRUCTION$', description: 'Who is speaking in a group chat and who to write as. Empty outside group chats'},
+  {group: 'Old names, still supported', key: '$PERSONALITY$', description: 'Same as $CHARPERSONALITY$'},
+  {group: 'Old names, still supported', key: '$WRITINGSTYLE$', description: 'Same as $CHARWRITINGSTYLE$'},
+  {group: 'Old names, still supported', key: '$SCENARIO$', description: 'Same as $CHARSCENARIO$'},
+  {group: 'Old names, still supported', key: '$EXAMPLES$', description: 'Same as $CHAREXAMPLES$'},
 ];
+
+export interface QuickCharacterFields {
+  id: string;
+  name: string;
+  description: string;
+  personality: string;
+}
 
 export async function resolveProvider(config: PromptConfig): Promise<PromptConfig> {
   const providerId = config.providerId || getActiveProviderId();
@@ -124,12 +159,50 @@ export async function resolveProvider(config: PromptConfig): Promise<PromptConfi
   return {...config, providerId, apiUrl: provider.url, apiKey: apiKey || ''};
 }
 
+const PROMPT_MIGRATED_KEY = 'promptConfigMigrated';
+
+const LEGACY_PREFIX = 'You are a roleplay companion.';
+
+const LEGACY_QUICK_CHARACTER_PROMPT = `You are roleplaying as $CHARNAME$.
+
+Write this reply as $CHARNAME$ and nobody else:
+- $CHARNAME$ is a persona of the base character described below. The base character is context only, never write as them.
+- Do not imitate, continue or switch to any other character's voice, no matter who spoke earlier in the conversation.
+- Do not write dialogue, actions or thoughts for the user.
+- Stay in $CHARNAME$'s personality and voice from the first word to the last.`;
+
+function migratePromptConfig(config: PromptConfig): boolean {
+  if (getKV(PROMPT_MIGRATED_KEY)) return false;
+  setKV(PROMPT_MIGRATED_KEY, '1');
+  let changed = false;
+  if (config.prefix === LEGACY_PREFIX) {
+    config.prefix = DEFAULT_PROMPT_CONFIG.prefix;
+    changed = true;
+  }
+  const qc = config.quickCharacterPrompt;
+  if (typeof qc === 'string') {
+    const migrated =
+      qc === LEGACY_QUICK_CHARACTER_PROMPT
+        ? DEFAULT_QUICK_CHARACTER_PROMPT
+        : qc
+            .split('$CHARNAME$').join('$QUICKCHARNAME$')
+            .split('$PERSONALITY$').join('$QUICKCHARPERSONALITY$');
+    if (migrated !== qc) {
+      config.quickCharacterPrompt = migrated;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export async function loadPromptConfig(): Promise<PromptConfig> {
   try {
     const stored = getKV(PROMPT_CONFIG_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored);
-      const withProvider = await resolveProvider({...DEFAULT_PROMPT_CONFIG, ...parsed});
+      const config: PromptConfig = {...DEFAULT_PROMPT_CONFIG, ...JSON.parse(stored)};
+      const migrated = migratePromptConfig(config);
+      const withProvider = await resolveProvider(config);
+      if (migrated) await savePromptConfig(withProvider);
       return withProvider;
     }
   } catch (e) {
@@ -275,9 +348,9 @@ export function estimateTokens(text: string): number {
   }
 }
 
-function buildCharBlock(character: Character): string {
+function buildCharBlock(character: Character, nameLabel: string = 'Name'): string {
   const parts: string[] = [];
-  parts.push(`Name: ${character.name}`);
+  parts.push(`${nameLabel}: ${character.name}`);
   if (character.description) parts.push(`Description: ${character.description}`);
   if (character.personality) parts.push(`Personality: ${character.personality}`);
   const writingStyle = getCustomField(character, 'writingStyle');
@@ -285,6 +358,21 @@ function buildCharBlock(character: Character): string {
   if (character.scenario) parts.push(`Scenario: ${character.scenario}`);
   if (character.exampleMessages) parts.push(`Example messages:\n${character.exampleMessages}`);
   return parts.join('\n');
+}
+
+function buildQuickCharBlock(qc: QuickCharacterFields): string {
+  const asCharacter: Character = {
+    id: qc.id,
+    name: qc.name,
+    description: qc.description,
+    personality: qc.personality,
+    scenario: '',
+    initialMessage: '',
+    exampleMessages: '',
+    customFields: [],
+    lorebookIds: [],
+  };
+  return buildCharBlock(asCharacter, 'Quick character');
 }
 
 function resolveUserDescription(character: Character, config: PromptConfig): string {
@@ -299,40 +387,61 @@ function resolveUserDescription(character: Character, config: PromptConfig): str
   return config.userDescription ? `User description: ${config.userDescription}` : '';
 }
 
+interface PromptExtras {
+  qc?: QuickCharacterFields;
+  charBlock?: string;
+  groupInstruction?: string;
+  lorebook?: string;
+}
+
 function resolvePlaceholders(
   template: string,
   character: Character,
   userDescription: string,
+  extras: PromptExtras = {},
 ): string {
+  const base = {
+    name: character.name,
+    description: character.description || '',
+    personality: character.personality || '',
+    writingStyle: getCustomField(character, 'writingStyle'),
+    scenario: character.scenario || '',
+    examples: character.exampleMessages || '',
+  };
+  const quick = extras.qc
+    ? {name: extras.qc.name, description: extras.qc.description || '', personality: extras.qc.personality || ''}
+    : base;
+
   const replacements: [string, string][] = [
-    ['$CHARNAME$', character.name],
-    ['$CHARDESC$', character.description || ''],
-    ['$PERSONALITY$', character.personality || ''],
-    ['$WRITINGSTYLE$', getCustomField(character, 'writingStyle')],
-    ['$SCENARIO$', character.scenario || ''],
-    ['$EXAMPLES$', character.exampleMessages || ''],
+    ['$CHARNAME$', base.name],
+    ['$CHARDESC$', base.description],
+    ['$CHARPERSONALITY$', base.personality],
+    ['$CHARWRITINGSTYLE$', base.writingStyle],
+    ['$CHARSCENARIO$', base.scenario],
+    ['$CHAREXAMPLES$', base.examples],
+    ['$CHARBLOCK$', extras.charBlock ?? buildCharBlock(character, extras.qc ? 'Base character' : 'Name')],
+    ['$PERSONALITY$', base.personality],
+    ['$WRITINGSTYLE$', base.writingStyle],
+    ['$SCENARIO$', base.scenario],
+    ['$EXAMPLES$', base.examples],
+    ['$QUICKCHARNAME$', quick.name],
+    ['$QUICKCHARDESC$', quick.description],
+    ['$QUICKCHARPERSONALITY$', quick.personality],
+    ['$QUICKCHARBLOCK$', extras.qc ? buildQuickCharBlock(extras.qc) : ''],
     ['$USRDESC$', userDescription],
+    ['$LOREBOOK$', extras.lorebook ?? ''],
+    ['$GROUPINSTRUCTION$', extras.groupInstruction ?? ''],
   ];
 
   let result = template;
   for (const [placeholder, value] of replacements) {
     result = result.split(placeholder).join(value);
   }
-  return result;
+  return result.replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function buildSystemParts(
-  prefix: string,
-  userDescription: string,
-  config: PromptConfig,
-  ...rest: (string | undefined)[]
-): string[] {
-  const parts: string[] = [prefix];
-  if (userDescription && !config.prefix.includes('$USRDESC$') && !config.suffix.includes('$USRDESC$')) {
-    parts.push(userDescription);
-  }
-  parts.push(...rest.filter(Boolean) as string[]);
-  return parts;
+function joinSystem(prefix: string, suffix: string): string {
+  return [prefix, suffix].filter(Boolean).join('\n\n');
 }
 
 function sliceHistory(
@@ -374,22 +483,13 @@ export function buildPrompt(
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
+  qc?: QuickCharacterFields,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(character, config);
-  const resolvedPrefix = resolvePlaceholders(config.prefix, character, userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, character, userDescription);
-  const charBlock = buildCharBlock(character);
-
-  const systemParts = buildSystemParts(
-    resolvedPrefix,
-    userDescription,
-    config,
-    charBlock,
-    lorebookContext,
-    resolvedSuffix,
-  );
-
-  const systemContent = systemParts.filter(Boolean).join('\n\n');
+  const extras: PromptExtras = {qc, lorebook: lorebookContext};
+  const resolvedPrefix = resolvePlaceholders(config.prefix, character, userDescription, extras);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, character, userDescription, extras);
+  const systemContent = joinSystem(resolvedPrefix, resolvedSuffix);
 
   const messages: ChatMessageObject[] = [
     {role: 'system', content: systemContent},
@@ -419,24 +519,14 @@ export function buildGroupPrompt(
   lorebookContext?: string,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(selectedCharacter, config);
-  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, userDescription);
-
   const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
-
   const groupInstruction = `You are roleplaying as multiple characters in a group conversation. The characters are:\n${characters.map(c => `- ${c.name}`).join('\n')}\n\nThe user has selected **${selectedCharacter.name}** to respond next. Write ONLY as ${selectedCharacter.name}. Stay in character and respond naturally to the conversation.\n\nIMPORTANT: In the conversation history below, messages from each character are prefixed with their name in brackets, like [CharacterName]: message. Use this to understand who said what.`;
+  const extras: PromptExtras = {charBlock: charBlocks, groupInstruction, lorebook: lorebookContext};
 
-  const systemParts = buildSystemParts(
-    resolvedPrefix,
-    userDescription,
-    config,
-    charBlocks,
-    groupInstruction,
-    lorebookContext,
-    resolvedSuffix,
-  );
+  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, userDescription, extras);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, userDescription, extras);
 
-  const systemContent = systemParts.filter(Boolean).join('\n\n');
+  const systemContent = joinSystem(resolvedPrefix, resolvedSuffix);
 
   const messages: ChatMessageObject[] = [
     {role: 'system', content: systemContent},
@@ -465,22 +555,13 @@ export function buildContinuePrompt(
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
+  qc?: QuickCharacterFields,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(character, config);
-  const resolvedPrefix = resolvePlaceholders(config.prefix, character, userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, character, userDescription);
-  const charBlock = buildCharBlock(character);
-
-  const systemParts = buildSystemParts(
-    resolvedPrefix,
-    userDescription,
-    config,
-    charBlock,
-    lorebookContext,
-    resolvedSuffix,
-  );
-
-  const systemContent = systemParts.filter(Boolean).join('\n\n');
+  const extras: PromptExtras = {qc, lorebook: lorebookContext};
+  const resolvedPrefix = resolvePlaceholders(config.prefix, character, userDescription, extras);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, character, userDescription, extras);
+  const systemContent = joinSystem(resolvedPrefix, resolvedSuffix);
 
   const messages: ChatMessageObject[] = [
     {role: 'system', content: systemContent},
@@ -511,23 +592,14 @@ export function buildGroupContinuePrompt(
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(selectedCharacter, config);
-  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, userDescription);
-  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, userDescription);
-
   const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
-
   const groupInstruction = `You are roleplaying as multiple characters in a group conversation. The characters are:\n${characters.map(c => `- ${c.name}`).join('\n')}\n\nThe user has selected **${selectedCharacter.name}** to respond next. Write ONLY as ${selectedCharacter.name}. Stay in character and respond naturally to the conversation.\n\nIMPORTANT: In the conversation history below, messages from each character are prefixed with their name in brackets, like [CharacterName]: message. Use this to understand who said what.`;
+  const extras: PromptExtras = {charBlock: charBlocks, groupInstruction};
 
-  const systemParts = buildSystemParts(
-    resolvedPrefix,
-    userDescription,
-    config,
-    charBlocks,
-    groupInstruction,
-    resolvedSuffix,
-  );
+  const resolvedPrefix = resolvePlaceholders(config.prefix, selectedCharacter, userDescription, extras);
+  const resolvedSuffix = resolvePlaceholders(config.suffix, selectedCharacter, userDescription, extras);
 
-  const systemContent = systemParts.filter(Boolean).join('\n\n');
+  const systemContent = joinSystem(resolvedPrefix, resolvedSuffix);
 
   const messages: ChatMessageObject[] = [
     {role: 'system', content: systemContent},
@@ -639,40 +711,25 @@ export async function sendToGroupLLM(
 }
 
 export function buildQuickCharacterPrompt(
-  qc: {id: string; name: string; description: string; personality: string},
+  qc: QuickCharacterFields,
   parentChar: Character,
   userMessage: string,
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   continueMode: boolean = false,
 ): ChatMessageObject[] {
-  const baseDescription = parentChar.description
-    ? `Base character: ${parentChar.name}\n${parentChar.description}`
-    : '';
-  const qcAsCharacter: Character = {
-    id: qc.id,
-    name: qc.name,
-    description: [qc.description, baseDescription].filter(Boolean).join('\n\n'),
-    personality: qc.personality,
-    customFields: parentChar.customFields,
-    scenario: parentChar.scenario,
-    exampleMessages: parentChar.exampleMessages,
-    initialMessage: '',
-    lorebookIds: [],
-    personaId: parentChar.personaId,
-  };
   const trimmed = historyWithoutLatestUserTurn(history, userMessage);
   const qcConfig: PromptConfig = {
     ...config,
     prefix: config.quickCharacterPrompt ?? DEFAULT_QUICK_CHARACTER_PROMPT,
   };
   return continueMode
-    ? buildContinuePrompt(qcAsCharacter, trimmed, qcConfig)
-    : buildPrompt(qcAsCharacter, userMessage, trimmed, qcConfig);
+    ? buildContinuePrompt(parentChar, trimmed, qcConfig, undefined, qc)
+    : buildPrompt(parentChar, userMessage, trimmed, qcConfig, undefined, qc);
 }
 
 export async function sendToQCLLM(
-  qc: {id: string; name: string; description: string; personality: string},
+  qc: QuickCharacterFields,
   parentChar: Character,
   userMessage: string,
   history: ChatMessage[],
