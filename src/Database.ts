@@ -4,7 +4,7 @@ import {encrypt, decrypt} from './Crypto';
 import {LorebookEntry, LorebookState} from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 14;
+const CURRENT_VERSION = 15;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -232,6 +232,10 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         addColumnIfMissing(conn, 'quick_characters', 'icon', 'TEXT DEFAULT ""');
       }
 
+      if (v === 15) {
+        addColumnIfMissing(conn, 'chat_messages', 'speaker_name', 'TEXT DEFAULT ""');
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -300,7 +304,6 @@ async function encryptVariants(variants: ReplyVariant[]): Promise<string> {
   );
   return JSON.stringify(encrypted);
 }
-
 async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
   if (!raw) {
     return [];
@@ -318,7 +321,7 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
 
 async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   const messagesResult = initDB().execute(
-    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms, character_id FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
+    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms, character_id, speaker_name FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
     [sessionId],
   );
   if (!messagesResult.results) {
@@ -334,6 +337,7 @@ async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
       requestInfo: msg.request_info ? (msg.request_info as string) : undefined,
       thinkingMs: (msg.thinking_ms as number) || undefined,
       characterId: (msg.character_id as string) || undefined,
+      speakerName: (msg.speaker_name as string) || undefined,
     })),
   );
 }
@@ -380,9 +384,9 @@ export async function createSession(session: ChatSession): Promise<void> {
         : '';
       const encryptedRequest = msg.requestInfo ? await encrypt(msg.requestInfo) : '';
       d.execute(
-        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id)
-         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?)`,
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, session.id, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0, msg.characterId ?? ''],
+        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name)
+         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?)`,
+        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, session.id, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0, msg.characterId ?? '', msg.speakerName ?? ''],
       );
     }
     d.execute('COMMIT');
@@ -416,9 +420,9 @@ export async function addMessage(sessionId: string, message: ChatMessage, atStar
     ? 'COALESCE(MIN(seq), 1) - 1'
     : 'COALESCE(MAX(seq), 0) + 1';
   d.execute(
-    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id)
-     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?)`,
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp, sessionId, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0, message.characterId ?? ''],
+    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name)
+     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?)`,
+    [message.id, sessionId, message.role, encryptedContent, message.timestamp, sessionId, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0, message.characterId ?? '', message.speakerName ?? ''],
   );
   searchCachePut(sessionId, message);
 }
@@ -537,14 +541,15 @@ export async function updateMessageWithVariants(
   requestInfo?: string,
   thinkingMs?: number,
   characterId?: string,
+  speakerName?: string,
 ): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
   const encryptedVariants = variants.length > 0 ? await encryptVariants(variants) : '';
   const encryptedRequest = requestInfo ? await encrypt(requestInfo) : null;
   d.execute(
-    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info), thinking_ms = ?, character_id = COALESCE(?, character_id) WHERE id = ?',
-    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, thinkingMs ?? 0, characterId ?? null, messageId],
+    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info), thinking_ms = ?, character_id = COALESCE(?, character_id), speaker_name = ? WHERE id = ?',
+    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, thinkingMs ?? 0, characterId ?? null, speakerName ?? '', messageId],
   );
   const cached = searchCache.get(messageId);
   if (cached) {
@@ -930,6 +935,32 @@ async function queryQuickCharacters(query: string, params: (string | number)[]):
 export function deleteQuickCharacter(id: string): void {
   const d = initDB();
   d.execute('DELETE FROM quick_characters WHERE id = ?', [id]);
+}
+
+export async function preserveSpeakerNames(deletedId: string, name: string): Promise<void> {
+  const d = initDB();
+  const rows = d.execute(
+    'SELECT id, variants FROM chat_messages WHERE character_id = ?',
+    [deletedId],
+  );
+  for (const row of rows.results ?? []) {
+    const id = row.id as string;
+    const rawVariants = (row.variants as string) || '';
+    if (rawVariants) {
+      try {
+        const parsed = JSON.parse(rawVariants) as ReplyVariant[];
+        const stamped = JSON.stringify(
+          parsed.map(v => ({...v, speakerName: name})),
+        );
+        d.execute('UPDATE chat_messages SET speaker_name = ?, variants = ? WHERE id = ?', [name, stamped, id]);
+      } catch (e) {
+        console.warn('Failed to stamp deleted speaker variants:', e);
+        d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [name, id]);
+      }
+    } else {
+      d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [name, id]);
+    }
+  }
 }
 
 // =========================================================================

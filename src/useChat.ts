@@ -31,6 +31,7 @@ export interface ReplyVariant {
   timestamp: number;
   characterId?: string;
   thinkingMs?: number;
+  speakerName?: string;
 }
 
 function serializeRequest(request: RawRequest): string {
@@ -45,6 +46,7 @@ export interface ChatMessage {
   content: string;
   timestamp: number;
   characterId?: string;
+  speakerName?: string;
   variants?: ReplyVariant[];
   requestInfo?: string;
   thinkingMs?: number;
@@ -87,6 +89,7 @@ function makeVariantEntry(id: string, msg: ChatMessage): ReplyVariant {
     content: msg.content,
     timestamp: msg.timestamp,
     ...(msg.characterId ? {characterId: msg.characterId} : {}),
+    ...(msg.speakerName ? {speakerName: msg.speakerName} : {}),
     ...(msg.thinkingMs !== undefined ? {thinkingMs: msg.thinkingMs} : {}),
   };
 }
@@ -826,6 +829,7 @@ export function useChat({
       content: lastMsg.content,
       timestamp: lastMsg.timestamp,
       ...(lastMsg.characterId ? {characterId: lastMsg.characterId} : {}),
+      ...(lastMsg.speakerName ? {speakerName: lastMsg.speakerName} : {}),
       ...(lastMsg.thinkingMs !== undefined ? {thinkingMs: lastMsg.thinkingMs} : {}),
     };
     const existingVariants = [...(lastMsg.variants ?? []), archivedVariant];
@@ -869,6 +873,7 @@ export function useChat({
           undefined,
           updatedMsg.thinkingMs,
           updatedMsg.characterId,
+          updatedMsg.speakerName,
         );
       } catch (e) {
         console.warn('Failed to update message variants:', e);

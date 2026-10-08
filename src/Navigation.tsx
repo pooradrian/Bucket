@@ -19,6 +19,7 @@ import {
   getQuickCharactersForCharacter,
   saveQuickCharacter,
   deleteQuickCharacter,
+  preserveSpeakerNames,
   generateId,
   createSession,
 } from './Database';
@@ -393,9 +394,12 @@ function HomeScreen() {
 
   const handleDeleteQC = useCallback(async (qcId: string) => {
     const qc = quickCharacters.find(q => q.id === qcId);
-    await deleteQuickCharacter(qcId);
     if (qc) {
+      await deleteQuickCharacter(qcId);
+      await preserveSpeakerNames(qc.id, qc.name);
       logEvent('qc_deleted', {nameLen: qc.name.length});
+    } else {
+      await deleteQuickCharacter(qcId);
     }
     reloadQCs(activeSessionId);
   }, [activeSessionId, reloadQCs, quickCharacters]);
