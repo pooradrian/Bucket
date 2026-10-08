@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import {FlatList, Image, KeyboardAvoidingView, Modal, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {launchImageLibrary} from 'react-native-image-picker';
 import Animated, {
   useSharedValue,
