@@ -197,17 +197,16 @@ function migratePromptConfig(config: PromptConfig): boolean {
     config.quickCharacterPrompt = DEFAULT_QUICK_CHARACTER_PROMPT;
     changed = true;
   }
-  if (getKV(PROMPT_MIGRATED_KEY)) return changed;
-  setKV(PROMPT_MIGRATED_KEY, '1');
   if (config.prefix === LEGACY_PREFIX) {
     config.prefix = DEFAULT_PROMPT_CONFIG.prefix;
     changed = true;
   }
   const qc = config.quickCharacterPrompt;
   const corrupted = [
-    '- $QUICKCHARNAME$ is a persona of $QUICKCHARNAME$,',
-    '- $QUICKCHARNAME$ is a quick character of $QUICKCHARNAME$,',
+    '- $QUICKCHARNAME$ is a persona of $QUICKCHARNAME$',
+    '- $QUICKCHARNAME$ is a quick character of $QUICKCHARNAME$',
   ];
+  let repaired = false;
   if (typeof qc === 'string' && corrupted.some(c => qc.includes(c))) {
     config.quickCharacterPrompt = qc
       .split('- $QUICKCHARNAME$ is a persona of $QUICKCHARNAME$,')
@@ -215,7 +214,11 @@ function migratePromptConfig(config: PromptConfig): boolean {
       .split('- $QUICKCHARNAME$ is a quick character of $QUICKCHARNAME$,')
       .join('- $QUICKCHARNAME$ is a quick character of $CHARNAME$,');
     changed = true;
-  } else if (typeof qc === 'string') {
+    repaired = true;
+  }
+  if (getKV(PROMPT_MIGRATED_KEY)) return changed;
+  setKV(PROMPT_MIGRATED_KEY, '1');
+  if (typeof qc === 'string' && !repaired) {
     const migrated =
       qc === LEGACY_QUICK_CHARACTER_PROMPT
         ? DEFAULT_QUICK_CHARACTER_PROMPT
