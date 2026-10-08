@@ -312,6 +312,138 @@ describe('starred quick characters outlive their session', () => {
   });
 });
 
+describe('quick character icon bundling', () => {
+  const dataIcon = 'data:image/png;base64,aWNvbg==';
+
+  const fsReadFile = RNFS.readFile as jest.Mock;
+  const deviceIcon = 'file:///data/user/0/bucket/files/icons/starred-src.png';
+
+  beforeEach(() => {
+    fsReadFile.mockResolvedValue('aWNvbg==');
+  });
+
+  afterEach(() => {
+    fsReadFile.mockResolvedValue('');
+  });
+
+  test('qc icons export as image files, like character icons', async () => {
+    await saveCharacterToDB({
+      id: charId,
+      name: 'Alice',
+      description: 'A detective',
+      initial_message: 'Hi',
+      writing_style: '',
+      personality: 'calm',
+      scenario: 'noir',
+      example_messages: '',
+      icon: deviceIcon,
+      lorebook_id: '',
+      custom_fields: '',
+      persona_id: '',
+    });
+    await saveQuickCharacter({
+      id: starredQcId,
+      session_id: sessionId,
+      character_id: charId,
+      name: 'Starred QC',
+      description: 'starred description',
+      personality: 'grumpy',
+      starred: 1,
+      icon: deviceIcon,
+    });
+
+    await exportBundle([charId]);
+    const bundle = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+
+    const charImage = bundle.file(`icons/${charId}.png`);
+    const qcImage = bundle.file(`qcicons/${starredQcId}.png`);
+    expect(charImage).not.toBeNull();
+    expect(qcImage).not.toBeNull();
+    expect(await charImage!.async('string')).toBe('icon');
+    expect(await qcImage!.async('string')).toBe('icon');
+  });
+
+  test('chats JSON carries no icon paths or payloads', async () => {
+    await saveQuickCharacter({
+      id: starredQcId,
+      session_id: sessionId,
+      character_id: charId,
+      name: 'Starred QC',
+      description: 'starred description',
+      personality: 'grumpy',
+      starred: 1,
+      icon: deviceIcon,
+    });
+
+    await exportBundle([charId]);
+    const bundle = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+    const chat = JSON.parse(await bundle.file(`chats/${sessionId}.json`)!.async('string'));
+    for (const qc of chat.quickCharacters) {
+      expect(qc.icon).toBe('');
+    }
+  });
+
+  test('dangling quick characters export their icon image too', async () => {
+    await saveQuickCharacter({
+      id: starredQcId,
+      session_id: sessionId,
+      character_id: charId,
+      name: 'Starred QC',
+      description: 'starred description',
+      personality: 'grumpy',
+      starred: 1,
+      icon: deviceIcon,
+    });
+    deleteSession(sessionId);
+
+    await exportBundle([charId]);
+    const bundle = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+    expect(bundle.file(`qcicons/${starredQcId}.png`)).not.toBeNull();
+    const file = bundle.file(`quickcharacters/${charId}.json`);
+    expect(file).not.toBeNull();
+    const parsed = JSON.parse(await file!.async('string'));
+    expect(parsed.quickCharacters.find((q: {id: string}) => q.id === starredQcId).icon).toBe('');
+  });
+
+  test('icons transfer to a fresh device under a local path', async () => {
+    await saveQuickCharacter({
+      id: sessionQcId,
+      session_id: sessionId,
+      character_id: '',
+      name: 'Session QC',
+      description: 'session description',
+      personality: 'sunny',
+      starred: 0,
+      icon: dataIcon,
+    });
+
+    await exportBundle([charId]);
+    clearAll();
+    const result = await importBundle();
+
+    const qcs = await getQuickCharactersForSession(sessionId);
+    const sessionQc = qcs.find(q => q.id === sessionQcId)!;
+    expect(sessionQc.icon).toMatch(new RegExp(`^file:///tmp/documents/icons/qc-${sessionQcId}\\.png$`));
+
+    const writeFile = RNFS.writeFile as jest.Mock;
+    const iconWrite = writeFile.mock.calls.find(c => String(c[0]).includes(`qc-${sessionQcId}`));
+    expect(iconWrite).toBeTruthy();
+    expect(iconWrite![1]).toBe('aWNvbg==');
+
+    const imported = result.quickCharacters.find(q => q.id === sessionQcId)!;
+    expect(imported.icon).toBe(sessionQc.icon);
+  });
+
+  test('a bundle without icons still imports quick characters', async () => {
+    await exportBundle([charId]);
+    clearAll();
+    const result = await importBundle();
+    expect(result.quickCharacters).toHaveLength(2);
+    const qcs = await getQuickCharactersForSession(sessionId);
+    expect(qcs.every(q => q.icon === '')).toBe(true);
+  });
+});
+
 describe('import result only reports what was written', () => {
   test('re-importing an unchanged bundle reports nothing new', async () => {
     await saveGroupChatToDB({

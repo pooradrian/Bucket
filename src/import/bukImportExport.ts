@@ -32,6 +32,45 @@ import {readIconFile} from './util';
 import {parseV1Json, parseV2Json, serializeV2} from './characterCardSchema';
 import {BukImportResult, ExportOptions} from './types';
 
+function iconExt(uri: string): string {
+  const clean = uri.split('?')[0].split('#')[0];
+  const ext = (clean.match(/\.([A-Za-z0-9]{1,5})$/) || [])[1];
+  return ext ? ext.toLowerCase() : 'png';
+}
+
+async function restoreQuickCharacterIcons(
+  zip: JSZip,
+  quickCharacters: DBQuickCharacter[],
+  existingQcIds: Set<string>,
+): Promise<void> {
+  const iconDir = zip.folder('qcicons');
+  if (!iconDir) {
+    return;
+  }
+  const iconFiles = Object.entries(iconDir.filter(() => true));
+  if (iconFiles.length === 0) {
+    return;
+  }
+  await RNFS.mkdir(`${RNFS.DocumentDirectoryPath}/icons`).catch(() => {});
+  for (const [, file] of iconFiles) {
+    if (file.dir) continue;
+    try {
+      const name = file.name.split('/').pop() || '';
+      const qcId = name.split('.')[0];
+      const ext = name.split('.').pop() || 'png';
+      if (!qcId || existingQcIds.has(qcId)) continue;
+      const qc = quickCharacters.find(q => q.id === qcId);
+      if (!qc) continue;
+      const base64 = await file.async('base64');
+      const iconPath = `${RNFS.DocumentDirectoryPath}/icons/qc-${qcId}.${ext}`;
+      await RNFS.writeFile(iconPath, base64, 'base64');
+      qc.icon = `file://${iconPath}`;
+    } catch (e) {
+      console.warn('Failed to import quick character icon:', e);
+    }
+  }
+}
+
 function normalizeQuickCharacter(
   qc: Partial<DBQuickCharacter>,
   sessionId: string,
@@ -348,6 +387,8 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   }
   result.sessions = importedSessions;
 
+  await restoreQuickCharacterIcons(zip, result.quickCharacters, existingQcIds);
+
   const importedQcs: DBQuickCharacter[] = [];
   for (const qc of result.quickCharacters) {
     if (existingQcIds.has(qc.id)) {
@@ -495,6 +536,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
 
   const exportedSessionIds = new Set<string>();
   const exportedQcIds = new Set<string>();
+  const qcIconsToBundle: {id: string; icon: string}[] = [];
   if (options.includeChats) {
     const chatFolder = zip.folder('chats');
     const exportSessions = async (summaries: SessionSummary[]) => {
@@ -502,11 +544,15 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
         const session = await getSessionById(summary.id);
         if (!session) continue;
         const quickCharacters = await getQuickCharactersForSession(session.id);
-        const payload = stripRequestInfo({...session, quickCharacters});
+        const payload = stripRequestInfo({
+          ...session,
+          quickCharacters: quickCharacters.map(qc => ({...qc, icon: ''})),
+        });
         chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
         exportedSessionIds.add(session.id);
         for (const qc of quickCharacters) {
           exportedQcIds.add(qc.id);
+          if (qc.icon) qcIconsToBundle.push({id: qc.id, icon: qc.icon});
         }
       }
     };
@@ -525,14 +571,27 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     if (dangling.length === 0) continue;
     for (const qc of dangling) {
       exportedQcIds.add(qc.id);
+      if (qc.icon) qcIconsToBundle.push({id: qc.id, icon: qc.icon});
     }
     zip.folder('quickcharacters')?.file(
       `${charId}.json`,
       JSON.stringify({
         characterId: charId,
-        quickCharacters: dangling.map(qc => ({...qc, session_id: ''})),
+        quickCharacters: dangling.map(qc => ({...qc, session_id: '', icon: ''})),
       }, null, 2),
     );
+  }
+
+  if (qcIconsToBundle.length > 0) {
+    const qcIconFolder = zip.folder('qcicons');
+    for (const {id, icon} of qcIconsToBundle) {
+      try {
+        const base64 = await readIconFile(icon);
+        if (base64) {
+          qcIconFolder?.file(`${id}.${iconExt(icon)}`, base64, {base64: true});
+        }
+      } catch (e) { console.warn('Failed to export quick character icon:', e); }
+    }
   }
 
   const now = new Date();
