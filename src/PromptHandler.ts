@@ -509,6 +509,7 @@ function speakerName(
     if (qc && id === qc.id) return qc.name;
     const found = (quickCharacters ?? []).find(q => q.id === id);
     if (found) return found.name;
+    if (msg.speakerName) return msg.speakerName;
   }
   return character.name;
 }

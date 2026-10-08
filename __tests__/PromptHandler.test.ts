@@ -178,6 +178,16 @@ describe('buildQuickCharacterPrompt', () => {
     expect(msgs.find(m => m.content.includes('base reply'))!.content).toBe('[Bob]: base reply');
   });
 
+  test('messages from a deleted quick character keep their stamped name', () => {
+    const orphanHistory: ChatMessage[] = [
+      {id: '1', role: 'assistant', content: 'I was Viktor', timestamp: 1, characterId: 'qc-gone', speakerName: 'Viktor'},
+      {id: '2', role: 'assistant', content: 'unknown speaker', timestamp: 2, characterId: 'qc-unknown'},
+    ];
+    const msgs = buildQuickCharacterPrompt(qc, char, 'hi', orphanHistory, DEFAULT_PROMPT_CONFIG);
+    expect(msgs.find(m => m.content.includes('I was Viktor'))!.content).toBe('[Viktor]: I was Viktor');
+    expect(msgs.find(m => m.content.includes('unknown speaker'))!.content).toBe('[Bob]: unknown speaker');
+  });
+
   test('stripSpeakerNamePrefixes removes echoed speaker markers', () => {
     expect(stripSpeakerNamePrefixes('[Bob]: hello there', ['Bob'])).toBe('hello there');
     expect(stripSpeakerNamePrefixes('[Viktor]: hello', ['Bob', 'Viktor'])).toBe('hello');

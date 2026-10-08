@@ -30,6 +30,7 @@ import {
   getAllSessionsForCharacter,
   addMessage,
   updateMessageWithVariants,
+  preserveSpeakerNames,
 } from '../src/Database';
 import type {ChatMessage} from '../src/useChat';
 
@@ -103,11 +104,11 @@ beforeAll(async () => {
   }
 });
 
-test('upgrade runs migrations through v14', () => {
+test('upgrade runs migrations through v15', () => {
   const result = db.execute('PRAGMA user_version');
   expect(result.results?.[0]?.user_version).toBe(11);
   initDB();
-  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(14);
+  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(15);
 });
 
 test('backfill restores insertion order for threads whose timestamps were rewritten', async () => {
@@ -179,4 +180,36 @@ test('fresh installs track sequence without a migration', async () => {
 
   loaded = await fresh.getSessionById('fs1');
   expect(contents(loaded!.messages)).toEqual(['[Summary] s', 'fu1', 'fa1', 'fu2', 'fa2', 'fu3']);
+});
+
+describe('preserveSpeakerNames', () => {
+  test('stamps the live message and its variants with the deleted speaker', async () => {
+    await updateMessageWithVariants(
+      'm2',
+      'a1 (deck)',
+      500_002,
+      [{id: 'v1', content: 'a1 variant', timestamp: 500_100}],
+      undefined,
+      undefined,
+      'qc-dead',
+    );
+
+    await preserveSpeakerNames('qc-dead', 'Viktor');
+
+    const session = await getSessionById('s1');
+    const m2 = session!.messages.find(m => m.id === 'm2')!;
+    expect(m2.speakerName).toBe('Viktor');
+    expect(m2.characterId).toBe('qc-dead');
+    expect(m2.variants![0].speakerName).toBe('Viktor');
+
+    const m4 = session!.messages.find(m => m.id === 'm4')!;
+    expect(m4.speakerName).toBeUndefined();
+  });
+
+  test('leaves messages alone when no rows match the deleted id', async () => {
+    await preserveSpeakerNames('qc-never-existed', 'Ghost');
+    const session = await getSessionById('s1');
+    const m4 = session!.messages.find(m => m.id === 'm4')!;
+    expect(m4.speakerName).toBeUndefined();
+  });
 });

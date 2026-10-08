@@ -66,6 +66,7 @@ jest.mock('../src/Database', () => ({
   updateSessionTimestamp: jest.fn(),
   setLastReplyCharacterId: jest.fn(),
   addMessage: jest.fn(),
+  preserveSpeakerNames: jest.fn(),
 }));
 jest.mock('react-native-reanimated', () => {
   const React = require('react');

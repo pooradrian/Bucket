@@ -543,6 +543,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
           : undefined;
       return c ? {name: c.name, icon: c.icon || undefined} : null;
     }
+    if (item.characterId && item.speakerName) return {name: item.speakerName};
     if (quickCharacters.length === 0) return null;
     const qc = item.characterId
       ? quickCharacters.find(q => q.id === item.characterId)
