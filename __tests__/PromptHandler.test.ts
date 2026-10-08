@@ -235,6 +235,40 @@ describe('stored prompt migration after the placeholder split', () => {
     const loaded = await loadPromptConfig();
     expect(loaded.quickCharacterPrompt).toBe('Base is $CHARNAME$, I am $QUICKCHARNAME$.');
   });
+
+  test('a corrupted quick character prompt is repaired even after migration is marked done', async () => {
+    mockStore({
+      promptConfig: stored({
+        quickCharacterPrompt:
+          'You are roleplaying as $QUICKCHARNAME$.\n\n- $QUICKCHARNAME$ is a quick character of $QUICKCHARNAME$, the base character described below.',
+      }),
+      promptConfigMigrated: '1',
+    });
+    const loaded = await loadPromptConfig();
+    expect(loaded.quickCharacterPrompt).toBe(
+      'You are roleplaying as $QUICKCHARNAME$.\n\n- $QUICKCHARNAME$ is a quick character of $CHARNAME$, the base character described below.',
+    );
+    expect(setKV).toHaveBeenCalledWith('promptConfig', expect.stringContaining('$CHARNAME$, the base character'));
+  });
+
+  test('a previously migrated prompt is not rewritten again after repair', async () => {
+    mockStore({
+      promptConfig: stored({quickCharacterPrompt: 'Base is $CHARNAME$, I am $QUICKCHARNAME$.'}),
+    });
+    await loadPromptConfig();
+    expect(setKV).toHaveBeenCalledWith('promptConfigMigrated', '1');
+
+    (setKV as jest.Mock).mockClear();
+    const storedConfig = stored({quickCharacterPrompt: 'Base is $CHARNAME$, I am $QUICKCHARNAME$.'});
+    (getKV as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'promptConfig') return storedConfig;
+      if (key === 'promptConfigMigrated') return '1';
+      return null;
+    });
+    const loaded = await loadPromptConfig();
+    expect(loaded.quickCharacterPrompt).toBe('Base is $CHARNAME$, I am $QUICKCHARNAME$.');
+    expect(setKV).not.toHaveBeenCalledWith('promptConfig', expect.anything());
+  });
 });
 
 describe('nothing is inserted that a prompt did not ask for', () => {
