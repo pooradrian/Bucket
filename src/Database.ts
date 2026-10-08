@@ -536,14 +536,15 @@ export async function updateMessageWithVariants(
   variants: ReplyVariant[],
   requestInfo?: string,
   thinkingMs?: number,
+  characterId?: string,
 ): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
   const encryptedVariants = variants.length > 0 ? await encryptVariants(variants) : '';
   const encryptedRequest = requestInfo ? await encrypt(requestInfo) : null;
   d.execute(
-    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info), thinking_ms = ? WHERE id = ?',
-    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, thinkingMs ?? 0, messageId],
+    'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info), thinking_ms = ?, character_id = COALESCE(?, character_id) WHERE id = ?',
+    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, thinkingMs ?? 0, characterId ?? null, messageId],
   );
   const cached = searchCache.get(messageId);
   if (cached) {

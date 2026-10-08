@@ -570,6 +570,7 @@ export function useChat({
             opts.existingVariants ?? [],
             requestInfo,
             thinkingMsValue,
+            replyCharId,
           );
           updateSessionTimestamp(startSessionId, assistantUpdatedAt);
         } else {
@@ -867,6 +868,7 @@ export function useChat({
           updatedMsg.variants ?? [],
           undefined,
           updatedMsg.thinkingMs,
+          updatedMsg.characterId,
         );
       } catch (e) {
         console.warn('Failed to update message variants:', e);

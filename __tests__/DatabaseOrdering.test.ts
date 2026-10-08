@@ -121,6 +121,23 @@ test('rewriting a timestamp no longer reorders the thread', async () => {
   expect(contents(session!.messages)).toEqual(['u1*', 'a1', 'u2', 'a2']);
 });
 
+test('variant updates persist the message speaker so it survives reopening', async () => {
+  await updateMessageWithVariants('m2', 'a1 (regenerated)', 500_001, [], undefined, undefined, 'qc-9');
+  const session = await getSessionById('s1');
+  const m2 = session!.messages.find(m => m.id === 'm2');
+  expect(m2!.characterId).toBe('qc-9');
+  expect(m2!.content).toBe('a1 (regenerated)');
+  await updateMessageWithVariants('m2', 'a1', 500_000, []);
+});
+
+test('variant updates without a speaker leave the stored one in place', async () => {
+  await updateMessageWithVariants('m4', 'a2*', 900_001, []);
+  const session = await getSessionById('s1');
+  const m4 = session!.messages.find(m => m.id === 'm4');
+  expect(m4!.characterId).toBeUndefined();
+  await updateMessageWithVariants('m4', 'a2', 900_000, []);
+});
+
 test('appends land last and front inserts land first regardless of timestamp', async () => {
   await addMessage('s1', msg('m5', 'user', 'u3', 7));
   await addMessage('s1', msg('sum1', 'assistant', '[Summary] s', 1), true);
