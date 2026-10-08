@@ -94,6 +94,24 @@ function makeVariantEntry(id: string, msg: ChatMessage): ReplyVariant {
   };
 }
 
+export function reconcileSelectedQC(
+  selected: QuickCharacter | null,
+  list: QuickCharacter[],
+): QuickCharacter | null {
+  if (!selected) return null;
+  const fresh = list.find(q => q.id === selected.id);
+  if (!fresh) return null;
+  if (
+    fresh.name === selected.name &&
+    fresh.description === selected.description &&
+    fresh.personality === selected.personality &&
+    fresh.icon === selected.icon
+  ) {
+    return selected;
+  }
+  return fresh;
+}
+
 function notifyCompletion(): void {
   const {appSettings} = useAppStore.getState();
   if (appSettings.notificationMode === 'vibrate' || appSettings.notificationMode === 'both') {
@@ -439,8 +457,9 @@ export function useChat({
   }, [activeSessionId]);
 
   useEffect(() => {
-    if (selectedQC && !quickCharacters.find(q => q.id === selectedQC.id)) {
-      setSelectedQC(null);
+    const reconciled = reconcileSelectedQC(selectedQC, quickCharacters);
+    if (reconciled !== selectedQC) {
+      setSelectedQC(reconciled);
     }
   }, [quickCharacters, selectedQC]);
 
