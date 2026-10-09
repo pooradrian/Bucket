@@ -62,8 +62,24 @@ jobs:
           else
             base="Bucket-v$(node -p "require('./package.json').version")-${GITHUB_SHA::7}"
           fi
+          mapfile -t apks < <(find android/app/build/outputs -name '*.apk')
+          echo "found ${#apks[@]} APK(s):"
+          printf '  %s\n' "${apks[@]}"
+          if ((${#apks[@]} == 0)); then exit 1; fi
+          first=""
           for abi in arm64-v8a armeabi-v7a; do
-            cp "android/app/build/outputs/apk/release/app-release-$abi.apk" "$base-$abi.apk"
+            match=""
+            for apk in "${apks[@]}"; do
+              if unzip -l "$apk" | grep -q "lib/$abi/"; then
+                if [[ -n "$match" ]]; then echo "multiple APKs contain $abi"; exit 1; fi
+                match="$apk"
+              fi
+            done
+            if [[ -z "$match" ]]; then echo "no APK contains lib/$abi/"; exit 1; fi
+            if [[ -z "$first" ]]; then first="$match"
+            elif [[ "$match" == "$first" ]]; then echo "splits not applied: $match contains both ABIs"; exit 1; fi
+            cp "$match" "$base-$abi.apk"
+            echo "$abi <- $match"
           done
           echo "base=$base" >> "$GITHUB_OUTPUT"
 
