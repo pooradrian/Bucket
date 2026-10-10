@@ -1,11 +1,28 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {ActivityIndicator, BackHandler, FlatList, Keyboard, Platform, Text, ToastAndroid, View} from 'react-native';
-import {useFocusEffect, useNavigation, useRoute, RouteProp} from '@react-navigation/native';
-import {createNativeStackNavigator, NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Character} from './CharacterEditor';
-import {GroupChat, AppSettings, useAppStore} from './store';
-import {useTheme} from './ThemeContext';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  FlatList,
+  Keyboard,
+  Platform,
+  Text,
+  ToastAndroid,
+  View,
+} from 'react-native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  RouteProp,
+} from '@react-navigation/native';
+import {
+  createNativeStackNavigator,
+  NativeStackNavigationProp,
+} from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Character } from './CharacterEditor';
+import { GroupChat, AppSettings, useAppStore } from './store';
+import { useTheme } from './ThemeContext';
 import {
   getAllSessionsForCharacter,
   getSessionsForGroupChat,
@@ -23,8 +40,8 @@ import {
   generateId,
   createSession,
 } from './Database';
-import {QuickCharacter} from './useChat';
-import {logEvent} from './EventLogger';
+import { QuickCharacter } from './useChat';
+import { logEvent } from './EventLogger';
 import ChatHandler from './ChatHandler';
 import SettingsHandler from './SettingsHandler';
 import CharacterEditor from './CharacterEditor';
@@ -39,7 +56,7 @@ import WelcomeGuide from './WelcomeGuide';
 type RootStackParamList = {
   Home: undefined;
   Settings: undefined;
-  Editor: {characterId?: string};
+  Editor: { characterId?: string };
   Debugger: undefined;
 };
 
@@ -73,14 +90,19 @@ function HomeScreen() {
   const loadGroupChats = useAppStore(s => s.loadGroupChats);
 
   const [activeTab, setActiveTab] = useState<ContentTab>('menu');
-  const [activeChatCharacter, setActiveChatCharacter] = useState<Character | null>(null);
-  const [activeGroupChat, setActiveGroupChat] = useState<GroupChat | null>(null);
+  const [activeChatCharacter, setActiveChatCharacter] =
+    useState<Character | null>(null);
+  const [activeGroupChat, setActiveGroupChat] = useState<GroupChat | null>(
+    null,
+  );
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [historySessions, setHistorySessions] = useState<SessionSummary[]>([]);
   const [quickCharacters, setQuickCharacters] = useState<QuickCharacter[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<string | null>(null);
+  const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<
+    string | null
+  >(null);
   const [editingGroup, setEditingGroup] = useState<GroupChat | null>(null);
   const [showConvertGroup, setShowConvertGroup] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -122,26 +144,34 @@ function HomeScreen() {
     setWelcomeDismissed(v === 'true');
   }, []);
 
-  const reloadQCs = useCallback(async (sessionId: string | null) => {
-    const request = ++qcReloadRef.current;
-    const dbQCs = activeChatCharacter
-      ? await getQuickCharactersForCharacter(activeChatCharacter.id, sessionId ?? '')
-      : sessionId
-      ? await getQuickCharactersForSession(sessionId)
-      : [];
-    if (request !== qcReloadRef.current) {
-      return;
-    }
-    setQuickCharacters(dbQCs.map(dbQc => ({
-      id: dbQc.id,
-      session_id: dbQc.session_id,
-      name: dbQc.name,
-      description: dbQc.description,
-      personality: dbQc.personality,
-      starred: dbQc.starred === 1,
-      icon: dbQc.icon || undefined,
-    })));
-  }, [activeChatCharacter]);
+  const reloadQCs = useCallback(
+    async (sessionId: string | null) => {
+      const request = ++qcReloadRef.current;
+      const dbQCs = activeChatCharacter
+        ? await getQuickCharactersForCharacter(
+            activeChatCharacter.id,
+            sessionId ?? '',
+          )
+        : sessionId
+          ? await getQuickCharactersForSession(sessionId)
+          : [];
+      if (request !== qcReloadRef.current) {
+        return;
+      }
+      setQuickCharacters(
+        dbQCs.map(dbQc => ({
+          id: dbQc.id,
+          session_id: dbQc.session_id,
+          name: dbQc.name,
+          description: dbQc.description,
+          personality: dbQc.personality,
+          starred: dbQc.starred === 1,
+          icon: dbQc.icon || undefined,
+        })),
+      );
+    },
+    [activeChatCharacter],
+  );
 
   useEffect(() => {
     reloadQCs(activeSessionId);
@@ -154,7 +184,9 @@ function HomeScreen() {
     if (activeGroupChat) {
       setHistorySessions(await getSessionsForGroupChat(activeGroupChat.id));
     } else if (activeChatCharacter) {
-      setHistorySessions(await getAllSessionsForCharacter(activeChatCharacter.id));
+      setHistorySessions(
+        await getAllSessionsForCharacter(activeChatCharacter.id),
+      );
     }
   }, [activeChatCharacter, activeGroupChat]);
 
@@ -169,21 +201,24 @@ function HomeScreen() {
   const handleNewChat = useCallback(() => {
     setShowHistory(false);
     setActiveSessionId(null);
-    logEvent('session_created', {msgCount: 0});
+    logEvent('session_created', { msgCount: 0 });
   }, []);
 
-  const handleSwitchSession = useCallback((sessionId: string) => {
-    setShowHistory(false);
-    setActiveSessionId(sessionId);
-    const session = historySessions.find(s => s.id === sessionId);
-    logEvent('session_switched', {msgCount: session?.messageCount ?? 0});
-  }, [historySessions]);
+  const handleSwitchSession = useCallback(
+    (sessionId: string) => {
+      setShowHistory(false);
+      setActiveSessionId(sessionId);
+      const session = historySessions.find(s => s.id === sessionId);
+      logEvent('session_switched', { msgCount: session?.messageCount ?? 0 });
+    },
+    [historySessions],
+  );
 
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
       const session = historySessions.find(s => s.id === sessionId);
       deleteSession(sessionId);
-      logEvent('session_deleted', {msgCount: session?.messageCount ?? 0});
+      logEvent('session_deleted', { msgCount: session?.messageCount ?? 0 });
       if (sessionId === activeSessionId) {
         const remaining = historySessions.filter(s => s.id !== sessionId);
         if (remaining.length > 0) {
@@ -220,8 +255,8 @@ function HomeScreen() {
       const sessions = char
         ? await getAllSessionsForCharacter(char.id)
         : group
-        ? await getSessionsForGroupChat(group.id)
-        : [];
+          ? await getSessionsForGroupChat(group.id)
+          : [];
       setActiveSessionId(sessions.length > 0 ? sessions[0].id : null);
       setActiveTab('chat');
     },
@@ -239,7 +274,8 @@ function HomeScreen() {
   );
 
   const handleCharacterEdit = useCallback(
-    (char: Character) => navigation.navigate('Editor', {characterId: char.id}),
+    (char: Character) =>
+      navigation.navigate('Editor', { characterId: char.id }),
     [navigation],
   );
 
@@ -263,7 +299,7 @@ function HomeScreen() {
   const handleRenameSession = useCallback((sessionId: string, name: string) => {
     renameSession(sessionId, name);
     setHistorySessions(prev =>
-      prev.map(s => (s.id === sessionId ? {...s, name: name.trim()} : s)),
+      prev.map(s => (s.id === sessionId ? { ...s, name: name.trim() } : s)),
     );
   }, []);
 
@@ -272,7 +308,9 @@ function HomeScreen() {
       if (!activeSessionId) return;
       saveGroupChat(group);
       migrateSessionToGroup(activeSessionId, group.id);
-      logEvent('chat_converted_to_group', {memberCount: group.characterIds.length});
+      logEvent('chat_converted_to_group', {
+        memberCount: group.characterIds.length,
+      });
       setShowConvertGroup(false);
       setShowHistory(false);
       loadGroupChats();
@@ -299,122 +337,157 @@ function HomeScreen() {
     setActiveTab('menu');
   }, []);
 
-  const handleCreateQC = useCallback(async (qcData: {name: string; description: string; personality: string; icon?: string}) => {
-    let sessionId = activeSessionId;
-    if (!sessionId && (activeChatCharacter || activeGroupChat)) {
-      const newSession = {
+  const handleCreateQC = useCallback(
+    async (qcData: {
+      name: string;
+      description: string;
+      personality: string;
+      icon?: string;
+    }) => {
+      let sessionId = activeSessionId;
+      if (!sessionId && (activeChatCharacter || activeGroupChat)) {
+        const newSession = {
+          id: generateId(),
+          characterId: activeGroupChat ? '' : activeChatCharacter!.id,
+          groupChatId: activeGroupChat?.id,
+          messages: activeChatCharacter?.initialMessage
+            ? [
+                {
+                  id: generateId(),
+                  role: 'assistant' as const,
+                  content: activeChatCharacter.initialMessage,
+                  timestamp: Date.now(),
+                },
+              ]
+            : [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await createSession(newSession);
+        sessionId = newSession.id;
+        setActiveSessionId(newSession.id);
+        loadHistorySessions();
+      }
+      if (!sessionId) return;
+      await saveQuickCharacter({
         id: generateId(),
-        characterId: activeGroupChat ? '' : activeChatCharacter!.id,
-        groupChatId: activeGroupChat?.id,
-        messages: activeChatCharacter?.initialMessage
-          ? [
-              {
-                id: generateId(),
-                role: 'assistant' as const,
-                content: activeChatCharacter.initialMessage,
-                timestamp: Date.now(),
-              },
-            ]
-          : [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-      await createSession(newSession);
-      sessionId = newSession.id;
-      setActiveSessionId(newSession.id);
-      loadHistorySessions();
-    }
-    if (!sessionId) return;
-    await saveQuickCharacter({
-      id: generateId(),
-      session_id: sessionId,
-      character_id: '',
-      name: qcData.name,
-      description: qcData.description,
-      personality: qcData.personality,
-      starred: 0,
-      icon: qcData.icon || '',
-    });
-    logEvent('qc_created', {
-      nameLen: qcData.name.length,
-      descLen: qcData.description?.length || 0,
-      hasPersonality: !!qcData.personality,
-    });
-    reloadQCs(sessionId);
-  }, [activeSessionId, activeChatCharacter, activeGroupChat, reloadQCs, loadHistorySessions]);
-
-  const handleUpdateQC = useCallback(async (qcId: string, qcData: {name: string; description: string; personality: string; icon?: string}) => {
-    const qc = quickCharacters.find(q => q.id === qcId);
-    if (!qc) return;
-    await saveQuickCharacter({
-      id: qc.id,
-      session_id: qc.session_id || activeSessionId || '',
-      character_id: qc.starred ? (activeChatCharacter?.id || '') : '',
-      name: qcData.name,
-      description: qcData.description,
-      personality: qcData.personality,
-      starred: qc.starred ? 1 : 0,
-      icon: qcData.icon || '',
-    });
-    logEvent('qc_updated', {nameLen: qcData.name.length});
-    reloadQCs(activeSessionId);
-  }, [quickCharacters, activeSessionId, activeChatCharacter, reloadQCs]);
-
-  const handleToggleQCStar = useCallback(async (qcId: string) => {
-    const qc = quickCharacters.find(q => q.id === qcId);
-    if (!qc) return;
-    if (!qc.starred) {
-      await saveQuickCharacter({
-        id: qc.id,
-        session_id: qc.session_id || '',
-        character_id: activeChatCharacter?.id || '',
-        name: qc.name,
-        description: qc.description,
-        personality: qc.personality,
-        starred: 1,
-        icon: qc.icon || '',
-      });
-    } else if (activeSessionId) {
-      await saveQuickCharacter({
-        id: qc.id,
-        session_id: activeSessionId,
+        session_id: sessionId,
         character_id: '',
-        name: qc.name,
-        description: qc.description,
-        personality: qc.personality,
+        name: qcData.name,
+        description: qcData.description,
+        personality: qcData.personality,
         starred: 0,
-        icon: qc.icon || '',
+        icon: qcData.icon || '',
       });
-    } else {
-      deleteQuickCharacter(qc.id);
-    }
-    logEvent(qc.starred ? 'qc_unstarred' : 'qc_starred', {nameLen: qc.name.length});
-    reloadQCs(activeSessionId);
-  }, [quickCharacters, activeSessionId, activeChatCharacter, reloadQCs]);
+      logEvent('qc_created', {
+        nameLen: qcData.name.length,
+        descLen: qcData.description?.length || 0,
+        hasPersonality: !!qcData.personality,
+      });
+      reloadQCs(sessionId);
+    },
+    [
+      activeSessionId,
+      activeChatCharacter,
+      activeGroupChat,
+      reloadQCs,
+      loadHistorySessions,
+    ],
+  );
 
-  const handleDeleteQC = useCallback(async (qcId: string) => {
-    const qc = quickCharacters.find(q => q.id === qcId);
-    if (qc) {
-      await deleteQuickCharacter(qcId);
-      await preserveSpeakerNames(qc.id, qc.name);
-      logEvent('qc_deleted', {nameLen: qc.name.length});
-    } else {
-      await deleteQuickCharacter(qcId);
-    }
-    reloadQCs(activeSessionId);
-  }, [activeSessionId, reloadQCs, quickCharacters]);
+  const handleUpdateQC = useCallback(
+    async (
+      qcId: string,
+      qcData: {
+        name: string;
+        description: string;
+        personality: string;
+        icon?: string;
+      },
+    ) => {
+      const qc = quickCharacters.find(q => q.id === qcId);
+      if (!qc) return;
+      await saveQuickCharacter({
+        id: qc.id,
+        session_id: qc.session_id || activeSessionId || '',
+        character_id: qc.starred ? activeChatCharacter?.id || '' : '',
+        name: qcData.name,
+        description: qcData.description,
+        personality: qcData.personality,
+        starred: qc.starred ? 1 : 0,
+        icon: qcData.icon || '',
+      });
+      logEvent('qc_updated', { nameLen: qcData.name.length });
+      reloadQCs(activeSessionId);
+    },
+    [quickCharacters, activeSessionId, activeChatCharacter, reloadQCs],
+  );
+
+  const handleToggleQCStar = useCallback(
+    async (qcId: string) => {
+      const qc = quickCharacters.find(q => q.id === qcId);
+      if (!qc) return;
+      if (!qc.starred) {
+        await saveQuickCharacter({
+          id: qc.id,
+          session_id: qc.session_id || '',
+          character_id: activeChatCharacter?.id || '',
+          name: qc.name,
+          description: qc.description,
+          personality: qc.personality,
+          starred: 1,
+          icon: qc.icon || '',
+        });
+      } else if (activeSessionId) {
+        await saveQuickCharacter({
+          id: qc.id,
+          session_id: activeSessionId,
+          character_id: '',
+          name: qc.name,
+          description: qc.description,
+          personality: qc.personality,
+          starred: 0,
+          icon: qc.icon || '',
+        });
+      } else {
+        deleteQuickCharacter(qc.id);
+      }
+      logEvent(qc.starred ? 'qc_unstarred' : 'qc_starred', {
+        nameLen: qc.name.length,
+      });
+      reloadQCs(activeSessionId);
+    },
+    [quickCharacters, activeSessionId, activeChatCharacter, reloadQCs],
+  );
+
+  const handleDeleteQC = useCallback(
+    async (qcId: string) => {
+      const qc = quickCharacters.find(q => q.id === qcId);
+      if (qc) {
+        await deleteQuickCharacter(qcId);
+        await preserveSpeakerNames(qc.id, qc.name);
+        logEvent('qc_deleted', { nameLen: qc.name.length });
+      } else {
+        await deleteQuickCharacter(qcId);
+      }
+      reloadQCs(activeSessionId);
+    },
+    [activeSessionId, reloadQCs, quickCharacters],
+  );
 
   const showWelcomeCard = !welcomeDismissed && characters.length === 0;
 
   const menuData = [
-    ...(showWelcomeCard ? [{type: 'character' as const, data: WELCOME_CHARACTER}] : []),
-    ...characters.map(c => ({type: 'character' as const, data: c})),
-    ...groupChats.map(g => ({type: 'group' as const, data: g})),
+    ...(showWelcomeCard
+      ? [{ type: 'character' as const, data: WELCOME_CHARACTER }]
+      : []),
+    ...characters.map(c => ({ type: 'character' as const, data: c })),
+    ...groupChats.map(g => ({ type: 'group' as const, data: g })),
   ];
 
   return (
     <View style={st.screen}>
-      <View style={[st.safeArea, {paddingTop: insets.top}]}>
+      <View style={[st.safeArea, { paddingTop: insets.top }]}>
         {isChat ? (
           <>
             <View style={st.chatVisible}>
@@ -440,7 +513,7 @@ function HomeScreen() {
                 <FlatList
                   data={menuData}
                   keyExtractor={item => item.data.id}
-                  renderItem={({item}) =>
+                  renderItem={({ item }) =>
                     item.type === 'character' ? (
                       <CharacterCard
                         item={item.data as Character}
@@ -463,7 +536,9 @@ function HomeScreen() {
                     ) : (
                       <GroupCard
                         item={item.data as GroupChat}
-                        isConfirmingDelete={deleteConfirmGroupId === item.data.id}
+                        isConfirmingDelete={
+                          deleteConfirmGroupId === item.data.id
+                        }
                         onOpenChat={handleGroupOpenChat}
                         onEdit={handleGroupEdit}
                         onTriggerDelete={setDeleteConfirmGroupId}
@@ -478,9 +553,15 @@ function HomeScreen() {
                   contentContainerStyle={st.flatListContent}
                   style={st.flatListContainer}
                   ListEmptyComponent={
-                    loading
-                      ? <ActivityIndicator size="small" color={st.textMuted.color} style={{marginTop: 40}} />
-                      : <Text style={st.emptyText}>No characters yet</Text>
+                    loading ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={st.textMuted.color}
+                        style={{ marginTop: 40 }}
+                      />
+                    ) : (
+                      <Text style={st.emptyText}>No characters yet</Text>
+                    )
                   }
                 />
               </View>
@@ -491,7 +572,7 @@ function HomeScreen() {
             <FlatList
               data={menuData}
               keyExtractor={item => item.data.id}
-              renderItem={({item}) =>
+              renderItem={({ item }) =>
                 item.type === 'character' ? (
                   <CharacterCard
                     item={item.data as Character}
@@ -529,15 +610,21 @@ function HomeScreen() {
               contentContainerStyle={st.flatListContent}
               style={st.flatListContainer}
               ListEmptyComponent={
-                loading
-                  ? <ActivityIndicator size="small" color={st.textMuted.color} style={{marginTop: 40}} />
-                  : <Text style={st.emptyText}>No characters yet</Text>
+                loading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={st.textMuted.color}
+                    style={{ marginTop: 40 }}
+                  />
+                ) : (
+                  <Text style={st.emptyText}>No characters yet</Text>
+                )
               }
             />
           </View>
         )}
 
-        <View style={[st.bottomBar, {paddingBottom: insets.bottom}]}>
+        <View style={[st.bottomBar, { paddingBottom: insets.bottom }]}>
           <TabBar
             hasChat={hasChat}
             isChat={isChat}
@@ -560,7 +647,11 @@ function HomeScreen() {
           onSwitchSession={handleSwitchSession}
           onDeleteSession={handleDeleteSession}
           onRenameSession={handleRenameSession}
-          onConvertToGroup={!activeGroupChat && activeChatCharacter ? () => setShowConvertGroup(true) : undefined}
+          onConvertToGroup={
+            !activeGroupChat && activeChatCharacter
+              ? () => setShowConvertGroup(true)
+              : undefined
+          }
           onEditGroup={
             activeGroupChat
               ? () => {
@@ -612,7 +703,7 @@ function SettingsScreen() {
 
   return (
     <View style={st.screen}>
-      <View style={[st.safeArea, {paddingTop: insets.top, flex: 1}]}>
+      <View style={[st.safeArea, { paddingTop: insets.top, flex: 1 }]}>
         <SettingsHandler
           onApply={updated => setAppSettings(updated as unknown as AppSettings)}
           onOpenDebugger={() => navigation.navigate('Debugger')}
@@ -633,12 +724,12 @@ function EditorScreen() {
   const loadGroupChats = useAppStore(s => s.loadGroupChats);
 
   const editingCharacter = route.params.characterId
-    ? characters.find(c => c.id === route.params.characterId) ?? null
+    ? (characters.find(c => c.id === route.params.characterId) ?? null)
     : null;
 
   return (
     <View style={st.screen}>
-      <View style={[st.safeArea, {paddingTop: insets.top, flex: 1}]}>
+      <View style={[st.safeArea, { paddingTop: insets.top, flex: 1 }]}>
         <CharacterEditor
           character={editingCharacter}
           onClose={() => navigation.goBack()}
@@ -663,7 +754,7 @@ function DebuggerScreen() {
 
   return (
     <View style={st.screen}>
-      <View style={[st.safeArea, {paddingTop: insets.top, flex: 1}]}>
+      <View style={[st.safeArea, { paddingTop: insets.top, flex: 1 }]}>
         <Debugger
           onClose={() => navigation.goBack()}
           bottomInset={insets.bottom}
@@ -681,23 +772,24 @@ export function RootNavigator() {
       screenOptions={{
         headerShown: false,
         animation: 'none',
-        contentStyle: {backgroundColor: '#000'},
-      }}>
+        contentStyle: { backgroundColor: '#000' },
+      }}
+    >
       <Stack.Screen name="Home" component={HomeScreen} />
       <Stack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{animation: 'slide_from_left'}}
+        options={{ animation: 'slide_from_left' }}
       />
       <Stack.Screen
         name="Editor"
         component={EditorScreen}
-        options={{animation: 'slide_from_right'}}
+        options={{ animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="Debugger"
         component={DebuggerScreen}
-        options={{animation: 'slide_from_bottom'}}
+        options={{ animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>
   );

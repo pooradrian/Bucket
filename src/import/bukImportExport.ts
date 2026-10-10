@@ -1,11 +1,15 @@
 import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
-import {Character} from '../CharacterEditor';
-import {parseCustomFields, getCustomField} from '../CustomFields';
-import {LorebookState, lorebookDisplayName, lorebookExportName} from '../RAGHandler';
-import {ChatSession} from '../useChat';
-import {DEFAULT_PROMPT_CONFIG} from '../PromptHandler';
-import {DEFAULT_APP_SETTINGS, GroupChat} from '../store';
+import { Character } from '../CharacterEditor';
+import { parseCustomFields, getCustomField } from '../CustomFields';
+import {
+  LorebookState,
+  lorebookDisplayName,
+  lorebookExportName,
+} from '../RAGHandler';
+import { ChatSession } from '../useChat';
+import { DEFAULT_PROMPT_CONFIG } from '../PromptHandler';
+import { DEFAULT_APP_SETTINGS, GroupChat } from '../store';
 import {
   generateId,
   saveCharacterToDB,
@@ -28,9 +32,9 @@ import {
   SessionSummary,
   DBQuickCharacter,
 } from '../Database';
-import {readIconFile} from './util';
-import {parseV1Json, parseV2Json, serializeV2} from './characterCardSchema';
-import {BukImportResult, ExportOptions} from './types';
+import { readIconFile } from './util';
+import { parseV1Json, parseV2Json, serializeV2 } from './characterCardSchema';
+import { BukImportResult, ExportOptions } from './types';
 
 function iconExt(uri: string): string {
   const clean = uri.split('?')[0].split('#')[0];
@@ -110,7 +114,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     try {
       const text = await settingsFile.async('string');
       result.settings = JSON.parse(text);
-    } catch (e) { console.warn('Failed to import settings:', e); }
+    } catch (e) {
+      console.warn('Failed to import settings:', e);
+    }
   }
 
   const promptFile = zip.file('Bucket/prompt.json');
@@ -121,7 +127,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       delete parsed.apiUrl;
       delete parsed.apiKey;
       result.promptConfig = parsed;
-    } catch (e) { console.warn('Failed to import prompt config:', e); }
+    } catch (e) {
+      console.warn('Failed to import prompt config:', e);
+    }
   }
 
   const origLorebookIdToNewId = new Map<string, string>();
@@ -132,34 +140,42 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       if (file.dir) continue;
       try {
         const text = await file.async('string');
-        let entries: {id: number; text: string}[];
+        let entries: { id: number; text: string }[];
         let origId: string | undefined;
         try {
           const parsed = JSON.parse(text);
           entries = parsed.entries;
           origId = parsed.id;
         } catch {
-          entries = text.split('\n').filter(l => l.trim().length > 0).map((t, i) => ({id: i, text: t}));
+          entries = text
+            .split('\n')
+            .filter(l => l.trim().length > 0)
+            .map((t, i) => ({ id: i, text: t }));
         }
         if (entries.length > 0) {
           const lorebook: LorebookState = {
             id: generateId(),
             entries,
             entryCount: entries.length,
-            fileName: lorebookDisplayName(file.name.split('/').pop() || 'lorebook'),
+            fileName: lorebookDisplayName(
+              file.name.split('/').pop() || 'lorebook',
+            ),
           };
           if (origId) {
             origLorebookIdToNewId.set(origId, lorebook.id);
           }
           result.lorebooks.push(lorebook);
         }
-      } catch (e) { console.warn('Failed to import lorebook:', e); }
+      } catch (e) {
+        console.warn('Failed to import lorebook:', e);
+      }
     }
   }
 
   const origIdToNewId = new Map<string, string>();
   const existingCharacterIdsByName = new Map<string, string>();
-  for (const row of getDbConnection().execute('SELECT id, name FROM characters').results ?? []) {
+  for (const row of getDbConnection().execute('SELECT id, name FROM characters')
+    .results ?? []) {
     existingCharacterIdsByName.set(row.name as string, row.id as string);
   }
   const charDir = zip.folder('characters');
@@ -171,7 +187,8 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         const text = await file.async('string');
         const json = JSON.parse(text);
         const origId = file.name.split('/').pop()?.split('.')[0];
-        const char = json.spec === 'chara_card_v2' ? parseV2Json(json) : parseV1Json(json);
+        const char =
+          json.spec === 'chara_card_v2' ? parseV2Json(json) : parseV1Json(json);
 
         const existingId = existingCharacterIdsByName.get(char.name);
         if (existingId) {
@@ -188,8 +205,8 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         existingCharacterIdsByName.set(char.name, char.id);
 
         if (!char.lorebookIds || char.lorebookIds.length === 0) {
-          const assignedLorebook = result.lorebooks.find(l =>
-            l.fileName.replace('.txt', '') === char.name
+          const assignedLorebook = result.lorebooks.find(
+            l => l.fileName.replace('.txt', '') === char.name,
           );
           if (assignedLorebook) {
             char.lorebookIds = [assignedLorebook.id];
@@ -203,7 +220,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         }
 
         result.characters.push(char);
-      } catch (e) { console.warn('Failed to import character:', e); }
+      } catch (e) {
+        console.warn('Failed to import character:', e);
+      }
     }
   }
 
@@ -228,7 +247,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
             char.icon = `file://${iconPath}`;
           }
         }
-      } catch (e) { console.warn('Failed to import icon:', e); }
+      } catch (e) {
+        console.warn('Failed to import icon:', e);
+      }
     }
   }
 
@@ -241,7 +262,8 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         const text = await file.async('string');
         const parsed = JSON.parse(text);
         const session: ChatSession = parsed;
-        const qcs = parsed.quickCharacters as Array<Partial<DBQuickCharacter>> | undefined;
+        const qcs = parsed.quickCharacters as
+          Array<Partial<DBQuickCharacter>> | undefined;
         const newCharId = origIdToNewId.get(session.characterId);
         if (newCharId) {
           session.characterId = newCharId;
@@ -267,14 +289,22 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         result.sessions.push(session);
         if (qcs) {
           for (const qc of qcs) {
-            const mappedCharId = qc.character_id ? origIdToNewId.get(qc.character_id) : undefined;
-            const normalized = normalizeQuickCharacter(qc, session.id, mappedCharId ?? qc.character_id ?? '');
+            const mappedCharId = qc.character_id
+              ? origIdToNewId.get(qc.character_id)
+              : undefined;
+            const normalized = normalizeQuickCharacter(
+              qc,
+              session.id,
+              mappedCharId ?? qc.character_id ?? '',
+            );
             if (normalized) {
               result.quickCharacters.push(normalized);
             }
           }
         }
-      } catch (e) { console.warn('Failed to import chat session:', e); }
+      } catch (e) {
+        console.warn('Failed to import chat session:', e);
+      }
     }
   }
 
@@ -286,14 +316,22 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       try {
         const parsed = JSON.parse(await file.async('string'));
         const mappedCharId = origIdToNewId.get(parsed.characterId);
-        const qcs = (parsed.quickCharacters ?? []) as Array<Partial<DBQuickCharacter>>;
+        const qcs = (parsed.quickCharacters ?? []) as Array<
+          Partial<DBQuickCharacter>
+        >;
         for (const qc of qcs) {
-          const normalized = normalizeQuickCharacter(qc, '', mappedCharId ?? parsed.characterId ?? '');
+          const normalized = normalizeQuickCharacter(
+            qc,
+            '',
+            mappedCharId ?? parsed.characterId ?? '',
+          );
           if (normalized) {
             result.quickCharacters.push(normalized);
           }
         }
-      } catch (e) { console.warn('Failed to import quick characters:', e); }
+      } catch (e) {
+        console.warn('Failed to import quick characters:', e);
+      }
     }
   }
 
@@ -310,9 +348,13 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
           name: parsed.name,
           description: parsed.description || '',
           icon: parsed.icon || undefined,
-          characterIds: Array.isArray(parsed.characterIds) ? parsed.characterIds : [],
+          characterIds: Array.isArray(parsed.characterIds)
+            ? parsed.characterIds
+            : [],
         });
-      } catch (e) { console.warn('Failed to import group:', e); }
+      } catch (e) {
+        console.warn('Failed to import group:', e);
+      }
     }
   }
 
@@ -338,16 +380,24 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   }
 
   const validCharIds = new Set(
-    (getDbConnection().execute('SELECT id FROM characters').results ?? []).map(row => row.id as string),
+    (getDbConnection().execute('SELECT id FROM characters').results ?? []).map(
+      row => row.id as string,
+    ),
   );
   const existingGroupIds = new Set(
-    (getDbConnection().execute('SELECT id FROM group_chats').results ?? []).map(row => row.id as string),
+    (getDbConnection().execute('SELECT id FROM group_chats').results ?? []).map(
+      row => row.id as string,
+    ),
   );
   const existingQcIds = new Set(
-    (getDbConnection().execute('SELECT id FROM quick_characters').results ?? []).map(row => row.id as string),
+    (
+      getDbConnection().execute('SELECT id FROM quick_characters').results ?? []
+    ).map(row => row.id as string),
   );
   const existingSessionIds = new Set(
-    (getDbConnection().execute('SELECT id FROM chat_sessions').results ?? []).map(row => row.id as string),
+    (
+      getDbConnection().execute('SELECT id FROM chat_sessions').results ?? []
+    ).map(row => row.id as string),
   );
 
   const importedGroups: GroupChat[] = [];
@@ -371,7 +421,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         characterIds: memberIds,
       });
       importedGroups.push(group);
-    } catch (e) { console.warn('Failed to import group:', e); }
+    } catch (e) {
+      console.warn('Failed to import group:', e);
+    }
   }
   result.groups = importedGroups;
 
@@ -383,7 +435,9 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     try {
       await createSession(session);
       importedSessions.push(session);
-    } catch (e) { console.warn('Failed to create session:', e); }
+    } catch (e) {
+      console.warn('Failed to create session:', e);
+    }
   }
   result.sessions = importedSessions;
 
@@ -397,20 +451,30 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     try {
       await saveQuickCharacter(qc);
       importedQcs.push(qc);
-    } catch (e) { console.warn('Failed to create quick character:', e); }
+    } catch (e) {
+      console.warn('Failed to create quick character:', e);
+    }
   }
   result.quickCharacters = importedQcs;
 
   if (result.settings) {
     const currentSettings = JSON.parse(getKV('settings') || '{}');
-    const merged = {...DEFAULT_APP_SETTINGS, ...currentSettings, ...result.settings};
+    const merged = {
+      ...DEFAULT_APP_SETTINGS,
+      ...currentSettings,
+      ...result.settings,
+    };
     setKV('settings', JSON.stringify(merged));
   }
 
   if (result.promptConfig) {
     const currentConfig = getKV('promptConfig');
     const current = currentConfig ? JSON.parse(currentConfig) : {};
-    const merged = {...DEFAULT_PROMPT_CONFIG, ...current, ...result.promptConfig};
+    const merged = {
+      ...DEFAULT_PROMPT_CONFIG,
+      ...current,
+      ...result.promptConfig,
+    };
     delete merged.apiUrl;
     delete merged.apiKey;
     setKV('promptConfig', JSON.stringify(merged));
@@ -419,10 +483,12 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   return result;
 }
 
-function stripRequestInfo<T extends {messages: Array<{requestInfo?: string}>}>(session: T): T {
+function stripRequestInfo<
+  T extends { messages: Array<{ requestInfo?: string }> },
+>(session: T): T {
   return {
     ...session,
-    messages: session.messages.map(({requestInfo: _, ...m}) => m),
+    messages: session.messages.map(({ requestInfo: _, ...m }) => m),
   };
 }
 
@@ -444,7 +510,9 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       scenario: c.scenario,
       exampleMessages: c.example_messages,
       icon: c.icon,
-      lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [],
+      lorebookIds: c.lorebook_id
+        ? c.lorebook_id.split(',').filter(Boolean)
+        : [],
       personaId: c.persona_id || undefined,
     }));
 
@@ -483,11 +551,11 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       json.data.extensions.lorebookIds = cc.lorebookIds;
     }
     if (cc.customFields && cc.customFields.length > 0) {
-      json.data.extensions.bucket = {customFields: cc.customFields};
+      json.data.extensions.bucket = { customFields: cc.customFields };
     }
     if (cc.personaId) {
       const bucket = json.data.extensions.bucket ?? {};
-      json.data.extensions.bucket = {...bucket, personaId: cc.personaId};
+      json.data.extensions.bucket = { ...bucket, personaId: cc.personaId };
     }
     charFolder?.file(`${char.id}.json`, JSON.stringify(json, null, 2));
   }
@@ -501,9 +569,11 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
         const base64 = await readIconFile(char.icon);
         if (base64) {
           const ext = char.icon.split('.').pop() || 'png';
-          iconFolder?.file(`${char.id}.${ext}`, base64, {base64: true});
+          iconFolder?.file(`${char.id}.${ext}`, base64, { base64: true });
         }
-      } catch (e) { console.warn('Failed to export icon:', e); }
+      } catch (e) {
+        console.warn('Failed to export icon:', e);
+      }
     }
   }
 
@@ -512,31 +582,40 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     const lorebookFolder = zip.folder('lorebooks');
     for (const lorebook of lorebooks) {
       const entries = await getLorebookEntriesFromDB(lorebook.id);
-      const content = JSON.stringify({id: lorebook.id, entries});
+      const content = JSON.stringify({ id: lorebook.id, entries });
       lorebookFolder?.file(lorebookExportName(lorebook.fileName), content);
     }
   }
 
   if (options.groupIds.length > 0) {
     const allGroups = await getAllGroupChatsFromDB();
-    const selectedGroups = allGroups.filter(g => options.groupIds.includes(g.id));
+    const selectedGroups = allGroups.filter(g =>
+      options.groupIds.includes(g.id),
+    );
     if (selectedGroups.length > 0) {
       const groupFolder = zip.folder('groups');
       for (const group of selectedGroups) {
-        groupFolder?.file(`${group.id}.json`, JSON.stringify({
-          id: group.id,
-          name: group.name,
-          description: group.description,
-          icon: group.icon,
-          characterIds: group.characterIds,
-        }, null, 2));
+        groupFolder?.file(
+          `${group.id}.json`,
+          JSON.stringify(
+            {
+              id: group.id,
+              name: group.name,
+              description: group.description,
+              icon: group.icon,
+              characterIds: group.characterIds,
+            },
+            null,
+            2,
+          ),
+        );
       }
     }
   }
 
   const exportedSessionIds = new Set<string>();
   const exportedQcIds = new Set<string>();
-  const qcIconsToBundle: {id: string; icon: string}[] = [];
+  const qcIconsToBundle: { id: string; icon: string }[] = [];
   if (options.includeChats) {
     const chatFolder = zip.folder('chats');
     const exportSessions = async (summaries: SessionSummary[]) => {
@@ -546,13 +625,16 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
         const quickCharacters = await getQuickCharactersForSession(session.id);
         const payload = stripRequestInfo({
           ...session,
-          quickCharacters: quickCharacters.map(qc => ({...qc, icon: ''})),
+          quickCharacters: quickCharacters.map(qc => ({ ...qc, icon: '' })),
         });
-        chatFolder?.file(`${session.id}.json`, JSON.stringify(payload, null, 2));
+        chatFolder?.file(
+          `${session.id}.json`,
+          JSON.stringify(payload, null, 2),
+        );
         exportedSessionIds.add(session.id);
         for (const qc of quickCharacters) {
           exportedQcIds.add(qc.id);
-          if (qc.icon) qcIconsToBundle.push({id: qc.id, icon: qc.icon});
+          if (qc.icon) qcIconsToBundle.push({ id: qc.id, icon: qc.icon });
         }
       }
     };
@@ -566,31 +648,46 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
 
   for (const charId of options.characterIds) {
     const dangling = (await getQuickCharactersForCharacter(charId, '')).filter(
-      qc => qc.starred && !exportedSessionIds.has(qc.session_id) && !exportedQcIds.has(qc.id),
+      qc =>
+        qc.starred &&
+        !exportedSessionIds.has(qc.session_id) &&
+        !exportedQcIds.has(qc.id),
     );
     if (dangling.length === 0) continue;
     for (const qc of dangling) {
       exportedQcIds.add(qc.id);
-      if (qc.icon) qcIconsToBundle.push({id: qc.id, icon: qc.icon});
+      if (qc.icon) qcIconsToBundle.push({ id: qc.id, icon: qc.icon });
     }
     zip.folder('quickcharacters')?.file(
       `${charId}.json`,
-      JSON.stringify({
-        characterId: charId,
-        quickCharacters: dangling.map(qc => ({...qc, session_id: '', icon: ''})),
-      }, null, 2),
+      JSON.stringify(
+        {
+          characterId: charId,
+          quickCharacters: dangling.map(qc => ({
+            ...qc,
+            session_id: '',
+            icon: '',
+          })),
+        },
+        null,
+        2,
+      ),
     );
   }
 
   if (qcIconsToBundle.length > 0) {
     const qcIconFolder = zip.folder('qcicons');
-    for (const {id, icon} of qcIconsToBundle) {
+    for (const { id, icon } of qcIconsToBundle) {
       try {
         const base64 = await readIconFile(icon);
         if (base64) {
-          qcIconFolder?.file(`${id}.${iconExt(icon)}`, base64, {base64: true});
+          qcIconFolder?.file(`${id}.${iconExt(icon)}`, base64, {
+            base64: true,
+          });
         }
-      } catch (e) { console.warn('Failed to export quick character icon:', e); }
+      } catch (e) {
+        console.warn('Failed to export quick character icon:', e);
+      }
     }
   }
 
@@ -599,7 +696,10 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
   const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
   const filename = `${dateStr}@${timeStr}.buk`;
 
-  const base64 = await zip.generateAsync({type: 'base64', compression: 'DEFLATE'});
+  const base64 = await zip.generateAsync({
+    type: 'base64',
+    compression: 'DEFLATE',
+  });
   const path = `${dir}/${filename}`;
   await RNFS.writeFile(path, base64, 'base64');
   return path;

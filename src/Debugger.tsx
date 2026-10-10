@@ -1,4 +1,4 @@
-import {useState, useRef, useCallback, useEffect} from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -8,17 +8,19 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import axios, {AxiosRequestConfig} from 'axios';
-import {LogEntry} from './debuggerUtils';
-import {useAppStore} from './store';
-import {useTheme} from './ThemeContext';
-import {executeDebuggerCommand} from './debugger/commands';
+import axios, { AxiosRequestConfig } from 'axios';
+import { LogEntry } from './debuggerUtils';
+import { useAppStore } from './store';
+import { useTheme } from './ThemeContext';
+import { executeDebuggerCommand } from './debugger/commands';
 
 const MAX_LOG_ENTRIES = 500;
 
 function redactHeaders(headers: unknown): string {
   try {
-    const copy: Record<string, unknown> = JSON.parse(JSON.stringify(headers || {}));
+    const copy: Record<string, unknown> = JSON.parse(
+      JSON.stringify(headers || {}),
+    );
     for (const key of Object.keys(copy)) {
       if (key.toLowerCase() === 'authorization') {
         const val = String(copy[key]);
@@ -31,20 +33,27 @@ function redactHeaders(headers: unknown): string {
   }
 }
 
-const reqMetaMap = new WeakMap<AxiosRequestConfig, {reqId: string; t0: number}>();
+const reqMetaMap = new WeakMap<
+  AxiosRequestConfig,
+  { reqId: string; t0: number }
+>();
 
 interface DebuggerProps {
   onClose: () => void;
   bottomInset: number;
 }
 
-export default function Debugger({onClose, bottomInset}: DebuggerProps) {
+export default function Debugger({ onClose, bottomInset }: DebuggerProps) {
   const characters = useAppStore(st => st.characters);
   const appSettings = useAppStore(st => st.appSettings);
   const toggleSysStats = useAppStore(st => st.toggleSysStats);
   const st = useTheme();
   const [log, setLog] = useState<LogEntry[]>([
-    {id: '0', type: 'info', text: 'Debugger ready. Type "help" for available commands.'},
+    {
+      id: '0',
+      type: 'info',
+      text: 'Debugger ready. Type "help" for available commands.',
+    },
   ]);
   const [input, setInput] = useState('');
   const flatListRef = useRef<FlatList<LogEntry>>(null);
@@ -54,8 +63,13 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
 
   const appendLog = useCallback((type: LogEntry['type'], text: string) => {
     setLog(prev => {
-      const next = [...prev, {id: Date.now().toString() + Math.random(), type, text}];
-      return next.length > MAX_LOG_ENTRIES ? next.slice(next.length - MAX_LOG_ENTRIES) : next;
+      const next = [
+        ...prev,
+        { id: Date.now().toString() + Math.random(), type, text },
+      ];
+      return next.length > MAX_LOG_ENTRIES
+        ? next.slice(next.length - MAX_LOG_ENTRIES)
+        : next;
     });
   }, []);
 
@@ -74,9 +88,9 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
     if (verboseRef.current) return;
     verboseRef.current = true;
 
-    reqInterceptorRef.current = axios.interceptors.request.use((config) => {
+    reqInterceptorRef.current = axios.interceptors.request.use(config => {
       const reqId = Math.random().toString(36).slice(2, 8);
-      reqMetaMap.set(config, {reqId, t0: 0});
+      reqMetaMap.set(config, { reqId, t0: 0 });
 
       let bodyPreview = '';
       if (config.data && typeof config.data === 'string') {
@@ -90,36 +104,51 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
         bodyPreview = JSON.stringify(config.data, null, 2);
       }
 
-      appendLog('info', `[${reqId}] >>> ${config.method?.toUpperCase() || 'GET'} ${config.url}`);
+      appendLog(
+        'info',
+        `[${reqId}] >>> ${config.method?.toUpperCase() || 'GET'} ${config.url}`,
+      );
       if (bodyPreview) {
         appendLog('info', `[${reqId}] >>> Body:\n${bodyPreview}`);
       }
       if (config.headers) {
-        appendLog('info', `[${reqId}] >>> Headers: ${redactHeaders(config.headers)}`);
+        appendLog(
+          'info',
+          `[${reqId}] >>> Headers: ${redactHeaders(config.headers)}`,
+        );
       }
 
-      reqMetaMap.set(config, {reqId, t0: performance.now()});
+      reqMetaMap.set(config, { reqId, t0: performance.now() });
       return config;
     });
 
     resInterceptorRef.current = axios.interceptors.response.use(
-      (response) => {
-        const meta = reqMetaMap.get(response.config) || {reqId: '???', t0: performance.now()};
+      response => {
+        const meta = reqMetaMap.get(response.config) || {
+          reqId: '???',
+          t0: performance.now(),
+        };
         const reqId = meta.reqId;
         const t0 = meta.t0;
         const ms = (performance.now() - t0).toFixed(0);
         const resHeaders = response.headers || {};
 
-        appendLog('info', [
-          `[${reqId}] <<< ${response.status} ${response.statusText} in ${ms}ms`,
-          `  Headers: ${redactHeaders(resHeaders)}`,
-        ].join('\n'));
+        appendLog(
+          'info',
+          [
+            `[${reqId}] <<< ${response.status} ${response.statusText} in ${ms}ms`,
+            `  Headers: ${redactHeaders(resHeaders)}`,
+          ].join('\n'),
+        );
 
         return response;
       },
-      (error) => {
+      error => {
         const config = error.config || {};
-        const meta = reqMetaMap.get(config) || {reqId: '???', t0: performance.now()};
+        const meta = reqMetaMap.get(config) || {
+          reqId: '???',
+          t0: performance.now(),
+        };
         const reqId = meta.reqId;
         const t0 = meta.t0;
         const ms = (performance.now() - t0).toFixed(0);
@@ -137,11 +166,16 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
           }
         }
 
-        appendLog('error', [
-          `[${reqId}] <<< ${status || 'ERR'} ${error.message}`,
-          `  in ${ms}ms`,
-          bodyPreview ? `  Body: ${bodyPreview}` : '',
-        ].filter(Boolean).join('\n'));
+        appendLog(
+          'error',
+          [
+            `[${reqId}] <<< ${status || 'ERR'} ${error.message}`,
+            `  in ${ms}ms`,
+            bodyPreview ? `  Body: ${bodyPreview}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        );
 
         return Promise.reject(error);
       },
@@ -166,19 +200,30 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
 
   const executeCommand = useCallback(
     async (raw: string) => {
-      await executeDebuggerCommand(raw, {
-        characters,
-        appSettings,
-        toggleSysStats,
-        enableVerbose,
-        disableVerbose,
-        isVerbose: () => verboseRef.current,
-      }, {
-        log: appendLog,
-        clear: () => setLog([]),
-      });
+      await executeDebuggerCommand(
+        raw,
+        {
+          characters,
+          appSettings,
+          toggleSysStats,
+          enableVerbose,
+          disableVerbose,
+          isVerbose: () => verboseRef.current,
+        },
+        {
+          log: appendLog,
+          clear: () => setLog([]),
+        },
+      );
     },
-    [characters, appSettings, appendLog, enableVerbose, disableVerbose, toggleSysStats],
+    [
+      characters,
+      appSettings,
+      appendLog,
+      enableVerbose,
+      disableVerbose,
+      toggleSysStats,
+    ],
   );
 
   const handleSubmit = () => {
@@ -190,20 +235,19 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
     executeCommand(text);
   };
 
-  const renderLogEntry = ({item}: {item: LogEntry}) => {
-    const textStyle = item.type === 'input'
-      ? st.debugLogInput
-      : item.type === 'output'
-      ? st.debugLogOutput
-      : item.type === 'error'
-      ? st.debugLogError
-      : st.debugLogInfo;
+  const renderLogEntry = ({ item }: { item: LogEntry }) => {
+    const textStyle =
+      item.type === 'input'
+        ? st.debugLogInput
+        : item.type === 'output'
+          ? st.debugLogOutput
+          : item.type === 'error'
+            ? st.debugLogError
+            : st.debugLogInfo;
 
     return (
       <View style={st.debugLogEntry}>
-        <Text style={textStyle}>
-          {item.text}
-        </Text>
+        <Text style={textStyle}>{item.text}</Text>
       </View>
     );
   };
@@ -212,15 +256,14 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
     <KeyboardAvoidingView
       style={st.debugScreen}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}>
+      keyboardVerticalOffset={0}
+    >
       {/* Header */}
       <View style={st.debugHeader}>
         <TouchableOpacity onPress={onClose} style={st.debugClose}>
           <Text style={st.debugCloseText}>Close</Text>
         </TouchableOpacity>
-        <Text style={st.debugTitle}>
-          Debugger
-        </Text>
+        <Text style={st.debugTitle}>Debugger</Text>
       </View>
 
       {/* Output */}
@@ -233,12 +276,14 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
         style={st.debugFlatList}
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd({animated: false})}
-        onLayout={() => flatListRef.current?.scrollToEnd({animated: false})}
+        onContentSizeChange={() =>
+          flatListRef.current?.scrollToEnd({ animated: false })
+        }
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
       />
 
       {/* Input */}
-      <View style={[st.debugInputBar, {paddingBottom: bottomInset}]}>
+      <View style={[st.debugInputBar, { paddingBottom: bottomInset }]}>
         <TextInput
           style={st.debugTextInput}
           value={input}
@@ -250,9 +295,7 @@ export default function Debugger({onClose, bottomInset}: DebuggerProps) {
           onSubmitEditing={handleSubmit}
           returnKeyType="send"
         />
-        <TouchableOpacity
-          style={st.debugSendBtn}
-          onPress={handleSubmit}>
+        <TouchableOpacity style={st.debugSendBtn} onPress={handleSubmit}>
           <Text style={st.debugSendBtnText}>{'›'}</Text>
         </TouchableOpacity>
       </View>

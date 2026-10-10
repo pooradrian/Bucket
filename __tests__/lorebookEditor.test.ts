@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn(),
   types: {},
@@ -7,14 +7,19 @@ jest.mock('../src/Endpoint', () => ({
   getEmbeddings: jest.fn(async () => []),
 }));
 
-import {buildLorebookState, lorebookDisplayName, lorebookExportName, parseLorebook, splitBulkLines} from '../src/RAGHandler';
+import {
+  buildLorebookState,
+  lorebookDisplayName,
+  lorebookExportName,
+  parseLorebook,
+  splitBulkLines,
+} from '../src/RAGHandler';
 
 describe('splitBulkLines', () => {
   it('splits on newlines, trims, and drops blanks', () => {
-    expect(splitBulkLines('  Elf capital is Sylvara\n\nDragons fear bells  \n ')).toEqual([
-      'Elf capital is Sylvara',
-      'Dragons fear bells',
-    ]);
+    expect(
+      splitBulkLines('  Elf capital is Sylvara\n\nDragons fear bells  \n '),
+    ).toEqual(['Elf capital is Sylvara', 'Dragons fear bells']);
   });
 
   it('returns empty for blank input', () => {
@@ -25,8 +30,8 @@ describe('splitBulkLines', () => {
 describe('parseLorebook', () => {
   it('assigns sequential ids', () => {
     expect(parseLorebook('a\nb')).toEqual([
-      {id: 0, text: 'a'},
-      {id: 1, text: 'b'},
+      { id: 0, text: 'a' },
+      { id: 1, text: 'b' },
     ]);
   });
 });
@@ -60,8 +65,8 @@ describe('buildLorebookState', () => {
       id: 'id-1',
       fileName: 'World',
       entries: [
-        {id: 0, text: 'a'},
-        {id: 1, text: 'b'},
+        { id: 0, text: 'a' },
+        { id: 1, text: 'b' },
       ],
       entryCount: 2,
     });

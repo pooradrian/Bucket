@@ -6,9 +6,9 @@ jest.mock('@react-native-documents/picker', () => ({
 }));
 jest.mock('@react-native-clipboard/clipboard', () => ({
   __esModule: true,
-  default: {setString: jest.fn(), getString: jest.fn().mockResolvedValue('')},
+  default: { setString: jest.fn(), getString: jest.fn().mockResolvedValue('') },
 }));
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 jest.mock('react-native-keychain', () => ({
   getGenericPassword: jest.fn().mockResolvedValue(false),
   setGenericPassword: jest.fn().mockResolvedValue(true),
@@ -16,12 +16,14 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 jest.mock('react-native-nitro-modules', () => ({
-  NitroModules: {createHybridObject: () => ({encrypt: jest.fn(), decrypt: jest.fn()})},
+  NitroModules: {
+    createHybridObject: () => ({ encrypt: jest.fn(), decrypt: jest.fn() }),
+  },
 }));
 jest.mock('react-native-get-random-values', () => ({}));
 
-import {reconcileSelectedQC} from '../src/useChat';
-import type {QuickCharacter} from '../src/useChat';
+import { reconcileSelectedQC } from '../src/useChat';
+import type { QuickCharacter } from '../src/useChat';
 
 const qc = (over: Partial<QuickCharacter> = {}): QuickCharacter => ({
   id: 'qc-1',
@@ -34,17 +36,22 @@ const qc = (over: Partial<QuickCharacter> = {}): QuickCharacter => ({
 
 test('keeps the selection untouched when nothing changed', () => {
   const selected = qc();
-  expect(reconcileSelectedQC(selected, [selected, qc({id: 'qc-2'})])).toBe(selected);
+  expect(reconcileSelectedQC(selected, [selected, qc({ id: 'qc-2' })])).toBe(
+    selected,
+  );
 });
 
 test('returns null when the selected quick character was deleted', () => {
-  expect(reconcileSelectedQC(qc(), [qc({id: 'qc-2'})])).toBeNull();
+  expect(reconcileSelectedQC(qc(), [qc({ id: 'qc-2' })])).toBeNull();
   expect(reconcileSelectedQC(qc(), [])).toBeNull();
 });
 
 test('swaps in the fresh details after an edit', () => {
   const selected = qc();
-  const edited = qc({description: 'an old friend gone cold', personality: 'warm'});
+  const edited = qc({
+    description: 'an old friend gone cold',
+    personality: 'warm',
+  });
   const reconciled = reconcileSelectedQC(selected, [edited]);
   expect(reconciled).toBe(edited);
 });
@@ -52,10 +59,10 @@ test('swaps in the fresh details after an edit', () => {
 test('handles each edited field', () => {
   const selected = qc();
   for (const over of [
-    {name: 'Vik'},
-    {description: 'rewritten'},
-    {personality: 'sunny'},
-    {icon: 'file:///icons/qc.png'},
+    { name: 'Vik' },
+    { description: 'rewritten' },
+    { personality: 'sunny' },
+    { icon: 'file:///icons/qc.png' },
   ]) {
     expect(reconcileSelectedQC(selected, [qc(over)])).not.toBe(selected);
   }

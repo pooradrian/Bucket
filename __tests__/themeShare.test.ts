@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn(),
   types: {},
@@ -19,7 +19,7 @@ import {
   decodeThemeURL,
   applyThemeToSettings,
 } from '../src/themeShare';
-import {AppSettings, DEFAULT_APP_SETTINGS} from '../src/store';
+import { AppSettings, DEFAULT_APP_SETTINGS } from '../src/store';
 
 const customSettings: AppSettings = {
   ...DEFAULT_APP_SETTINGS,
@@ -47,15 +47,17 @@ describe('serializeTheme / parseTheme', () => {
   });
 
   it('rejects presets missing color keys', () => {
-    expect(parseTheme({v: 1, preset: {bgPrimary: '#000'}})).toBeNull();
+    expect(parseTheme({ v: 1, preset: { bgPrimary: '#000' } })).toBeNull();
   });
 
   it('rejects presets with wrong color types', () => {
-    expect(parseTheme({v: 1, preset: {...customSettings, accentColor: 123}})).toBeNull();
+    expect(
+      parseTheme({ v: 1, preset: { ...customSettings, accentColor: 123 } }),
+    ).toBeNull();
   });
 
   it('rejects missing version field', () => {
-    expect(parseTheme({preset: customSettings})).toBeNull();
+    expect(parseTheme({ preset: customSettings })).toBeNull();
   });
 });
 

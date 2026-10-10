@@ -1,7 +1,11 @@
-import {ChatMessage, ChatSession} from './useChat';
-import {PromptConfig, ChatMessageObject, estimateTokens} from './PromptHandler';
-import {getAIResponse} from './Endpoint';
-import {deleteMessage, addMessage, generateId} from './Database';
+import { ChatMessage, ChatSession } from './useChat';
+import {
+  PromptConfig,
+  ChatMessageObject,
+  estimateTokens,
+} from './PromptHandler';
+import { getAIResponse } from './Endpoint';
+import { deleteMessage, addMessage, generateId } from './Database';
 
 interface SummarizationConfig {
   enabled: boolean;
@@ -10,7 +14,9 @@ interface SummarizationConfig {
   model: string;
 }
 
-export function getSummarizationConfig(config: PromptConfig): SummarizationConfig {
+export function getSummarizationConfig(
+  config: PromptConfig,
+): SummarizationConfig {
   return {
     enabled: config.summarizationEnabled,
     tokenThreshold: Number(config.summarizationTokenThreshold) || 4000,
@@ -59,7 +65,13 @@ Keep the summary under 200 words. Be factual and neutral. Do not add commentary.
   ];
 
   const ctrl = new AbortController();
-  const result = await getAIResponse(summaryPrompt, {...promptConfig, model: config.model}, undefined, false, ctrl);
+  const result = await getAIResponse(
+    summaryPrompt,
+    { ...promptConfig, model: config.model },
+    undefined,
+    false,
+    ctrl,
+  );
 
   return result.content.trim();
 }
@@ -102,7 +114,11 @@ export async function checkAndSummarize(
   }
 
   const messagesToSummarize = processedMessages.slice(0, splitIndex + 1);
-  const summaryText = await summarizeMessages(messagesToSummarize, config, promptConfig);
+  const summaryText = await summarizeMessages(
+    messagesToSummarize,
+    config,
+    promptConfig,
+  );
 
   const newSummary: ChatMessage = {
     id: generateId(),
@@ -115,7 +131,9 @@ export async function checkAndSummarize(
     if (!isSummaryMessage(msg)) {
       try {
         await deleteMessage(msg.id);
-      } catch (e) { console.warn('Failed to delete old message:', e); }
+      } catch (e) {
+        console.warn('Failed to delete old message:', e);
+      }
     }
   }
 
@@ -123,14 +141,23 @@ export async function checkAndSummarize(
 
   try {
     await addMessage(session.id, newSummary, true);
-  } catch (e) { console.warn('Failed to add new summary:', e); }
+  } catch (e) {
+    console.warn('Failed to add new summary:', e);
+  }
 
   let existingSummaries = processedMessages.filter(m => isSummaryMessage(m));
 
   while (existingSummaries.length > config.maxSummaries) {
-    const summariesToMerge = existingSummaries.slice(0, existingSummaries.length - config.maxSummaries + 1);
+    const summariesToMerge = existingSummaries.slice(
+      0,
+      existingSummaries.length - config.maxSummaries + 1,
+    );
 
-    const mergedText = await summarizeMessages(summariesToMerge, config, promptConfig);
+    const mergedText = await summarizeMessages(
+      summariesToMerge,
+      config,
+      promptConfig,
+    );
 
     const mergedSummary: ChatMessage = {
       id: generateId(),
@@ -142,7 +169,9 @@ export async function checkAndSummarize(
     for (const msg of summariesToMerge) {
       try {
         await deleteMessage(msg.id);
-      } catch (e) { console.warn('Failed to delete old summary:', e); }
+      } catch (e) {
+        console.warn('Failed to delete old summary:', e);
+      }
       const idx = processedMessages.findIndex(m => m.id === msg.id);
       if (idx !== -1) {
         processedMessages.splice(idx, 1);
@@ -153,7 +182,9 @@ export async function checkAndSummarize(
 
     try {
       await addMessage(session.id, mergedSummary, true);
-    } catch (e) { console.warn('Failed to add merged summary:', e); }
+    } catch (e) {
+      console.warn('Failed to add merged summary:', e);
+    }
 
     existingSummaries = processedMessages.filter(m => isSummaryMessage(m));
   }

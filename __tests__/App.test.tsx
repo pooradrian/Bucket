@@ -6,17 +6,19 @@ jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn().mockResolvedValue([]),
   saveDocuments: jest.fn().mockResolvedValue([]),
   isKnownType: jest.fn().mockReturnValue(true),
-  types: {allFiles: 'public.all-files'},
+  types: { allFiles: 'public.all-files' },
 }));
 jest.mock('react-native-keychain', () => ({
   getGenericPassword: jest.fn().mockResolvedValue(false),
   setGenericPassword: jest.fn().mockResolvedValue(true),
   resetGenericPassword: jest.fn().mockResolvedValue(true),
-  ACCESSIBLE: {WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly'},
+  ACCESSIBLE: {
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly',
+  },
 }));
 jest.mock('react-native-nitro-sqlite', () => ({
   open: jest.fn().mockReturnValue({
-    execute: jest.fn().mockReturnValue({results: []}),
+    execute: jest.fn().mockReturnValue({ results: [] }),
   }),
 }));
 jest.mock('react-native-fs', () => {
@@ -29,11 +31,11 @@ jest.mock('react-native-fs', () => {
     exists: jest.fn().mockResolvedValue(false),
     unlink: jest.fn().mockResolvedValue(undefined),
   };
-  return {__esModule: true, default: fs, ...fs};
+  return { __esModule: true, default: fs, ...fs };
 });
 jest.mock('@react-native-clipboard/clipboard', () => ({
   __esModule: true,
-  default: {setString: jest.fn(), getString: jest.fn().mockResolvedValue('')},
+  default: { setString: jest.fn(), getString: jest.fn().mockResolvedValue('') },
 }));
 jest.mock('react-native-image-picker', () => ({
   launchImageLibrary: jest.fn(),
@@ -70,9 +72,11 @@ jest.mock('../src/Database', () => ({
 }));
 jest.mock('react-native-reanimated', () => {
   const React = require('react');
-  const {View, Text, ScrollView, FlatList, Image} = require('react-native');
+  const { View, Text, ScrollView, FlatList, Image } = require('react-native');
   const wrap = (Comp: any) =>
-    React.forwardRef((props: any, ref: any) => React.createElement(Comp, {...props, ref}));
+    React.forwardRef((props: any, ref: any) =>
+      React.createElement(Comp, { ...props, ref }),
+    );
   const Animated = {
     View: wrap(View),
     Text: wrap(Text),
@@ -86,7 +90,7 @@ jest.mock('react-native-reanimated', () => {
     Animated,
     View: Animated.View,
     Text: Animated.Text,
-    useSharedValue: (init: unknown) => ({value: init}),
+    useSharedValue: (init: unknown) => ({ value: init }),
     useAnimatedStyle: () => ({}),
     useAnimatedProps: () => ({}),
     withTiming: (v: unknown) => v,
@@ -101,16 +105,16 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('react-native-safe-area-context', () => {
-  const {View} = require('react-native');
+  const { View } = require('react-native');
   return {
     SafeAreaProvider: View,
     SafeAreaView: View,
-    useSafeAreaInsets: () => ({top: 0, bottom: 0, left: 0, right: 0}),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
   };
 });
 
 import React from 'react';
-import {Text} from 'react-native';
+import { Text } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import App from '../src/App';
 
@@ -120,8 +124,8 @@ test('renders the splash screen without crashing', async () => {
     tree = ReactTestRenderer.create(<App />);
     await new Promise(r => setTimeout(r, 0));
   });
-  const text = tree!
-    .root.findAllByType(Text)
+  const text = tree!.root
+    .findAllByType(Text)
     .map(n => String(n.props.children))
     .join('');
   expect(text).toContain('Poor Adrian');

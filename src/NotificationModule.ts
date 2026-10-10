@@ -1,14 +1,16 @@
-import {NativeModules, Platform} from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 interface NotificationModuleType {
   playNotificationSound(uri?: string | null): void;
   vibrate(): void;
 }
 
-const rawModule = (NativeModules as {NotificationModule?: unknown}).NotificationModule;
+const rawModule = (NativeModules as { NotificationModule?: unknown })
+  .NotificationModule;
 const notificationModule: NotificationModuleType | null =
   rawModule &&
-  typeof (rawModule as NotificationModuleType).playNotificationSound === 'function' &&
+  typeof (rawModule as NotificationModuleType).playNotificationSound ===
+    'function' &&
   typeof (rawModule as NotificationModuleType).vibrate === 'function'
     ? (rawModule as NotificationModuleType)
     : null;

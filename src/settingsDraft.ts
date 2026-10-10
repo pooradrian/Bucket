@@ -1,14 +1,40 @@
-import {AppSettings} from './store';
+import { AppSettings } from './store';
 
-export type Settings = Omit<Record<keyof AppSettings, string>, 'themeMode'> & {themeMode: 'dark' | 'light'};
+export type Settings = Omit<Record<keyof AppSettings, string>, 'themeMode'> & {
+  themeMode: 'dark' | 'light';
+};
 
 export const SETTINGS_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
-  'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
-  'textPrimary', 'textSecondary', 'textMuted',
-  'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
-  'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-  'accentColor', 'userBubbleBg', 'dangerColor', 'showCharacterIcons', 'showGroupCharNames', 'showThinking', 'dynamicIcon', 'forceItalic', 'debugLogging', 'notificationMode', 'notificationSound', 'carouselAnimMs',
+  'bgPrimary',
+  'bgSecondary',
+  'bgPill',
+  'borderPrimary',
+  'textPrimary',
+  'textSecondary',
+  'textMuted',
+  'cardRadius',
+  'pillRadius',
+  'bubbleRadius',
+  'inputRadius',
+  'chatMaxWidth',
+  'fontSizeBody',
+  'fontSizeHeader',
+  'fontSizeTab',
+  'bottomBarPad',
+  'sideBtnSize',
+  'sendBtnSize',
+  'accentColor',
+  'userBubbleBg',
+  'dangerColor',
+  'showCharacterIcons',
+  'showGroupCharNames',
+  'showThinking',
+  'dynamicIcon',
+  'forceItalic',
+  'debugLogging',
+  'notificationMode',
+  'notificationSound',
+  'carouselAnimMs',
 ];
 
 export function toDraft(s: AppSettings): Settings {
@@ -54,16 +80,48 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
 };
 
 export const CUSTOMIZATION_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
-  'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
-  'textPrimary', 'textSecondary', 'textMuted',
-  'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
-  'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize',
-  'accentColor', 'userBubbleBg',
+  'bgPrimary',
+  'bgSecondary',
+  'bgPill',
+  'borderPrimary',
+  'textPrimary',
+  'textSecondary',
+  'textMuted',
+  'cardRadius',
+  'pillRadius',
+  'bubbleRadius',
+  'inputRadius',
+  'chatMaxWidth',
+  'fontSizeBody',
+  'fontSizeHeader',
+  'fontSizeTab',
+  'bottomBarPad',
+  'sideBtnSize',
+  'sendBtnSize',
+  'accentColor',
+  'userBubbleBg',
 ];
 
-export const NUMERIC_KEYS: Exclude<keyof Settings, 'themeMode' | 'showCharacterIcons' | 'showGroupCharNames' | 'showThinking' | 'forceItalic' | 'debugLogging' | 'notificationSound'>[] = [
-  'cardRadius', 'pillRadius', 'bubbleRadius', 'inputRadius',
-  'chatMaxWidth', 'fontSizeBody', 'fontSizeHeader', 'fontSizeTab',
-  'bottomBarPad', 'sideBtnSize', 'sendBtnSize', 'carouselAnimMs',
+export const NUMERIC_KEYS: Exclude<
+  keyof Settings,
+  | 'themeMode'
+  | 'showCharacterIcons'
+  | 'showGroupCharNames'
+  | 'showThinking'
+  | 'forceItalic'
+  | 'debugLogging'
+  | 'notificationSound'
+>[] = [
+  'cardRadius',
+  'pillRadius',
+  'bubbleRadius',
+  'inputRadius',
+  'chatMaxWidth',
+  'fontSizeBody',
+  'fontSizeHeader',
+  'fontSizeTab',
+  'bottomBarPad',
+  'sideBtnSize',
+  'sendBtnSize',
+  'carouselAnimMs',
 ];

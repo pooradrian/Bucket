@@ -1,5 +1,5 @@
-import {useState} from 'react';
-import {Alert, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import { useState } from 'react';
+import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
   ModelPreset,
   PromptConfig,
@@ -8,8 +8,8 @@ import {
   deleteModelPreset,
   applyModelPreset,
 } from '../PromptHandler';
-import {useTheme} from '../ThemeContext';
-import {AutoGrowTextInput} from './ui';
+import { useTheme } from '../ThemeContext';
+import { AutoGrowTextInput } from './ui';
 
 interface ModelPresetsViewProps {
   promptValues: PromptConfig;
@@ -30,16 +30,17 @@ export default function ModelPresetsView({
   return (
     <View style={st.settingsField}>
       <Text style={st.settingsLabel}>Model Presets</Text>
-      <Text style={[st.settingsDefaultText, {marginBottom: 10}]}>
-        Each preset stores system instructions and temperature for one exact model name.
-        Matching presets apply automatically when you change the model; tap one to switch manually.
+      <Text style={[st.settingsDefaultText, { marginBottom: 10 }]}>
+        Each preset stores system instructions and temperature for one exact
+        model name. Matching presets apply automatically when you change the
+        model; tap one to switch manually.
       </Text>
 
       {presets.map((preset, idx) => {
         const isActive = promptValues.activeModelPresetId === preset.id;
         const isEditing = editingIdx === idx;
         return (
-          <View key={preset.id} style={{marginBottom: 10}}>
+          <View key={preset.id} style={{ marginBottom: 10 }}>
             <TouchableOpacity
               style={[
                 st.settingsToggleButton,
@@ -54,7 +55,7 @@ export default function ModelPresetsView({
               <Text
                 style={[
                   st.settingsToggleText,
-                  {fontWeight: '600'},
+                  { fontWeight: '600' },
                   isActive && st.settingsToggleTextActive,
                 ]}
               >
@@ -63,7 +64,13 @@ export default function ModelPresetsView({
               </Text>
               {!isEditing && (
                 <Text
-                  style={{color: isActive ? st.settingsToggleTextActive.color : st.textMuted.color, fontSize: 12, marginTop: 2}}
+                  style={{
+                    color: isActive
+                      ? st.settingsToggleTextActive.color
+                      : st.textMuted.color,
+                    fontSize: 12,
+                    marginTop: 2,
+                  }}
                   numberOfLines={1}
                 >
                   {preset.prefix || '(no instructions)'}
@@ -72,13 +79,15 @@ export default function ModelPresetsView({
             </TouchableOpacity>
 
             {isEditing && (
-              <View style={[st.card, {marginTop: 4, marginBottom: 0}]}>
+              <View style={[st.card, { marginTop: 4, marginBottom: 0 }]}>
                 <Text style={st.settingsLabel}>Model (exact name)</Text>
                 <TextInput
-                  style={[st.settingsInput, {marginBottom: 8}]}
+                  style={[st.settingsInput, { marginBottom: 8 }]}
                   value={preset.model}
                   onChangeText={text => {
-                    setPromptValues(prev => updateModelPreset(prev, idx, {model: text}));
+                    setPromptValues(prev =>
+                      updateModelPreset(prev, idx, { model: text }),
+                    );
                   }}
                   placeholder="e.g. gpt-4o"
                   placeholderTextColor={st.textMuted.color}
@@ -87,10 +96,12 @@ export default function ModelPresetsView({
                 />
                 <Text style={st.settingsLabel}>Prefix</Text>
                 <AutoGrowTextInput
-                  style={[st.settingsInput, {marginBottom: 8}]}
+                  style={[st.settingsInput, { marginBottom: 8 }]}
                   value={preset.prefix}
                   onChangeText={text => {
-                    setPromptValues(prev => updateModelPreset(prev, idx, {prefix: text}));
+                    setPromptValues(prev =>
+                      updateModelPreset(prev, idx, { prefix: text }),
+                    );
                   }}
                   placeholder="System instructions for this model"
                   placeholderTextColor={st.textMuted.color}
@@ -99,10 +110,12 @@ export default function ModelPresetsView({
                 />
                 <Text style={st.settingsLabel}>Suffix</Text>
                 <AutoGrowTextInput
-                  style={[st.settingsInput, {marginBottom: 8}]}
+                  style={[st.settingsInput, { marginBottom: 8 }]}
                   value={preset.suffix}
                   onChangeText={text => {
-                    setPromptValues(prev => updateModelPreset(prev, idx, {suffix: text}));
+                    setPromptValues(prev =>
+                      updateModelPreset(prev, idx, { suffix: text }),
+                    );
                   }}
                   placeholder="End of system message"
                   placeholderTextColor={st.textMuted.color}
@@ -111,10 +124,12 @@ export default function ModelPresetsView({
                 />
                 <Text style={st.settingsLabel}>Temperature</Text>
                 <TextInput
-                  style={[st.settingsInput, {marginBottom: 8}]}
+                  style={[st.settingsInput, { marginBottom: 8 }]}
                   value={preset.temperature}
                   onChangeText={text => {
-                    setPromptValues(prev => updateModelPreset(prev, idx, {temperature: text}));
+                    setPromptValues(prev =>
+                      updateModelPreset(prev, idx, { temperature: text }),
+                    );
                   }}
                   placeholder="1"
                   placeholderTextColor={st.textMuted.color}
@@ -135,12 +150,14 @@ export default function ModelPresetsView({
                         'Delete preset',
                         `Delete instructions for "${preset.model}"?`,
                         [
-                          {text: 'Cancel', style: 'cancel'},
+                          { text: 'Cancel', style: 'cancel' },
                           {
                             text: 'Delete',
                             style: 'destructive',
                             onPress: () => {
-                              setPromptValues(prev => deleteModelPreset(prev, idx));
+                              setPromptValues(prev =>
+                                deleteModelPreset(prev, idx),
+                              );
                               setEditingIdx(null);
                             },
                           },
@@ -148,7 +165,9 @@ export default function ModelPresetsView({
                       );
                     }}
                   >
-                    <Text style={{color: st.dangerText.color, fontSize: 13}}>Delete</Text>
+                    <Text style={{ color: st.dangerText.color, fontSize: 13 }}>
+                      Delete
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
@@ -156,7 +175,9 @@ export default function ModelPresetsView({
                       setEditingIdx(null);
                     }}
                   >
-                    <Text style={{color: accent, fontSize: 13, fontWeight: '600'}}>
+                    <Text
+                      style={{ color: accent, fontSize: 13, fontWeight: '600' }}
+                    >
                       {isActive ? 'Active' : 'Use these instructions'}
                     </Text>
                   </TouchableOpacity>
@@ -181,9 +202,14 @@ export default function ModelPresetsView({
           setPromptValues(prev => addModelPreset(prev, preset));
           setEditingIdx(presets.length);
         }}
-        style={[st.settingsToggleButton, {borderStyle: 'dashed', marginTop: 4}]}
+        style={[
+          st.settingsToggleButton,
+          { borderStyle: 'dashed', marginTop: 4 },
+        ]}
       >
-        <Text style={st.settingsToggleText}>+ Add preset from current settings</Text>
+        <Text style={st.settingsToggleText}>
+          + Add preset from current settings
+        </Text>
       </TouchableOpacity>
     </View>
   );

@@ -1,9 +1,9 @@
 import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
-import {Character} from '../CharacterEditor';
-import {writePngWithCharaMetadata} from '../PngMetadata';
-import {readIconFile} from './util';
-import {serializeV1, serializeV2} from './characterCardSchema';
+import { Character } from '../CharacterEditor';
+import { writePngWithCharaMetadata } from '../PngMetadata';
+import { readIconFile } from './util';
+import { serializeV1, serializeV2 } from './characterCardSchema';
 
 export async function exportCCV1(characters: Character[]): Promise<string> {
   const dir = `${RNFS.CachesDirectoryPath}/export`;
@@ -21,7 +21,10 @@ export async function exportCCV1(characters: Character[]): Promise<string> {
     const json = serializeV1(char);
     zip.file(`${char.name || 'character'}.json`, JSON.stringify(json, null, 2));
   }
-  const base64 = await zip.generateAsync({type: 'base64', compression: 'DEFLATE'});
+  const base64 = await zip.generateAsync({
+    type: 'base64',
+    compression: 'DEFLATE',
+  });
   const path = `${dir}/characters.zip`;
   await RNFS.writeFile(path, base64, 'base64');
   return path;
@@ -46,7 +49,9 @@ export async function exportCCV2(characters: Character[]): Promise<string[]> {
           paths.push(path);
           continue;
         }
-      } catch (e) { console.warn('Failed to export character icon:', e); }
+      } catch (e) {
+        console.warn('Failed to export character icon:', e);
+      }
     }
 
     const path = `${dir}/${char.name || 'character'}.json`;

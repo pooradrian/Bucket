@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn(),
   types: {},
@@ -22,11 +22,15 @@ jest.mock('../src/Endpoint', () => ({
   ),
 }));
 
-import {cosineSimilarity, rankLorebookEntries, retrieveRelevantLorebook} from '../src/RAGHandler';
-import {getEmbeddings} from '../src/Endpoint';
-import {DEFAULT_PROMPT_CONFIG} from '../src/PromptHandler';
-import type {RAGConfig, LorebookState} from '../src/RAGHandler';
-import type {ChatMessageObject} from '../src/PromptHandler';
+import {
+  cosineSimilarity,
+  rankLorebookEntries,
+  retrieveRelevantLorebook,
+} from '../src/RAGHandler';
+import { getEmbeddings } from '../src/Endpoint';
+import { DEFAULT_PROMPT_CONFIG } from '../src/PromptHandler';
+import type { RAGConfig, LorebookState } from '../src/RAGHandler';
+import type { ChatMessageObject } from '../src/PromptHandler';
 
 const VECTORS: Record<string, number[]> = {
   query: [1, 0],
@@ -50,7 +54,7 @@ const ragConfig = (overrides: Partial<RAGConfig> = {}): RAGConfig => ({
 const lorebook = (...texts: string[]): LorebookState => ({
   id: 'lb',
   fileName: 'lb.txt',
-  entries: texts.map((text, i) => ({id: i, text})),
+  entries: texts.map((text, i) => ({ id: i, text })),
   entryCount: texts.length,
 });
 
@@ -84,7 +88,11 @@ describe('rankLorebookEntries', () => {
       ragConfig(),
       DEFAULT_PROMPT_CONFIG,
     );
-    expect(ranked.map(r => r.entry.text)).toEqual(['exact', 'partial', 'unrelated']);
+    expect(ranked.map(r => r.entry.text)).toEqual([
+      'exact',
+      'partial',
+      'unrelated',
+    ]);
     expect(ranked[0].score).toBeCloseTo(1);
     expect(ranked[1].score).toBeCloseTo(0.6);
     expect(ranked[2].score).toBeCloseTo(0);
@@ -94,7 +102,7 @@ describe('rankLorebookEntries', () => {
     const ranked = await rankLorebookEntries(
       'query',
       lorebook('exact', 'partial', 'unrelated').entries,
-      ragConfig({maxEntriesToSend: '2'}),
+      ragConfig({ maxEntriesToSend: '2' }),
       DEFAULT_PROMPT_CONFIG,
     );
     expect(ranked).toHaveLength(2);
@@ -114,15 +122,30 @@ describe('rankLorebookEntries', () => {
 
   test('caches embeddings per model+text across calls', async () => {
     const entries = lorebook('cache-a', 'cache-b').entries;
-    await rankLorebookEntries('cache-q', entries, ragConfig(), DEFAULT_PROMPT_CONFIG);
+    await rankLorebookEntries(
+      'cache-q',
+      entries,
+      ragConfig(),
+      DEFAULT_PROMPT_CONFIG,
+    );
     expect(getEmbeddings).toHaveBeenCalledTimes(1);
 
     (getEmbeddings as jest.Mock).mockClear();
-    await rankLorebookEntries('query', entries, ragConfig(), DEFAULT_PROMPT_CONFIG);
+    await rankLorebookEntries(
+      'query',
+      entries,
+      ragConfig(),
+      DEFAULT_PROMPT_CONFIG,
+    );
     expect(getEmbeddings).not.toHaveBeenCalled();
 
     (getEmbeddings as jest.Mock).mockClear();
-    await rankLorebookEntries('query', entries, ragConfig({model: 'other-model'}), DEFAULT_PROMPT_CONFIG);
+    await rankLorebookEntries(
+      'query',
+      entries,
+      ragConfig({ model: 'other-model' }),
+      DEFAULT_PROMPT_CONFIG,
+    );
     expect(getEmbeddings).toHaveBeenCalledTimes(1);
     expect((getEmbeddings as jest.Mock).mock.calls[0][1]).toBe('other-model');
   });
@@ -130,7 +153,7 @@ describe('rankLorebookEntries', () => {
 
 describe('retrieveRelevantLorebook', () => {
   const msgs = (contents: string[]): ChatMessageObject[] =>
-    contents.map(content => ({role: 'user' as const, content}));
+    contents.map(content => ({ role: 'user' as const, content }));
 
   test('builds the query from the last three messages', async () => {
     await retrieveRelevantLorebook(
@@ -139,14 +162,16 @@ describe('retrieveRelevantLorebook', () => {
       ragConfig(),
       DEFAULT_PROMPT_CONFIG,
     );
-    expect((getEmbeddings as jest.Mock).mock.calls[0][0][0]).toBe('m3\nm4\nquery');
+    expect((getEmbeddings as jest.Mock).mock.calls[0][0][0]).toBe(
+      'm3\nm4\nquery',
+    );
   });
 
   test('drops entries below the similarity threshold and caps results', async () => {
     const relevant = await retrieveRelevantLorebook(
       msgs(['query']),
       lorebook('exact', 'partial', 'unrelated'),
-      ragConfig({maxResults: '1'}),
+      ragConfig({ maxResults: '1' }),
       DEFAULT_PROMPT_CONFIG,
     );
     expect(relevant).toEqual(['exact']);

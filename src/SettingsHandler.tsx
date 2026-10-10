@@ -1,5 +1,13 @@
-import {useEffect, useState, useCallback, useRef, useMemo} from 'react';
-import {AppState, KeyboardAvoidingView, Platform, ScrollView, Text, TouchableOpacity, View} from 'react-native';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import {
+  AppState,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import {
   PromptConfig,
   DEFAULT_PROMPT_CONFIG,
@@ -7,9 +15,14 @@ import {
   savePromptConfig,
 } from './PromptHandler';
 import ImportExportHandler from './ImportExportHandler';
-import {useAppStore, DEFAULT_APP_SETTINGS, getThemePreset, AppSettings} from './store';
-import {Settings, toDraft, NUMERIC_KEYS} from './settingsDraft';
-import {useTheme} from './ThemeContext';
+import {
+  useAppStore,
+  DEFAULT_APP_SETTINGS,
+  getThemePreset,
+  AppSettings,
+} from './store';
+import { Settings, toDraft, NUMERIC_KEYS } from './settingsDraft';
+import { useTheme } from './ThemeContext';
 import CustomizationView from './settings/CustomizationView';
 import PromptView from './settings/PromptView';
 import PersonasView from './settings/PersonasView';
@@ -194,7 +207,7 @@ export default function SettingsHandler({
 
   const applyThemeSettings = useCallback(
     (draft: Settings) => {
-      const converted: Record<string, unknown> = {...draft};
+      const converted: Record<string, unknown> = { ...draft };
       for (const k of NUMERIC_KEYS) {
         converted[k] = Number(converted[k]);
         if (isNaN(converted[k] as number)) {
@@ -215,7 +228,7 @@ export default function SettingsHandler({
   const handleChange = useCallback(
     (key: keyof Settings, text: string) => {
       setValues(prev => {
-        const next = {...prev, [key]: text};
+        const next = { ...prev, [key]: text };
         applyThemeSettings(next);
         return next;
       });
@@ -239,67 +252,71 @@ export default function SettingsHandler({
         </Text>
       </View>
       <KeyboardAvoidingView
-        style={{flex: 1}}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}>
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-        contentContainerStyle={[
-          st.settingsContent,
-          {paddingBottom: bottomInset + 60},
-        ]}
+        keyboardVerticalOffset={0}
       >
-        {settingsView === 'main' ? (
-          <>
-            {MENU_ITEMS.map(item => (
-              <TouchableOpacity
-                key={item.view}
-                style={[st.card, {marginBottom: 10}]}
-                onPress={() => setSettingsView(item.view)}
-              >
-                <Text style={st.cardTitle}>{item.title}</Text>
-                <Text style={st.cardDescription}>{item.description}</Text>
-              </TouchableOpacity>
-            ))}
-          </>
-        ) : settingsView === 'customization' ? (
-          <CustomizationView
-            values={values}
-            defaults={defaults}
-            handleChange={handleChange}
-          />
-        ) : settingsView === 'systemPrompt' ? (
-          <PromptView
-            promptValues={promptValues}
-            setPromptValues={setPromptValues}
-            accent={values.accentColor}
-          />
-        ) : settingsView === 'personas' ? (
-          <PersonasView
-            values={values}
-            promptValues={promptValues}
-            setPromptValues={setPromptValues}
-            promptLoaded={promptLoaded}
-          />
-        ) : settingsView === 'lorebooks' ? (
-          <LorebooksView
-            promptValues={promptValues}
-            setPromptValues={setPromptValues}
-          />
-        ) : settingsView === 'providers' ? (
-          <ProvidersView
-            promptValues={promptValues}
-            setPromptValues={setPromptValues}
-          />
-        ) : settingsView === 'importExport' ? (
-          <ImportExportHandler bottomInset={bottomInset} />
-        ) : settingsView === 'notifications' ? (
-          <NotificationsView accent={values.accentColor} />
-        ) : (
-          <DeveloperView accent={values.accentColor} onOpenDebugger={onOpenDebugger} />
-        )}
-      </ScrollView>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={[
+            st.settingsContent,
+            { paddingBottom: bottomInset + 60 },
+          ]}
+        >
+          {settingsView === 'main' ? (
+            <>
+              {MENU_ITEMS.map(item => (
+                <TouchableOpacity
+                  key={item.view}
+                  style={[st.card, { marginBottom: 10 }]}
+                  onPress={() => setSettingsView(item.view)}
+                >
+                  <Text style={st.cardTitle}>{item.title}</Text>
+                  <Text style={st.cardDescription}>{item.description}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          ) : settingsView === 'customization' ? (
+            <CustomizationView
+              values={values}
+              defaults={defaults}
+              handleChange={handleChange}
+            />
+          ) : settingsView === 'systemPrompt' ? (
+            <PromptView
+              promptValues={promptValues}
+              setPromptValues={setPromptValues}
+              accent={values.accentColor}
+            />
+          ) : settingsView === 'personas' ? (
+            <PersonasView
+              values={values}
+              promptValues={promptValues}
+              setPromptValues={setPromptValues}
+              promptLoaded={promptLoaded}
+            />
+          ) : settingsView === 'lorebooks' ? (
+            <LorebooksView
+              promptValues={promptValues}
+              setPromptValues={setPromptValues}
+            />
+          ) : settingsView === 'providers' ? (
+            <ProvidersView
+              promptValues={promptValues}
+              setPromptValues={setPromptValues}
+            />
+          ) : settingsView === 'importExport' ? (
+            <ImportExportHandler bottomInset={bottomInset} />
+          ) : settingsView === 'notifications' ? (
+            <NotificationsView accent={values.accentColor} />
+          ) : (
+            <DeveloperView
+              accent={values.accentColor}
+              onOpenDebugger={onOpenDebugger}
+            />
+          )}
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );

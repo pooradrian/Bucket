@@ -1,11 +1,17 @@
 import RNFS from 'react-native-fs';
 import pako from 'pako';
-import {Character} from '../CharacterEditor';
-import {getCustomField} from '../CustomFields';
-import {LorebookState, parseLorebook} from '../RAGHandler';
-import {ChatSession, ChatMessage} from '../useChat';
-import {generateId, saveCharacterToDB, saveLorebookToDB, getAllCharactersFromDB, createSession} from '../Database';
-import {isGzipSignature} from './util';
+import { Character } from '../CharacterEditor';
+import { getCustomField } from '../CustomFields';
+import { LorebookState, parseLorebook } from '../RAGHandler';
+import { ChatSession, ChatMessage } from '../useChat';
+import {
+  generateId,
+  saveCharacterToDB,
+  saveLorebookToDB,
+  getAllCharactersFromDB,
+  createSession,
+} from '../Database';
+import { isGzipSignature } from './util';
 import {
   parsePerchanceCharacter,
   PerchanceCharacter,
@@ -18,7 +24,15 @@ interface PerchanceTable {
   rows: PerchanceCharacter[] | PerchanceThread[] | PerchanceMessage[];
 }
 
-export async function importPerchance(fileUri: string, downloadIcons: boolean = false, downloadLorebooks: boolean = false): Promise<{characters: Character[]; sessions: ChatSession[]; skippedCharacters: string[]}> {
+export async function importPerchance(
+  fileUri: string,
+  downloadIcons: boolean = false,
+  downloadLorebooks: boolean = false,
+): Promise<{
+  characters: Character[];
+  sessions: ChatSession[];
+  skippedCharacters: string[];
+}> {
   const response = await fetch(fileUri);
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
@@ -38,9 +52,12 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
   const threadTable = tables.find(t => t.tableName === 'threads');
   const messageTable = tables.find(t => t.tableName === 'messages');
 
-  const pCharacters: PerchanceCharacter[] = (charTable?.rows ?? []) as PerchanceCharacter[];
-  const pThreads: PerchanceThread[] = (threadTable?.rows ?? []) as PerchanceThread[];
-  const pMessages: PerchanceMessage[] = (messageTable?.rows ?? []) as PerchanceMessage[];
+  const pCharacters: PerchanceCharacter[] = (charTable?.rows ??
+    []) as PerchanceCharacter[];
+  const pThreads: PerchanceThread[] = (threadTable?.rows ??
+    []) as PerchanceThread[];
+  const pMessages: PerchanceMessage[] = (messageTable?.rows ??
+    []) as PerchanceMessage[];
 
   const result = {
     characters: [] as Character[],
@@ -109,7 +126,7 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
 
     const messages: ChatMessage[] = threadMessages.map(m => ({
       id: generateId(),
-      role: m.characterId === -1 ? 'user' as const : 'assistant' as const,
+      role: m.characterId === -1 ? ('user' as const) : ('assistant' as const),
       content: m.message,
       timestamp: m.creationTime,
       characterId: m.characterId === -1 ? undefined : newCharId,
@@ -131,7 +148,10 @@ export async function importPerchance(fileUri: string, downloadIcons: boolean = 
   return result;
 }
 
-async function downloadPerchanceIcon(url: string, charId: string): Promise<string | null> {
+async function downloadPerchanceIcon(
+  url: string,
+  charId: string,
+): Promise<string | null> {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
@@ -155,14 +175,18 @@ async function downloadPerchanceIcon(url: string, charId: string): Promise<strin
   }
 }
 
-async function downloadPerchanceLorebook(url: string, charId: string): Promise<LorebookState | null> {
+async function downloadPerchanceLorebook(
+  url: string,
+  charId: string,
+): Promise<LorebookState | null> {
   try {
     const response = await fetch(url);
     const text = await response.text();
     const entries = parseLorebook(text);
     if (entries.length === 0) return null;
-    const fileName = url.split('/').pop()?.split('?')[0] || `lorebook_${charId}.txt`;
-    return {id: generateId(), entries, entryCount: entries.length, fileName};
+    const fileName =
+      url.split('/').pop()?.split('?')[0] || `lorebook_${charId}.txt`;
+    return { id: generateId(), entries, entryCount: entries.length, fileName };
   } catch {
     return null;
   }

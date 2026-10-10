@@ -1,4 +1,4 @@
-import {formatRelativeTime} from '../src/relativeTime';
+import { formatRelativeTime } from '../src/relativeTime';
 
 const NOW = new Date('2026-08-25T12:00:00').getTime();
 

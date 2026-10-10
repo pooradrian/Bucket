@@ -1,6 +1,6 @@
-import React, {createContext, useContext, useMemo} from 'react';
-import {AppSettings} from './store';
-import {createStyles} from './styles';
+import React, { createContext, useContext, useMemo } from 'react';
+import { AppSettings } from './store';
+import { createStyles } from './styles';
 
 type Styles = ReturnType<typeof createStyles>;
 

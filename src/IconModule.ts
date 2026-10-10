@@ -1,10 +1,10 @@
-import {NativeModules} from 'react-native';
+import { NativeModules } from 'react-native';
 
 interface IconModuleType {
   setIcon(mode: 'dark' | 'light'): void;
 }
 
-const rawModule = (NativeModules as {IconModule?: unknown}).IconModule;
+const rawModule = (NativeModules as { IconModule?: unknown }).IconModule;
 const iconModule: IconModuleType | null =
   rawModule && typeof (rawModule as IconModuleType).setIcon === 'function'
     ? (rawModule as IconModuleType)
@@ -13,8 +13,7 @@ const iconModule: IconModuleType | null =
 export function setIcon(mode: 'dark' | 'light'): void {
   try {
     iconModule?.setIcon(mode);
-  } catch {
-  }
+  } catch {}
 }
 
 export const hasIconModule = (): boolean => iconModule !== null;

@@ -57,7 +57,7 @@
     "jest": "^30.5.2",
     "nitrogen": "^0.37.1",
     "patch-package": "^8.0.1",
-    "prettier": "2.8.8",
+    "prettier": "^3.9.10",
     "react-test-renderer": "19.2.3",
     "typescript": "^5.9.3"
   },

@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {useTheme} from '../ThemeContext';
+import { useTheme } from '../ThemeContext';
 import AutoGrowTextInput from '../components/AutoGrowTextInput';
 
-export {AutoGrowTextInput};
+export { AutoGrowTextInput };
 
-export function SectionHeader({title}: {title: string}) {
+export function SectionHeader({ title }: { title: string }) {
   const st = useTheme();
   return (
     <View style={st.settingsSectionHeader}>
@@ -19,10 +19,10 @@ export function SectionHeader({title}: {title: string}) {
   );
 }
 
-export function MutedNote({children}: {children: React.ReactNode}) {
+export function MutedNote({ children }: { children: React.ReactNode }) {
   const st = useTheme();
   return (
-    <Text style={{fontSize: 12, color: st.textMuted.color, marginBottom: 8}}>
+    <Text style={{ fontSize: 12, color: st.textMuted.color, marginBottom: 8 }}>
       {children}
     </Text>
   );
@@ -50,12 +50,15 @@ export function BoolToggle({
         <TouchableOpacity
           style={[
             st.settingsToggleButton,
-            value && {backgroundColor: accent},
+            value && { backgroundColor: accent },
           ]}
           onPress={() => onChange(!value)}
         >
           <Text
-            style={[st.settingsToggleText, value && st.settingsToggleTextActive]}
+            style={[
+              st.settingsToggleText,
+              value && st.settingsToggleTextActive,
+            ]}
           >
             {value ? 'On' : 'Off'}
           </Text>
@@ -75,7 +78,7 @@ export function OptionRow<T extends string>({
 }: {
   label?: string;
   note?: string;
-  options: {value: T; label: string}[];
+  options: { value: T; label: string }[];
   value: T;
   accent: string;
   onChange: (v: T) => void;
@@ -93,7 +96,7 @@ export function OptionRow<T extends string>({
               key={o.value}
               style={[
                 st.settingsToggleButton,
-                active && {backgroundColor: accent},
+                active && { backgroundColor: accent },
               ]}
               onPress={() => onChange(o.value)}
             >

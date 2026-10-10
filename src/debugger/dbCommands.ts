@@ -4,8 +4,8 @@ import {
   searchMessages,
   deleteAllByPrefix,
 } from '../Database';
-import {findCharacter} from '../debuggerUtils';
-import {CommandHandler, DebuggerEnv, DebuggerIO} from './types';
+import { findCharacter } from '../debuggerUtils';
+import { CommandHandler, DebuggerEnv, DebuggerIO } from './types';
 
 export const DB_HELP_TEXT = [
   'DB Commands:',
@@ -40,14 +40,20 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
   if (sub === 'info') {
     const info = getDBInfo();
     const journalResult = getDbConnection().execute('PRAGMA journal_mode');
-    const journalMode = journalResult.results?.[0]?.journal_mode as string ?? '?';
-    io.log('output', `Sessions: ${info.sessionCount}\nMessages: ${info.messageCount}\nJournal:  ${journalMode}`);
+    const journalMode =
+      (journalResult.results?.[0]?.journal_mode as string) ?? '?';
+    io.log(
+      'output',
+      `Sessions: ${info.sessionCount}\nMessages: ${info.messageCount}\nJournal:  ${journalMode}`,
+    );
     return;
   }
 
   if (sub === 'tables') {
     const d = getDbConnection();
-    const tables = d.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+    const tables = d.execute(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    );
     if (!tables.results || tables.results.length === 0) {
       io.log('info', 'No tables found.');
       return;
@@ -55,8 +61,10 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
     const lines: string[] = [];
     for (const row of tables.results) {
       const name = row.name as string;
-      const count = d.execute(`SELECT COUNT(*) as count FROM ${safeIdentifier(name)}`);
-      const cnt = count.results?.[0]?.count as number ?? 0;
+      const count = d.execute(
+        `SELECT COUNT(*) as count FROM ${safeIdentifier(name)}`,
+      );
+      const cnt = (count.results?.[0]?.count as number) ?? 0;
       lines.push(`  ${name}: ${cnt} rows`);
     }
     io.log('output', `Tables:\n${lines.join('\n')}`);
@@ -75,8 +83,9 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
       io.log('error', `Table "${table}" not found.`);
       return;
     }
-    const lines = result.results.map(row =>
-      `  ${row.name} ${row.type}${row.notnull ? ' NOT NULL' : ''}${row.dflt_value !== null ? ` DEFAULT ${row.dflt_value}` : ''}${row.pk ? ' PRIMARY KEY' : ''}`
+    const lines = result.results.map(
+      row =>
+        `  ${row.name} ${row.type}${row.notnull ? ' NOT NULL' : ''}${row.dflt_value !== null ? ` DEFAULT ${row.dflt_value}` : ''}${row.pk ? ' PRIMARY KEY' : ''}`,
     );
     io.log('output', `Schema for ${table}:\n${lines.join('\n')}`);
     return;
@@ -106,15 +115,18 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
         'SELECT COUNT(*) as count FROM chat_messages WHERE session_id = ?',
         [sess.id as string],
       );
-      const count = msgCount.results?.[0]?.count as number ?? 0;
+      const count = (msgCount.results?.[0]?.count as number) ?? 0;
       return [
         `Session:    ${sess.id}`,
-        `Created:    ${new Date((sess.created_at as number)).toLocaleString()}`,
-        `Updated:    ${new Date((sess.updated_at as number)).toLocaleString()}`,
+        `Created:    ${new Date(sess.created_at as number).toLocaleString()}`,
+        `Updated:    ${new Date(sess.updated_at as number).toLocaleString()}`,
         `Messages:   ${count}`,
       ].join('\n');
     });
-    io.log('output', `Character: ${char.name} (${char.id})\n\n${lines.join('\n\n')}`);
+    io.log(
+      'output',
+      `Character: ${char.name} (${char.id})\n\n${lines.join('\n\n')}`,
+    );
     return;
   }
 
@@ -130,7 +142,8 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
       return;
     }
     const lines = results.map(
-      r => `  [${r.role}] ${r.content.slice(0, 100)}${r.content.length > 100 ? '...' : ''}`,
+      r =>
+        `  [${r.role}] ${r.content.slice(0, 100)}${r.content.length > 100 ? '...' : ''}`,
     );
     io.log('output', `Results (${results.length}):\n${lines.join('\n')}`);
     return;
@@ -146,10 +159,14 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
       return;
     }
     const lines = result.results.map(row => {
-      const charName = env.characters.find(c => c.id === row.character_id)?.name || '?';
+      const charName =
+        env.characters.find(c => c.id === row.character_id)?.name || '?';
       return `  [${row.id}] ${charName} — ${row.msg_count} msgs — updated ${new Date(row.updated_at as number).toLocaleString()}`;
     });
-    io.log('output', `Sessions (${result.results.length}):\n${lines.join('\n')}`);
+    io.log(
+      'output',
+      `Sessions (${result.results.length}):\n${lines.join('\n')}`,
+    );
     return;
   }
 
@@ -158,7 +175,10 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
     const cleanupStart = performance.now();
     const result = deleteAllByPrefix('_stress_');
     const cleanupMs = (performance.now() - cleanupStart).toFixed(0);
-    io.log('output', `Cleanup done in ${cleanupMs}ms — removed ${result.messages} messages, ${result.sessions} sessions`);
+    io.log(
+      'output',
+      `Cleanup done in ${cleanupMs}ms — removed ${result.messages} messages, ${result.sessions} sessions`,
+    );
     return;
   }
 
@@ -167,7 +187,10 @@ export const dbCommand: CommandHandler = async (rest, env, io) => {
     return;
   }
 
-  io.log('error', `Unknown DB subcommand: "${sub}". Type "help db" for available commands.`);
+  io.log(
+    'error',
+    `Unknown DB subcommand: "${sub}". Type "help db" for available commands.`,
+  );
 };
 
 async function stressCommand(rest: string[], env: DebuggerEnv, io: DebuggerIO) {
@@ -209,27 +232,41 @@ async function stressCommand(rest: string[], env: DebuggerEnv, io: DebuggerIO) {
 
   const yieldToUI = () => new Promise<void>(r => setTimeout(r, 0));
 
-  io.log('info', `Stress test: ${isSize ? `~${targetEntries} entries (${sizeArg.split(':')[1]}MB)` : `${targetEntries} entries`}`);
+  io.log(
+    'info',
+    `Stress test: ${isSize ? `~${targetEntries} entries (${sizeArg.split(':')[1]}MB)` : `${targetEntries} entries`}`,
+  );
 
   io.log('info', 'Phase 1: Inserting (batched)...');
   let inserted = 0;
   let firstSessionId = '';
   const insertStart = performance.now();
   const BATCH_SIZE = 500;
-  let batch: Array<{query: string; params: (string | number | boolean | null)[]}> = [];
+  let batch: Array<{
+    query: string;
+    params: (string | number | boolean | null)[];
+  }> = [];
   for (let s = 0; s < totalSessions; s++) {
     const sessionId = `${stressPrefix}s${s}_${Date.now()}`;
     if (s === 0) firstSessionId = sessionId;
     batch.push({
-      query: 'INSERT INTO chat_sessions (id, character_id, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      query:
+        'INSERT INTO chat_sessions (id, character_id, created_at, updated_at) VALUES (?, ?, ?, ?)',
       params: [sessionId, `_stress_char_${s % 5}`, Date.now(), Date.now()],
     });
     const msgCount = Math.min(msgsPerSession, targetEntries - inserted);
     for (let m = 0; m < msgCount; m++) {
       const content = `Stress test row ${inserted}: ${Math.random().toString(36).slice(2)} ${'x'.repeat(80)}`;
       batch.push({
-        query: 'INSERT INTO chat_messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
-        params: [`${stressPrefix}m${inserted}_${Date.now()}`, sessionId, m % 2 === 0 ? 'user' : 'assistant', content, Date.now()],
+        query:
+          'INSERT INTO chat_messages (id, session_id, role, content, timestamp) VALUES (?, ?, ?, ?, ?)',
+        params: [
+          `${stressPrefix}m${inserted}_${Date.now()}`,
+          sessionId,
+          m % 2 === 0 ? 'user' : 'assistant',
+          content,
+          Date.now(),
+        ],
       });
       inserted++;
     }
@@ -241,7 +278,10 @@ async function stressCommand(rest: string[], env: DebuggerEnv, io: DebuggerIO) {
     }
   }
   const insertMs = (performance.now() - insertStart).toFixed(0);
-  io.log('output', `Bulk insert: ${insertMs}ms (${inserted} rows in batched transactions)`);
+  io.log(
+    'output',
+    `Bulk insert: ${insertMs}ms (${inserted} rows in batched transactions)`,
+  );
 
   io.log('info', 'Phase 2: Single-row insert benchmark...');
   const benchId = `${stressPrefix}_bench_${Date.now()}`;
@@ -279,10 +319,10 @@ async function stressCommand(rest: string[], env: DebuggerEnv, io: DebuggerIO) {
   let updateCount = 0;
   if (toUpdate.results) {
     for (const row of toUpdate.results) {
-      d.execute(
-        'UPDATE chat_messages SET content = ? WHERE id = ?',
-        ['UPDATED_STRESS_ROW', row.id as string],
-      );
+      d.execute('UPDATE chat_messages SET content = ? WHERE id = ?', [
+        'UPDATED_STRESS_ROW',
+        row.id as string,
+      ]);
       updateCount++;
     }
   }
@@ -290,10 +330,10 @@ async function stressCommand(rest: string[], env: DebuggerEnv, io: DebuggerIO) {
   io.log('output', `Bulk update: ${updateMs}ms (${updateCount} rows)`);
 
   const singleUpdateStart = performance.now();
-  d.execute(
-    'UPDATE chat_messages SET content = ? WHERE id = ?',
-    ['Benchmark updated', benchId],
-  );
+  d.execute('UPDATE chat_messages SET content = ? WHERE id = ?', [
+    'Benchmark updated',
+    benchId,
+  ]);
   const singleUpdateMs = (performance.now() - singleUpdateStart).toFixed(1);
   io.log('output', `Single update: ${singleUpdateMs}ms (1 row, auto-commit)`);
 
@@ -317,19 +357,25 @@ async function stressCommand(rest: string[], env: DebuggerEnv, io: DebuggerIO) {
   const cleanupStart = performance.now();
   const cleanup = deleteAllByPrefix(stressPrefix);
   const cleanupMs = (performance.now() - cleanupStart).toFixed(0);
-  io.log('output', `Cleanup: ${cleanupMs}ms (${cleanup.messages} msgs, ${cleanup.sessions} sessions)`);
+  io.log(
+    'output',
+    `Cleanup: ${cleanupMs}ms (${cleanup.messages} msgs, ${cleanup.sessions} sessions)`,
+  );
 
   const totalMs = (performance.now() - t0).toFixed(0);
-  io.log('output', [
-    '\u2500'.repeat(40),
-    `DONE — ${inserted} entries in ${totalMs}ms`,
-    `  Bulk insert:    ${insertMs}ms (${inserted} rows)`,
-    `  Single insert:  ${singleInsertMs}ms (1 row)`,
-    `  Read:           ${readMs}ms (${readCount}/${sampleSize})`,
-    `  Bulk update:    ${updateMs}ms (${updateCount} rows)`,
-    `  Single update:  ${singleUpdateMs}ms (1 row)`,
-    `  Delete:         ${deleteMs}ms (${deleteCount} rows)`,
-    `  Cleanup:        ${cleanupMs}ms`,
-    '\u2500'.repeat(40),
-  ].join('\n'));
+  io.log(
+    'output',
+    [
+      '\u2500'.repeat(40),
+      `DONE — ${inserted} entries in ${totalMs}ms`,
+      `  Bulk insert:    ${insertMs}ms (${inserted} rows)`,
+      `  Single insert:  ${singleInsertMs}ms (1 row)`,
+      `  Read:           ${readMs}ms (${readCount}/${sampleSize})`,
+      `  Bulk update:    ${updateMs}ms (${updateCount} rows)`,
+      `  Single update:  ${singleUpdateMs}ms (1 row)`,
+      `  Delete:         ${deleteMs}ms (${deleteCount} rows)`,
+      `  Cleanup:        ${cleanupMs}ms`,
+      '\u2500'.repeat(40),
+    ].join('\n'),
+  );
 }

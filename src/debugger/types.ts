@@ -1,5 +1,5 @@
-import {Character} from '../CharacterEditor';
-import {AppSettings} from '../store';
+import { Character } from '../CharacterEditor';
+import { AppSettings } from '../store';
 
 export type DebuggerLogType = 'input' | 'info' | 'output' | 'error';
 

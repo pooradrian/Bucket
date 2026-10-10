@@ -1,12 +1,18 @@
-import {AppSettings, ThemePreset} from './store';
+import { AppSettings, ThemePreset } from './store';
 
 const THEME_URL_SCHEME = 'bucket://theme?t=';
 const THEME_VERSION = 1;
 
 const THEME_COLOR_KEYS: (keyof ThemePreset)[] = [
-  'bgPrimary', 'bgSecondary', 'bgPill', 'borderPrimary',
-  'textPrimary', 'textSecondary', 'textMuted',
-  'accentColor', 'userBubbleBg',
+  'bgPrimary',
+  'bgSecondary',
+  'bgPill',
+  'borderPrimary',
+  'textPrimary',
+  'textSecondary',
+  'textMuted',
+  'accentColor',
+  'userBubbleBg',
 ];
 
 export interface SharedTheme {
@@ -44,7 +50,7 @@ export function serializeTheme(settings: AppSettings, name?: string): string {
     userBubbleBg: settings.userBubbleBg,
     dynamicIcon: settings.dynamicIcon,
   };
-  const shared: SharedTheme = {v: THEME_VERSION, preset};
+  const shared: SharedTheme = { v: THEME_VERSION, preset };
   if (name) {
     shared.name = name;
   }
@@ -65,13 +71,16 @@ export function parseTheme(raw: unknown): SharedTheme | null {
   if (!isThemePreset(obj.preset)) {
     return null;
   }
-  return {v: obj.v, name: obj.name as string | undefined, preset: obj.preset};
+  return { v: obj.v, name: obj.name as string | undefined, preset: obj.preset };
 }
 
 function base64UrlEncode(str: string): string {
   const utf8 = unescape(encodeURIComponent(str));
   const base64 = btoa(utf8);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(new RegExp('=+$'), '');
+  return base64
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(new RegExp('=+$'), '');
 }
 
 function base64UrlDecode(str: string): string {
@@ -110,7 +119,10 @@ export function decodeThemeURL(url: string): SharedTheme | null {
   }
 }
 
-export function applyThemeToSettings(settings: AppSettings, theme: SharedTheme): AppSettings {
+export function applyThemeToSettings(
+  settings: AppSettings,
+  theme: SharedTheme,
+): AppSettings {
   return {
     ...settings,
     ...theme.preset,

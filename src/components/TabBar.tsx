@@ -1,12 +1,12 @@
-import React, {useCallback, useRef, useState} from 'react';
-import {Text, TouchableOpacity, View} from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   runOnJS,
 } from 'react-native-reanimated';
-import {useTheme} from '../ThemeContext';
+import { useTheme } from '../ThemeContext';
 
 interface TabBarProps {
   hasChat: boolean;
@@ -39,7 +39,7 @@ export default function TabBar({
 
   const indicatorStyle = useAnimatedStyle(() => ({
     width: indicatorW.value,
-    transform: [{translateX: indicatorX.value}],
+    transform: [{ translateX: indicatorX.value }],
     opacity: pillOpacity.value,
   }));
 
@@ -49,20 +49,20 @@ export default function TabBar({
 
   React.useEffect(() => {
     if (!hasChat) {
-      pillOpacity.value = withTiming(0, {duration: 300});
-      indicatorW.value = withTiming(0, {duration: 300});
-      chatTextOpacity.value = withTiming(0, {duration: 200});
+      pillOpacity.value = withTiming(0, { duration: 300 });
+      indicatorW.value = withTiming(0, { duration: 300 });
+      chatTextOpacity.value = withTiming(0, { duration: 200 });
       return;
     }
 
-    pillOpacity.value = withTiming(1, {duration: 250});
+    pillOpacity.value = withTiming(1, { duration: 250 });
     indicatorW.value = withTiming(isChat ? chatTabWidth : menuTabWidth, {
       duration: 300,
     });
     indicatorX.value = withTiming(isChat ? 0 : chatTabWidth, {
       duration: 300,
     });
-    chatTextOpacity.value = withTiming(1, {duration: 200});
+    chatTextOpacity.value = withTiming(1, { duration: 200 });
   }, [
     hasChat,
     isChat,
@@ -80,8 +80,8 @@ export default function TabBar({
     lastChatTapRef.current = now;
 
     if (isDoubleTap && hasChat) {
-      pillOpacity.value = withTiming(0, {duration: 350});
-      chatTextOpacity.value = withTiming(0, {duration: 200}, () => {
+      pillOpacity.value = withTiming(0, { duration: 350 });
+      chatTextOpacity.value = withTiming(0, { duration: 200 }, () => {
         'worklet';
         runOnJS(onCloseChat)();
       });
@@ -92,9 +92,7 @@ export default function TabBar({
 
   return (
     <>
-      <TouchableOpacity
-        style={st.sideButton}
-        onPress={onSettingsPress}>
+      <TouchableOpacity style={st.sideButton} onPress={onSettingsPress}>
         <Text style={st.sideButtonText}>☰</Text>
       </TouchableOpacity>
 
@@ -104,19 +102,22 @@ export default function TabBar({
           <TouchableOpacity
             style={st.tabButton}
             onPress={handleChatTabPress}
-            onLayout={e => setChatTabWidth(e.nativeEvent.layout.width)}>
+            onLayout={e => setChatTabWidth(e.nativeEvent.layout.width)}
+          >
             <Animated.Text
               style={[
                 isChat ? st.tabTextActive : st.tabTextInactive,
                 chatTextStyle,
-              ]}>
+              ]}
+            >
               Chat
             </Animated.Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={st.tabButton}
             onPress={onMenuPress}
-            onLayout={e => setMenuTabWidth(e.nativeEvent.layout.width)}>
+            onLayout={e => setMenuTabWidth(e.nativeEvent.layout.width)}
+          >
             <Text style={!isChat ? st.tabTextActive : st.tabTextInactive}>
               Menu
             </Text>

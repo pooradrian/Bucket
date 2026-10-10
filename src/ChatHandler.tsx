@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
@@ -17,12 +17,16 @@ import {
   View,
   ViewInstance,
 } from 'react-native';
-import {Character} from './CharacterEditor';
-import {useAppStore, GroupChat} from './store';
-import {useTheme} from './ThemeContext';
-import {useChat, ChatMessage, QuickCharacter} from './useChat';
-import {renderFormattedText} from './textFormat';
-import {formatThinkingDuration, splitThinking, visibleContent} from './thinking';
+import { Character } from './CharacterEditor';
+import { useAppStore, GroupChat } from './store';
+import { useTheme } from './ThemeContext';
+import { useChat, ChatMessage, QuickCharacter } from './useChat';
+import { renderFormattedText } from './textFormat';
+import {
+  formatThinkingDuration,
+  splitThinking,
+  visibleContent,
+} from './thinking';
 import Carousel from './components/Carousel';
 
 const DOUBLE_TAP_DELAY_MS = 300;
@@ -46,7 +50,7 @@ interface MessageBubbleProps {
   isLiveStreaming: boolean;
   st: ReturnType<typeof useTheme>;
   variantIndexMap: Record<string, number>;
-  speaker?: {name: string; icon?: string} | null;
+  speaker?: { name: string; icon?: string } | null;
   onSelect: (id: string | null) => void;
   onOpenCarousel: (id: string) => void;
   registerBubble: (id: string, ref: TouchableOpacityInstance | null) => void;
@@ -63,16 +67,28 @@ interface MessageBubbleProps {
   onRetry: () => void;
 }
 
-function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
-  const opacities = useRef([new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]).current;
+function TypingIndicator({ st }: { st: ReturnType<typeof useTheme> }) {
+  const opacities = useRef([
+    new Animated.Value(0.3),
+    new Animated.Value(0.3),
+    new Animated.Value(0.3),
+  ]).current;
 
   useEffect(() => {
     const animations = opacities.map((val, i) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(i * 200),
-          Animated.timing(val, {toValue: 1, duration: 400, useNativeDriver: true}),
-          Animated.timing(val, {toValue: 0.3, duration: 400, useNativeDriver: true}),
+          Animated.timing(val, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(val, {
+            toValue: 0.3,
+            duration: 400,
+            useNativeDriver: true,
+          }),
         ]),
       ),
     );
@@ -86,7 +102,7 @@ function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
       <View style={[st.bubble, st.bubbleAssistant, st.typingBubble]}>
         <View style={st.typingDots}>
           {opacities.map((val, i) => (
-            <Animated.View key={i} style={[st.typingDot, {opacity: val}]} />
+            <Animated.View key={i} style={[st.typingDot, { opacity: val }]} />
           ))}
         </View>
       </View>
@@ -95,9 +111,29 @@ function TypingIndicator({st}: {st: ReturnType<typeof useTheme>}) {
 }
 
 const MessageBubble = React.memo(function MessageBubble({
-  item, hidden, isSelected, isLastAssistant, sending, isLiveStreaming, st, variantIndexMap, speaker,
-  onSelect, onOpenCarousel, registerBubble, onBubbleLayout, onEdit, onEditSave, onEditCancel, editingMessageId, editingText, onEditingTextChange,
-  onCopy, onDelete, onRegenerate, onRetry,
+  item,
+  hidden,
+  isSelected,
+  isLastAssistant,
+  sending,
+  isLiveStreaming,
+  st,
+  variantIndexMap,
+  speaker,
+  onSelect,
+  onOpenCarousel,
+  registerBubble,
+  onBubbleLayout,
+  onEdit,
+  onEditSave,
+  onEditCancel,
+  editingMessageId,
+  editingText,
+  onEditingTextChange,
+  onCopy,
+  onDelete,
+  onRegenerate,
+  onRetry,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const showThinking = useAppStore(s => s.appSettings.showThinking);
@@ -109,7 +145,8 @@ const MessageBubble = React.memo(function MessageBubble({
   const isTyping = item.id === '__typing__';
   const isEditing = editingMessageId === item.id;
   const thought = splitThinking(item.content);
-  const showThoughtBlock = thought.hasThinking && (showThinking || !thought.answer);
+  const showThoughtBlock =
+    thought.hasThinking && (showThinking || !thought.answer);
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [thinkElapsed, setThinkElapsed] = useState(0);
   const openSinceRef = useRef(0);
@@ -122,7 +159,10 @@ const MessageBubble = React.memo(function MessageBubble({
     }
     if (!openSinceRef.current) openSinceRef.current = Date.now();
     setThinkElapsed(Date.now() - openSinceRef.current);
-    const t = setInterval(() => setThinkElapsed(Date.now() - openSinceRef.current), 500);
+    const t = setInterval(
+      () => setThinkElapsed(Date.now() - openSinceRef.current),
+      500,
+    );
     return () => clearInterval(t);
   }, [thought.open]);
 
@@ -132,19 +172,25 @@ const MessageBubble = React.memo(function MessageBubble({
         <TouchableOpacity
           activeOpacity={0.8}
           ref={ref => registerBubble(item.id, ref)}
-          onLayout={e => onBubbleLayout(item.id, e.nativeEvent.layout.width, e.nativeEvent.layout.height)}
+          onLayout={e =>
+            onBubbleLayout(
+              item.id,
+              e.nativeEvent.layout.width,
+              e.nativeEvent.layout.height,
+            )
+          }
           onPress={() => onOpenCarousel(item.id)}
-          style={[st.bubble, st.bubbleAssistant, st.errorBubble]}>
+          style={[st.bubble, st.bubbleAssistant, st.errorBubble]}
+        >
           <Text style={st.errorText}>{item.content}</Text>
-          <View style={{flexDirection: 'row', gap: 12, marginTop: 6}}>
-            <TouchableOpacity
-              onPress={onRetry}
-              style={st.retryBtn}>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 6 }}>
+            <TouchableOpacity onPress={onRetry} style={st.retryBtn}>
               <Text style={st.retryBtnText}>Retry</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => onOpenCarousel(item.id)}
-              style={st.retryBtn}>
+              style={st.retryBtn}
+            >
               <Text style={st.retryBtnText}>Details</Text>
             </TouchableOpacity>
           </View>
@@ -157,35 +203,59 @@ const MessageBubble = React.memo(function MessageBubble({
     return <TypingIndicator st={st} />;
   }
 
-  const showAvatar = !!speaker && groupCharDisplay !== 'name' && showCharacterIcons;
+  const showAvatar =
+    !!speaker && groupCharDisplay !== 'name' && showCharacterIcons;
   const showName = !!speaker && groupCharDisplay !== 'avatar';
 
   return (
-    <View style={[
-      st.messageContainer,
-      isUser ? st.messageContainerUser : st.messageContainerAssistant,
-      hidden && {opacity: 0},
-    ]}>
+    <View
+      style={[
+        st.messageContainer,
+        isUser ? st.messageContainerUser : st.messageContainerAssistant,
+        hidden && { opacity: 0 },
+      ]}
+    >
       {speaker ? (
         <View style={st.messageSenderRow}>
           {showAvatar ? (
             speaker.icon ? (
-              <Image source={{uri: speaker.icon}} style={st.messageSenderAvatar} />
+              <Image
+                source={{ uri: speaker.icon }}
+                style={st.messageSenderAvatar}
+              />
             ) : (
-              <View style={[st.messageSenderAvatar, st.messageSenderAvatarFallback, {justifyContent: 'center', alignItems: 'center'}]}>
-                <Text style={{color: st.bubbleText.color, fontSize: 10}}>{speaker.name[0]}</Text>
+              <View
+                style={[
+                  st.messageSenderAvatar,
+                  st.messageSenderAvatarFallback,
+                  { justifyContent: 'center', alignItems: 'center' },
+                ]}
+              >
+                <Text style={{ color: st.bubbleText.color, fontSize: 10 }}>
+                  {speaker.name[0]}
+                </Text>
               </View>
             )
           ) : null}
           {showName ? (
-            <Text style={[st.messageSenderName, showAvatar && {marginLeft: 6}]}>{speaker.name}</Text>
+            <Text
+              style={[st.messageSenderName, showAvatar && { marginLeft: 6 }]}
+            >
+              {speaker.name}
+            </Text>
           ) : null}
         </View>
       ) : null}
       <TouchableOpacity
         activeOpacity={0.8}
         ref={ref => registerBubble(item.id, ref)}
-        onLayout={e => onBubbleLayout(item.id, e.nativeEvent.layout.width, e.nativeEvent.layout.height)}
+        onLayout={e =>
+          onBubbleLayout(
+            item.id,
+            e.nativeEvent.layout.width,
+            e.nativeEvent.layout.height,
+          )
+        }
         onPress={() => {
           if (!isStreamingMsg && !isEditing) {
             onOpenCarousel(item.id);
@@ -196,10 +266,8 @@ const MessageBubble = React.memo(function MessageBubble({
             onSelect(isSelected ? null : item.id);
           }
         }}
-        style={[
-          st.bubble,
-          isUser ? st.bubbleUser : st.bubbleAssistant,
-        ]}>
+        style={[st.bubble, isUser ? st.bubbleUser : st.bubbleAssistant]}
+      >
         {isEditing ? (
           <>
             <TextInput
@@ -210,15 +278,19 @@ const MessageBubble = React.memo(function MessageBubble({
               autoFocus
               textAlignVertical="top"
             />
-            <View style={[st.actionRow, isUser ? st.actionRowUser : st.actionRowAssistant]}>
+            <View
+              style={[
+                st.actionRow,
+                isUser ? st.actionRowUser : st.actionRowAssistant,
+              ]}
+            >
               <TouchableOpacity
                 onPress={() => onEditSave(item, editingText)}
-                style={st.actionBtn}>
+                style={st.actionBtn}
+              >
                 <Text style={st.actionBtnText}>Save</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={onEditCancel}
-                style={st.actionBtn}>
+              <TouchableOpacity onPress={onEditCancel} style={st.actionBtn}>
                 <Text style={st.actionBtnText}>Cancel</Text>
               </TouchableOpacity>
             </View>
@@ -232,9 +304,10 @@ const MessageBubble = React.memo(function MessageBubble({
                   onSelect(isSelected ? null : item.id);
                 }
               }}
-              activeOpacity={0.7}>
+              activeOpacity={0.7}
+            >
               <Text style={st.thinkingLabel}>
-                {(thought.open || thoughtExpanded) ? '▾ ' : '▸ '}
+                {thought.open || thoughtExpanded ? '▾ ' : '▸ '}
                 {thought.open
                   ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
                   : item.thinkingMs !== undefined
@@ -242,62 +315,107 @@ const MessageBubble = React.memo(function MessageBubble({
                     : 'thought'}
               </Text>
             </TouchableOpacity>
-            {(thought.open || thoughtExpanded) && !!thought.thinking && showThinking && (
-              <Text
-                style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-                <Text style={st.thinkingBody}>
-                  {renderFormattedText(thought.thinking, st.thinkingBody, forceItalic)}
+            {(thought.open || thoughtExpanded) &&
+              !!thought.thinking &&
+              showThinking && (
+                <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+                  <Text style={st.thinkingBody}>
+                    {renderFormattedText(
+                      thought.thinking,
+                      st.thinkingBody,
+                      forceItalic,
+                    )}
+                  </Text>
                 </Text>
-              </Text>
-            )}
+              )}
             {!!thought.answer && (
-              <Text
-                style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-                {(thought.open || thoughtExpanded) && !!thought.thinking && showThinking ? '\n\n' : null}
-                {renderFormattedText(thought.answer, st.bubbleText, forceItalic)}
+              <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+                {(thought.open || thoughtExpanded) &&
+                !!thought.thinking &&
+                showThinking
+                  ? '\n\n'
+                  : null}
+                {renderFormattedText(
+                  thought.answer,
+                  st.bubbleText,
+                  forceItalic,
+                )}
               </Text>
             )}
           </>
         ) : (
           <>
-            <Text
-              style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-              {renderFormattedText(visibleContent(item.content, showThinking), st.bubbleText, forceItalic)}
+            <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+              {renderFormattedText(
+                visibleContent(item.content, showThinking),
+                st.bubbleText,
+                forceItalic,
+              )}
             </Text>
             {!isStreamingMsg && (
-              <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'space-between'}}>
-                <Text style={[st.timestampText, isUser ? st.timestampUser : st.timestampAssistant, {marginTop: 0, flexShrink: 1}]}>
-                  {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginTop: 4,
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text
+                  style={[
+                    st.timestampText,
+                    isUser ? st.timestampUser : st.timestampAssistant,
+                    { marginTop: 0, flexShrink: 1 },
+                  ]}
+                >
+                  {new Date(item.timestamp).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </Text>
                 {!isUser && item.variants && item.variants.length > 0 && (
-                  <Text style={[st.variantCounter, {marginTop: 0, marginLeft: 8}]}>
-                    {(variantIndexMap[item.id] ?? item.variants.length) + 1}/{item.variants.length + 1}
+                  <Text
+                    style={[st.variantCounter, { marginTop: 0, marginLeft: 8 }]}
+                  >
+                    {(variantIndexMap[item.id] ?? item.variants.length) + 1}/
+                    {item.variants.length + 1}
                   </Text>
                 )}
               </View>
             )}
             {isSelected && !isStreamingMsg && (
-              <View style={[st.actionRow, isUser ? st.actionRowUser : st.actionRowAssistant]}>
+              <View
+                style={[
+                  st.actionRow,
+                  isUser ? st.actionRowUser : st.actionRowAssistant,
+                ]}
+              >
                 <TouchableOpacity
                   onPress={() => onEdit(item)}
-                  style={st.actionBtn}>
+                  style={st.actionBtn}
+                >
                   <Text style={st.actionBtnText}>Edit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => onCopy(item)}
-                  style={st.actionBtn}>
+                  style={st.actionBtn}
+                >
                   <Text style={st.actionBtnText}>Copy</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => onDelete(item)}
-                  style={st.actionBtn}>
-                  <Text style={[st.actionBtnText, st.actionBtnTextDelete]}>Delete</Text>
+                  style={st.actionBtn}
+                >
+                  <Text style={[st.actionBtnText, st.actionBtnTextDelete]}>
+                    Delete
+                  </Text>
                 </TouchableOpacity>
                 {isLastAssistant && (
                   <TouchableOpacity
                     onPress={onRegenerate}
                     disabled={sending}
-                    style={[st.actionBtn, sending && st.actionBtnDisabled]}>
+                    style={[st.actionBtn, sending && st.actionBtnDisabled]}
+                  >
                     <Text style={st.actionBtnText}>Regen</Text>
                   </TouchableOpacity>
                 )}
@@ -310,7 +428,15 @@ const MessageBubble = React.memo(function MessageBubble({
   );
 });
 
-export default function ChatHandler({character, groupChat, activeSessionId, quickCharacters, onHistoryPress, onSessionCreated, bottomInset}: ChatHandlerProps) {
+export default function ChatHandler({
+  character,
+  groupChat,
+  activeSessionId,
+  quickCharacters,
+  onHistoryPress,
+  onSessionCreated,
+  bottomInset,
+}: ChatHandlerProps) {
   const st = useTheme();
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
   const groupCharDisplay = useAppStore(s => s.appSettings.showGroupCharNames);
@@ -354,18 +480,43 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     handleStudioDeleteEntry,
     handleRetryError,
     handleStop,
-  } = useChat({character, groupChat, activeSessionId, onSessionCreated, quickCharacters});
+  } = useChat({
+    character,
+    groupChat,
+    activeSessionId,
+    onSessionCreated,
+    quickCharacters,
+  });
 
-  const [carouselMessageId, setCarouselMessageIdInner] = useState<string | null>(null);
-  const [carouselOrigin, setCarouselOrigin] = useState<{x: number; y: number; width: number; height: number; viewport?: {y: number; height: number}} | null | undefined>(undefined);
+  const [carouselMessageId, setCarouselMessageIdInner] = useState<
+    string | null
+  >(null);
+  const [carouselOrigin, setCarouselOrigin] = useState<
+    | {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        viewport?: { y: number; height: number };
+      }
+    | null
+    | undefined
+  >(undefined);
   const [carouselReady, setCarouselReady] = useState(false);
-  const bubbleRefs = useRef<Record<string, TouchableOpacityInstance | null>>({}).current;
-  const bubbleLayouts = useRef<Record<string, {width: number; height: number}>>({}).current;
+  const bubbleRefs = useRef<Record<string, TouchableOpacityInstance | null>>(
+    {},
+  ).current;
+  const bubbleLayouts = useRef<
+    Record<string, { width: number; height: number }>
+  >({}).current;
   const listAreaRef = useRef<ViewInstance | null>(null);
 
   const lastSendTapRef = useRef(0);
   const sendTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSelectorTapRef = useRef<{id: string; time: number}>({id: '', time: 0});
+  const lastSelectorTapRef = useRef<{ id: string; time: number }>({
+    id: '',
+    time: 0,
+  });
 
   const handleSendPress = useCallback(() => {
     const now = Date.now();
@@ -400,17 +551,23 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     (
       id: string,
       onSelect: () => void,
-      continueTarget: {character?: Character | null; qc?: QuickCharacter | null},
+      continueTarget: {
+        character?: Character | null;
+        qc?: QuickCharacter | null;
+      },
     ) => {
       return () => {
         const now = Date.now();
-        if (lastSelectorTapRef.current.id === id && now - lastSelectorTapRef.current.time < DOUBLE_TAP_DELAY_MS) {
-          lastSelectorTapRef.current = {id: '', time: 0};
+        if (
+          lastSelectorTapRef.current.id === id &&
+          now - lastSelectorTapRef.current.time < DOUBLE_TAP_DELAY_MS
+        ) {
+          lastSelectorTapRef.current = { id: '', time: 0 };
           onSelect();
           handleContinue(continueTarget);
           return;
         }
-        lastSelectorTapRef.current = {id, time: now};
+        lastSelectorTapRef.current = { id, time: now };
         onSelect();
       };
     },
@@ -435,67 +592,96 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     return () => sub.remove();
   }, [carouselMessageId, handleCloseCarousel, setSelectedMessageId]);
 
-  const registerBubble = useCallback((id: string, ref: TouchableOpacityInstance | null) => {
-    if (ref) {
-      bubbleRefs[id] = ref;
-    } else {
-      delete bubbleRefs[id];
-    }
-  }, [bubbleRefs]);
-
-  const handleBubbleLayout = useCallback((id: string, width: number, height: number) => {
-    bubbleLayouts[id] = {width, height};
-  }, [bubbleLayouts]);
-
-  const openCarousel = useCallback((id: string) => {
-    setCarouselReady(false);
-    setCarouselOrigin(undefined);
-    setCarouselMessageIdInner(id);
-    const ref = bubbleRefs[id];
-    const area = listAreaRef.current;
-    if (!ref || !area) {
-      setCarouselOrigin(null);
-      return;
-    }
-    ref.measureInWindow((x, y, width, height) => {
-      const layout = bubbleLayouts[id];
-      if (layout) {
-        width = layout.width;
-        height = layout.height;
-      }
-      if (width > 0 && height > 0 && x >= -100 && x <= 5000 && y >= -100000 && y <= 100000) {
-        area.measureInWindow((vx, vy, vw, vh) => {
-          const viewport = vh > 0 ? {y: vy, height: vh} : undefined;
-          setCarouselOrigin({x, y, width, height, viewport});
-        });
+  const registerBubble = useCallback(
+    (id: string, ref: TouchableOpacityInstance | null) => {
+      if (ref) {
+        bubbleRefs[id] = ref;
       } else {
-        setCarouselOrigin(null);
+        delete bubbleRefs[id];
       }
-    });
-  }, [bubbleRefs, bubbleLayouts]);
+    },
+    [bubbleRefs],
+  );
 
-  const handleCarouselDelete = useCallback((msg: ChatMessage) => {
-    handleDeleteMessage(msg);
-    handleCloseCarousel();
-  }, [handleDeleteMessage, handleCloseCarousel]);
+  const handleBubbleLayout = useCallback(
+    (id: string, width: number, height: number) => {
+      bubbleLayouts[id] = { width, height };
+    },
+    [bubbleLayouts],
+  );
+
+  const openCarousel = useCallback(
+    (id: string) => {
+      setCarouselReady(false);
+      setCarouselOrigin(undefined);
+      setCarouselMessageIdInner(id);
+      const ref = bubbleRefs[id];
+      const area = listAreaRef.current;
+      if (!ref || !area) {
+        setCarouselOrigin(null);
+        return;
+      }
+      ref.measureInWindow((x, y, width, height) => {
+        const layout = bubbleLayouts[id];
+        if (layout) {
+          width = layout.width;
+          height = layout.height;
+        }
+        if (
+          width > 0 &&
+          height > 0 &&
+          x >= -100 &&
+          x <= 5000 &&
+          y >= -100000 &&
+          y <= 100000
+        ) {
+          area.measureInWindow((vx, vy, vw, vh) => {
+            const viewport = vh > 0 ? { y: vy, height: vh } : undefined;
+            setCarouselOrigin({ x, y, width, height, viewport });
+          });
+        } else {
+          setCarouselOrigin(null);
+        }
+      });
+    },
+    [bubbleRefs, bubbleLayouts],
+  );
+
+  const handleCarouselDelete = useCallback(
+    (msg: ChatMessage) => {
+      handleDeleteMessage(msg);
+      handleCloseCarousel();
+    },
+    [handleDeleteMessage, handleCloseCarousel],
+  );
 
   const carouselMessage: ChatMessage | null = (() => {
     if (!carouselMessageId) return null;
     if (carouselMessageId === '__error__') {
       return error
-        ? {id: '__error__', role: 'assistant', content: error, timestamp: Date.now()}
+        ? {
+            id: '__error__',
+            role: 'assistant',
+            content: error,
+            timestamp: Date.now(),
+          }
         : null;
     }
     return session?.messages.find(m => m.id === carouselMessageId) ?? null;
   })();
-  const carouselCanRegen = !!carouselMessage && !!session && session.messages.length > 0 &&
+  const carouselCanRegen =
+    !!carouselMessage &&
+    !!session &&
+    session.messages.length > 0 &&
     session.messages[session.messages.length - 1].id === carouselMessage.id &&
     carouselMessage.role === 'assistant';
 
   const isGroupChat = !!groupChat;
-  const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
+  const activeCharacter =
+    character || (groupMembers.length > 0 ? groupMembers[0] : null);
   const showSelectorLine = isGroupChat || quickCharacters.length > 0;
-  const showAvatar = groupCharDisplay === 'avatar' || groupCharDisplay === 'both';
+  const showAvatar =
+    groupCharDisplay === 'avatar' || groupCharDisplay === 'both';
   const showName = groupCharDisplay === 'name' || groupCharDisplay === 'both';
 
   const scrollOffsetRef = useRef(0);
@@ -504,26 +690,35 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () =>
+      setKeyboardVisible(true),
+    );
+    const hideSub = Keyboard.addListener(hideEvent, () =>
+      setKeyboardVisible(false),
+    );
     return () => {
       showSub.remove();
       hideSub.remove();
     };
   }, []);
 
-  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
-    setShowGoDown(e.nativeEvent.contentOffset.y > 120);
-  }, []);
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      setShowGoDown(e.nativeEvent.contentOffset.y > 120);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (editingMessageId) {
       const offset = scrollOffsetRef.current;
       const raf = requestAnimationFrame(() => {
-        flatListRef.current?.scrollToOffset({offset, animated: false});
+        flatListRef.current?.scrollToOffset({ offset, animated: false });
       });
       return () => cancelAnimationFrame(raf);
     }
@@ -531,313 +726,501 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
 
   useEffect(() => {
     if (isStreaming && scrollOffsetRef.current <= 120) {
-      flatListRef.current?.scrollToOffset({offset: 0, animated: true});
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     }
   }, [streamingContent, isStreaming, flatListRef]);
 
-  const resolveSpeaker = useCallback((item: ChatMessage): {name: string; icon?: string} | null => {
-    if (item.role === 'user') return null;
-    if (isGroupChat) {
-      const c = item.characterId
-        ? groupMembers.find(m => m.id === item.characterId)
+  const resolveSpeaker = useCallback(
+    (item: ChatMessage): { name: string; icon?: string } | null => {
+      if (item.role === 'user') return null;
+      if (isGroupChat) {
+        const c = item.characterId
+          ? groupMembers.find(m => m.id === item.characterId)
+          : item.id === '__streaming__'
+            ? selectedReplyCharacter
+            : undefined;
+        return c ? { name: c.name, icon: c.icon || undefined } : null;
+      }
+      if (item.characterId && item.speakerName)
+        return { name: item.speakerName };
+      if (quickCharacters.length === 0) return null;
+      const qc = item.characterId
+        ? quickCharacters.find(q => q.id === item.characterId)
         : item.id === '__streaming__'
-          ? selectedReplyCharacter
+          ? selectedQC
           : undefined;
-      return c ? {name: c.name, icon: c.icon || undefined} : null;
-    }
-    if (item.characterId && item.speakerName) return {name: item.speakerName};
-    if (quickCharacters.length === 0) return null;
-    const qc = item.characterId
-      ? quickCharacters.find(q => q.id === item.characterId)
-      : item.id === '__streaming__'
-        ? selectedQC
-        : undefined;
-    if (qc) return {name: qc.name, icon: qc.icon};
-    return character ? {name: character.name, icon: character.icon || undefined} : null;
-  }, [isGroupChat, groupMembers, quickCharacters, selectedReplyCharacter, selectedQC, character]);
+      if (qc) return { name: qc.name, icon: qc.icon };
+      return character
+        ? { name: character.name, icon: character.icon || undefined }
+        : null;
+    },
+    [
+      isGroupChat,
+      groupMembers,
+      quickCharacters,
+      selectedReplyCharacter,
+      selectedQC,
+      character,
+    ],
+  );
 
-  const renderMessage = useCallback(({item}: {item: ChatMessage}) => {
-    const isUser = item.role === 'user';
-    const isLastAssistant = !isUser && session && session.messages.length > 0 &&
-      session.messages[session.messages.length - 1].id === item.id && item.role === 'assistant';
+  const renderMessage = useCallback(
+    ({ item }: { item: ChatMessage }) => {
+      const isUser = item.role === 'user';
+      const isLastAssistant =
+        !isUser &&
+        session &&
+        session.messages.length > 0 &&
+        session.messages[session.messages.length - 1].id === item.id &&
+        item.role === 'assistant';
 
-    return (
-      <MessageBubble
-        item={item}
-        hidden={carouselMessageId === item.id && carouselReady}
-        isSelected={selectedMessageId === item.id}
-        isLastAssistant={!!isLastAssistant}
-        sending={sending}
-        isLiveStreaming={item.id === replacingMessageId && isStreaming}
-        st={st}
-        variantIndexMap={variantIndexMap}
-        speaker={resolveSpeaker(item)}
-        onSelect={setSelectedMessageId}
-        onOpenCarousel={openCarousel}
-        registerBubble={registerBubble}
-        onBubbleLayout={handleBubbleLayout}
-        onEdit={handleEditMessage}
-        onEditSave={handleEditSave}
-        onEditCancel={handleEditCancel}
-        editingMessageId={editingMessageId}
-        editingText={editingText}
-        onEditingTextChange={setEditingText}
-        onCopy={handleCopyMessage}
-        onDelete={handleDeleteMessage}
-        onRegenerate={handleRegenerate}
-        onRetry={handleRetryError}
-      />
-    );
-  }, [session, selectedMessageId, sending, isStreaming, replacingMessageId, st, variantIndexMap, carouselMessageId, carouselReady, handleEditMessage, handleEditSave, handleEditCancel, editingMessageId, editingText, setEditingText, setSelectedMessageId, openCarousel, registerBubble, handleBubbleLayout, handleCopyMessage, handleDeleteMessage, handleRegenerate, handleRetryError, resolveSpeaker]);
+      return (
+        <MessageBubble
+          item={item}
+          hidden={carouselMessageId === item.id && carouselReady}
+          isSelected={selectedMessageId === item.id}
+          isLastAssistant={!!isLastAssistant}
+          sending={sending}
+          isLiveStreaming={item.id === replacingMessageId && isStreaming}
+          st={st}
+          variantIndexMap={variantIndexMap}
+          speaker={resolveSpeaker(item)}
+          onSelect={setSelectedMessageId}
+          onOpenCarousel={openCarousel}
+          registerBubble={registerBubble}
+          onBubbleLayout={handleBubbleLayout}
+          onEdit={handleEditMessage}
+          onEditSave={handleEditSave}
+          onEditCancel={handleEditCancel}
+          editingMessageId={editingMessageId}
+          editingText={editingText}
+          onEditingTextChange={setEditingText}
+          onCopy={handleCopyMessage}
+          onDelete={handleDeleteMessage}
+          onRegenerate={handleRegenerate}
+          onRetry={handleRetryError}
+        />
+      );
+    },
+    [
+      session,
+      selectedMessageId,
+      sending,
+      isStreaming,
+      replacingMessageId,
+      st,
+      variantIndexMap,
+      carouselMessageId,
+      carouselReady,
+      handleEditMessage,
+      handleEditSave,
+      handleEditCancel,
+      editingMessageId,
+      editingText,
+      setEditingText,
+      setSelectedMessageId,
+      openCarousel,
+      registerBubble,
+      handleBubbleLayout,
+      handleCopyMessage,
+      handleDeleteMessage,
+      handleRegenerate,
+      handleRetryError,
+      resolveSpeaker,
+    ],
+  );
 
   return (
     <>
-    <KeyboardAvoidingView
-      style={st.chatContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}>
-      <View style={st.chatHeader}>
-        {isGroupChat ? (
-          <>
-            <View style={[st.chatHeaderAvatar, {justifyContent: 'center', alignItems: 'center'}]}>
-              <Text style={{color: st.textMuted.color, fontSize: 14}}>{groupMembers.length}</Text>
-            </View>
-            <Text style={st.chatHeaderName} numberOfLines={1}>
-              {groupChat.name}
-            </Text>
-          </>
-        ) : (
-          <>
-            {showCharacterIcons && activeCharacter?.icon ? (
-              <Image
-                source={{uri: activeCharacter.icon}}
-                style={st.chatHeaderAvatar}
-              />
-            ) : null}
-            <Text style={st.chatHeaderName} numberOfLines={1}>
-              {activeCharacter?.name}
-            </Text>
-          </>
-        )}
-        <TouchableOpacity
-          onPress={onHistoryPress}
-          style={st.historyBtn}>
-          <Text style={st.historyBtnIcon}>≡</Text>
-        </TouchableOpacity>
-      </View>
+      <KeyboardAvoidingView
+        style={st.chatContainer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <View style={st.chatHeader}>
+          {isGroupChat ? (
+            <>
+              <View
+                style={[
+                  st.chatHeaderAvatar,
+                  { justifyContent: 'center', alignItems: 'center' },
+                ]}
+              >
+                <Text style={{ color: st.textMuted.color, fontSize: 14 }}>
+                  {groupMembers.length}
+                </Text>
+              </View>
+              <Text style={st.chatHeaderName} numberOfLines={1}>
+                {groupChat.name}
+              </Text>
+            </>
+          ) : (
+            <>
+              {showCharacterIcons && activeCharacter?.icon ? (
+                <Image
+                  source={{ uri: activeCharacter.icon }}
+                  style={st.chatHeaderAvatar}
+                />
+              ) : null}
+              <Text style={st.chatHeaderName} numberOfLines={1}>
+                {activeCharacter?.name}
+              </Text>
+            </>
+          )}
+          <TouchableOpacity onPress={onHistoryPress} style={st.historyBtn}>
+            <Text style={st.historyBtnIcon}>≡</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View ref={listAreaRef} style={{flex: 1}}>
-      <FlatList
-        ref={flatListRef}
-        data={messagesData}
-        keyExtractor={item => item.id}
-        renderItem={renderMessage}
-        inverted
-        maintainVisibleContentPosition={{minIndexForVisible: 0}}
-        style={{flex: 1}}
-        contentContainerStyle={st.chatContent}
-        onScroll={handleScroll}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-        onScrollBeginDrag={() => {
-          if (selectedMessageId) {setSelectedMessageId(null);}
-          if (carouselMessageId) {setCarouselMessageIdInner(null);}
-        }}
-        ListEmptyComponent={
-          <View style={st.emptyStateContainer}>
-            <View style={st.emptyStateBubble}>
-              <Text style={st.emptyStateBubbleDots}>{'···'}</Text>
-            </View>
-            <Text style={st.emptyStateTitle}>
-              {isGroupChat ? 'Start a group conversation' : 'Start a conversation'}
-            </Text>
-            <Text style={st.emptyStateSubtitle}>
-              {isGroupChat
-                ? `Say something to ${groupChat.name}...`
-                : `Say something to ${activeCharacter?.name}...`}
-            </Text>
-          </View>
-        }
-      />
-      {showGoDown && (
-        <TouchableOpacity
-          style={st.goDownBtn}
-          onPress={() => {
-            flatListRef.current?.scrollToOffset({offset: 0, animated: true});
-            setShowGoDown(false);
-          }}>
-          <Text style={st.goDownBtnIcon}>↓</Text>
-        </TouchableOpacity>
-      )}
-      </View>
-      {showSelectorLine && (
-        <View style={st.characterSelector}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={st.characterSelectorScroll}>
-            {isGroupChat ? groupMembers.map(char => {
-              const isSelected = selectedReplyCharacter?.id === char.id;
-              return (
-                <TouchableOpacity
-                  key={char.id}
-                  onPress={makeSelectorPress(char.id, () => setSelectedReplyCharacter(char), {character: char})}
-                  style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
-                  {showAvatar && showCharacterIcons && char.icon ? (
-                    <Image
-                      source={{uri: char.icon}}
-                      style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive]}
-                    />
-                  ) : showAvatar ? (
-                    <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
-                      <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
-                        {char.name[0]}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {showName && (
-                    <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive, showAvatar && {marginLeft: 6}]} numberOfLines={1}>
-                      {char.name}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            }) : (
-              <>
-                <TouchableOpacity
-                  onPress={makeSelectorPress(
-                    activeCharacter?.id ?? 'base',
-                    () => setSelectedQC(null),
-                    {qc: null},
-                  )}
-                  style={[st.characterSelectorItem, !selectedQC && st.characterSelectorItemActive]}>
-                  {showAvatar && showCharacterIcons && activeCharacter?.icon ? (
-                    <Image
-                      source={{uri: activeCharacter.icon}}
-                      style={[st.characterSelectorAvatar, !selectedQC && st.characterSelectorAvatarActive]}
-                    />
-                  ) : showAvatar ? (
-                    <View style={[st.characterSelectorAvatar, !selectedQC && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
-                      <Text style={{color: !selectedQC ? accentColor : st.textMuted.color, fontSize: 14}}>
-                        {activeCharacter?.name?.[0] || '?'}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {showName && (
-                    <Text style={[st.characterSelectorName, !selectedQC && st.characterSelectorNameActive, showAvatar && {marginLeft: 6}]} numberOfLines={1}>
-                      {activeCharacter?.name}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-                {quickCharacters.map(qc => {
-                  const isSelected = selectedQC?.id === qc.id;
+        <View ref={listAreaRef} style={{ flex: 1 }}>
+          <FlatList
+            ref={flatListRef}
+            data={messagesData}
+            keyExtractor={item => item.id}
+            renderItem={renderMessage}
+            inverted
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+            style={{ flex: 1 }}
+            contentContainerStyle={st.chatContent}
+            onScroll={handleScroll}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+            onScrollBeginDrag={() => {
+              if (selectedMessageId) {
+                setSelectedMessageId(null);
+              }
+              if (carouselMessageId) {
+                setCarouselMessageIdInner(null);
+              }
+            }}
+            ListEmptyComponent={
+              <View style={st.emptyStateContainer}>
+                <View style={st.emptyStateBubble}>
+                  <Text style={st.emptyStateBubbleDots}>{'···'}</Text>
+                </View>
+                <Text style={st.emptyStateTitle}>
+                  {isGroupChat
+                    ? 'Start a group conversation'
+                    : 'Start a conversation'}
+                </Text>
+                <Text style={st.emptyStateSubtitle}>
+                  {isGroupChat
+                    ? `Say something to ${groupChat.name}...`
+                    : `Say something to ${activeCharacter?.name}...`}
+                </Text>
+              </View>
+            }
+          />
+          {showGoDown && (
+            <TouchableOpacity
+              style={st.goDownBtn}
+              onPress={() => {
+                flatListRef.current?.scrollToOffset({
+                  offset: 0,
+                  animated: true,
+                });
+                setShowGoDown(false);
+              }}
+            >
+              <Text style={st.goDownBtnIcon}>↓</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {showSelectorLine && (
+          <View style={st.characterSelector}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={st.characterSelectorScroll}
+            >
+              {isGroupChat ? (
+                groupMembers.map(char => {
+                  const isSelected = selectedReplyCharacter?.id === char.id;
                   return (
                     <TouchableOpacity
-                      key={qc.id}
-                      onPress={makeSelectorPress(qc.id, () => setSelectedQC(qc), {qc})}
-                      style={[st.characterSelectorItem, isSelected && st.characterSelectorItemActive]}>
-                      {showAvatar && showCharacterIcons && qc.icon ? (
+                      key={char.id}
+                      onPress={makeSelectorPress(
+                        char.id,
+                        () => setSelectedReplyCharacter(char),
+                        { character: char },
+                      )}
+                      style={[
+                        st.characterSelectorItem,
+                        isSelected && st.characterSelectorItemActive,
+                      ]}
+                    >
+                      {showAvatar && showCharacterIcons && char.icon ? (
                         <Image
-                          source={{uri: qc.icon}}
-                          style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive]}
+                          source={{ uri: char.icon }}
+                          style={[
+                            st.characterSelectorAvatar,
+                            isSelected && st.characterSelectorAvatarActive,
+                          ]}
                         />
                       ) : showAvatar ? (
-                        <View style={[st.characterSelectorAvatar, isSelected && st.characterSelectorAvatarActive, {justifyContent: 'center', alignItems: 'center'}]}>
-                          <Text style={{color: isSelected ? accentColor : st.textMuted.color, fontSize: 14}}>
-                            {qc.name[0]}
+                        <View
+                          style={[
+                            st.characterSelectorAvatar,
+                            isSelected && st.characterSelectorAvatarActive,
+                            { justifyContent: 'center', alignItems: 'center' },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              color: isSelected
+                                ? accentColor
+                                : st.textMuted.color,
+                              fontSize: 14,
+                            }}
+                          >
+                            {char.name[0]}
                           </Text>
                         </View>
                       ) : null}
                       {showName && (
-                        <Text style={[st.characterSelectorName, isSelected && st.characterSelectorNameActive, showAvatar && {marginLeft: 6}]} numberOfLines={1}>
-                          {qc.name}
+                        <Text
+                          style={[
+                            st.characterSelectorName,
+                            isSelected && st.characterSelectorNameActive,
+                            showAvatar && { marginLeft: 6 },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {char.name}
                         </Text>
                       )}
                     </TouchableOpacity>
                   );
-                })}
-              </>
-            )}
-          </ScrollView>
-        </View>
-      )}
-
-      <View style={[st.inputBar, {paddingBottom: keyboardVisible ? bottomInset + 30 : bottomInset}]}>
-        {(isGroupChat && selectedReplyCharacter) ? (
-          <View style={{marginRight: 8}}>
-            {showCharacterIcons && selectedReplyCharacter.icon ? (
-              <Image
-                source={{uri: selectedReplyCharacter.icon}}
-                style={{width: 28, height: 28, borderRadius: 14}}
-              />
-            ) : (
-              <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: bgSecondary, justifyContent: 'center', alignItems: 'center'}}>
-                <Text style={{color: st.textMuted.color, fontSize: 12}}>{selectedReplyCharacter.name[0]}</Text>
-              </View>
-            )}
+                })
+              ) : (
+                <>
+                  <TouchableOpacity
+                    onPress={makeSelectorPress(
+                      activeCharacter?.id ?? 'base',
+                      () => setSelectedQC(null),
+                      { qc: null },
+                    )}
+                    style={[
+                      st.characterSelectorItem,
+                      !selectedQC && st.characterSelectorItemActive,
+                    ]}
+                  >
+                    {showAvatar &&
+                    showCharacterIcons &&
+                    activeCharacter?.icon ? (
+                      <Image
+                        source={{ uri: activeCharacter.icon }}
+                        style={[
+                          st.characterSelectorAvatar,
+                          !selectedQC && st.characterSelectorAvatarActive,
+                        ]}
+                      />
+                    ) : showAvatar ? (
+                      <View
+                        style={[
+                          st.characterSelectorAvatar,
+                          !selectedQC && st.characterSelectorAvatarActive,
+                          { justifyContent: 'center', alignItems: 'center' },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            color: !selectedQC
+                              ? accentColor
+                              : st.textMuted.color,
+                            fontSize: 14,
+                          }}
+                        >
+                          {activeCharacter?.name?.[0] || '?'}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {showName && (
+                      <Text
+                        style={[
+                          st.characterSelectorName,
+                          !selectedQC && st.characterSelectorNameActive,
+                          showAvatar && { marginLeft: 6 },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {activeCharacter?.name}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  {quickCharacters.map(qc => {
+                    const isSelected = selectedQC?.id === qc.id;
+                    return (
+                      <TouchableOpacity
+                        key={qc.id}
+                        onPress={makeSelectorPress(
+                          qc.id,
+                          () => setSelectedQC(qc),
+                          { qc },
+                        )}
+                        style={[
+                          st.characterSelectorItem,
+                          isSelected && st.characterSelectorItemActive,
+                        ]}
+                      >
+                        {showAvatar && showCharacterIcons && qc.icon ? (
+                          <Image
+                            source={{ uri: qc.icon }}
+                            style={[
+                              st.characterSelectorAvatar,
+                              isSelected && st.characterSelectorAvatarActive,
+                            ]}
+                          />
+                        ) : showAvatar ? (
+                          <View
+                            style={[
+                              st.characterSelectorAvatar,
+                              isSelected && st.characterSelectorAvatarActive,
+                              {
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                color: isSelected
+                                  ? accentColor
+                                  : st.textMuted.color,
+                                fontSize: 14,
+                              }}
+                            >
+                              {qc.name[0]}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {showName && (
+                          <Text
+                            style={[
+                              st.characterSelectorName,
+                              isSelected && st.characterSelectorNameActive,
+                              showAvatar && { marginLeft: 6 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {qc.name}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </>
+              )}
+            </ScrollView>
           </View>
-        ) : (selectedQC && !isGroupChat) ? (
-          <View style={{marginRight: 8}}>
-            {showCharacterIcons && selectedQC.icon ? (
-              <Image
-                source={{uri: selectedQC.icon}}
-                style={{width: 28, height: 28, borderRadius: 14}}
-              />
-            ) : (
-              <View style={{width: 28, height: 28, borderRadius: 14, backgroundColor: bgSecondary, justifyContent: 'center', alignItems: 'center'}}>
-                <Text style={{color: st.textMuted.color, fontSize: 12}}>{selectedQC.name[0]}</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
-        <TextInput
-          style={st.textInput}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Message..."
-          placeholderTextColor={st.textMuted.color}
-          editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
-          multiline
-          textAlignVertical="top"
-        />
-        {isStreaming ? (
-          <TouchableOpacity
-            style={st.stopBtn}
-            onPress={handleStop}>
-            <View style={st.stopSquare} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[st.sendBtn, (sending || (isGroupChat && !selectedReplyCharacter)) && st.sendBtnDisabled]}
-            onPress={handleSendPress}
-            disabled={sending || (isGroupChat && !selectedReplyCharacter)}>
-            <Text style={st.sendBtnText}>›</Text>
-          </TouchableOpacity>
         )}
-      </View>
-    </KeyboardAvoidingView>
-    {carouselMessage && (
-      <Carousel
-        message={carouselMessage}
-        origin={carouselOrigin}
-        onReady={handleCarouselReady}
-        onClose={handleCloseCarousel}
-        onSelectVariant={handleSelectVariant}
-        onEditEntry={handleStudioEditEntry}
-        onFork={handleStudioFork}
-        onFresh={handleStudioFresh}
-        onDeleteEntry={handleStudioDeleteEntry}
-        onDeleteMessage={handleCarouselDelete}
-        onCopy={handleCopyMessage}
-        onRegenerate={handleRegenerate}
-        canRegenerate={carouselCanRegen}
-        sending={sending}
-        isStreaming={isStreaming}
-        streamingContent={streamingContent}
-        replacingMessageId={replacingMessageId}
-        onStop={handleStop}
-      />
-    )}
+
+        <View
+          style={[
+            st.inputBar,
+            { paddingBottom: keyboardVisible ? bottomInset + 30 : bottomInset },
+          ]}
+        >
+          {isGroupChat && selectedReplyCharacter ? (
+            <View style={{ marginRight: 8 }}>
+              {showCharacterIcons && selectedReplyCharacter.icon ? (
+                <Image
+                  source={{ uri: selectedReplyCharacter.icon }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: bgSecondary,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: st.textMuted.color, fontSize: 12 }}>
+                    {selectedReplyCharacter.name[0]}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : selectedQC && !isGroupChat ? (
+            <View style={{ marginRight: 8 }}>
+              {showCharacterIcons && selectedQC.icon ? (
+                <Image
+                  source={{ uri: selectedQC.icon }}
+                  style={{ width: 28, height: 28, borderRadius: 14 }}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    backgroundColor: bgSecondary,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: st.textMuted.color, fontSize: 12 }}>
+                    {selectedQC.name[0]}
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+          <TextInput
+            style={st.textInput}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Message..."
+            placeholderTextColor={st.textMuted.color}
+            editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
+            multiline
+            textAlignVertical="top"
+          />
+          {isStreaming ? (
+            <TouchableOpacity style={st.stopBtn} onPress={handleStop}>
+              <View style={st.stopSquare} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                st.sendBtn,
+                (sending || (isGroupChat && !selectedReplyCharacter)) &&
+                  st.sendBtnDisabled,
+              ]}
+              onPress={handleSendPress}
+              disabled={sending || (isGroupChat && !selectedReplyCharacter)}
+            >
+              <Text style={st.sendBtnText}>›</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+      {carouselMessage && (
+        <Carousel
+          message={carouselMessage}
+          origin={carouselOrigin}
+          onReady={handleCarouselReady}
+          onClose={handleCloseCarousel}
+          onSelectVariant={handleSelectVariant}
+          onEditEntry={handleStudioEditEntry}
+          onFork={handleStudioFork}
+          onFresh={handleStudioFresh}
+          onDeleteEntry={handleStudioDeleteEntry}
+          onDeleteMessage={handleCarouselDelete}
+          onCopy={handleCopyMessage}
+          onRegenerate={handleRegenerate}
+          canRegenerate={carouselCanRegen}
+          sending={sending}
+          isStreaming={isStreaming}
+          streamingContent={streamingContent}
+          replacingMessageId={replacingMessageId}
+          onStop={handleStop}
+        />
+      )}
     </>
   );
 }

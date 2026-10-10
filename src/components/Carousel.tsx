@@ -1,4 +1,10 @@
-import React, {useMemo, useRef, useState, useEffect, useCallback} from 'react';
+import React, {
+  useMemo,
+  useRef,
+  useState,
+  useEffect,
+  useCallback,
+} from 'react';
 import {
   Dimensions,
   Keyboard,
@@ -13,7 +19,7 @@ import {
   View,
   ViewInstance,
 } from 'react-native';
-import {BlurView} from '@react-native-community/blur';
+import { BlurView } from '@react-native-community/blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -29,10 +35,14 @@ import Animated, {
   Extrapolate,
   SharedValue,
 } from 'react-native-reanimated';
-import {useAppStore} from '../store';
-import {ChatMessage, ReplyVariant} from '../useChat';
-import {renderFormattedText} from '../textFormat';
-import {formatThinkingDuration, splitThinking, visibleContent} from '../thinking';
+import { useAppStore } from '../store';
+import { ChatMessage, ReplyVariant } from '../useChat';
+import { renderFormattedText } from '../textFormat';
+import {
+  formatThinkingDuration,
+  splitThinking,
+  visibleContent,
+} from '../thinking';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -52,7 +62,7 @@ interface OriginFrame {
   y: number;
   width: number;
   height: number;
-  viewport?: {y: number; height: number};
+  viewport?: { y: number; height: number };
 }
 
 interface CarouselProps {
@@ -61,7 +71,11 @@ interface CarouselProps {
   onReady: () => void;
   onClose: () => void;
   onSelectVariant: (msgId: string, slotIndex: number) => void;
-  onEditEntry: (msgId: string, entryKey: string, newText: string) => Promise<void>;
+  onEditEntry: (
+    msgId: string,
+    entryKey: string,
+    newText: string,
+  ) => Promise<void>;
   onFork: (msgId: string, sourceKey: string) => Promise<string | null>;
   onFresh: (msgId: string) => Promise<string | null>;
   onDeleteEntry: (msgId: string, entryKey: string) => Promise<void>;
@@ -140,23 +154,42 @@ export default function Carousel({
   onStop,
 }: CarouselProps) {
   const theme = useAppStore(s => s.appSettings);
-  const colors = useMemo<Colors>(() => ({
-    accent: theme.accentColor,
-    danger: theme.dangerColor,
-    bgPrimary: theme.bgPrimary,
-    bgSecondary: theme.bgSecondary,
-    borderPrimary: theme.borderPrimary,
-    userBubbleBg: theme.userBubbleBg,
-    textPrimary: theme.textPrimary,
-    textSecondary: theme.textSecondary,
-    textMuted: theme.textMuted,
-    bubbleRadius: theme.bubbleRadius,
-    fontSizeBody: theme.fontSizeBody,
-    forceItalic: theme.forceItalic,
-    showThinking: theme.showThinking,
-    blurType: isDarkTheme(theme.bgPrimary, theme.textMuted) ? ('dark' as const) : ('light' as const),
-    overlay: overlayColor(theme.bgPrimary),
-  }), [theme.accentColor, theme.dangerColor, theme.bgPrimary, theme.bgSecondary, theme.borderPrimary, theme.userBubbleBg, theme.textPrimary, theme.textSecondary, theme.textMuted, theme.bubbleRadius, theme.fontSizeBody, theme.forceItalic, theme.showThinking]);
+  const colors = useMemo<Colors>(
+    () => ({
+      accent: theme.accentColor,
+      danger: theme.dangerColor,
+      bgPrimary: theme.bgPrimary,
+      bgSecondary: theme.bgSecondary,
+      borderPrimary: theme.borderPrimary,
+      userBubbleBg: theme.userBubbleBg,
+      textPrimary: theme.textPrimary,
+      textSecondary: theme.textSecondary,
+      textMuted: theme.textMuted,
+      bubbleRadius: theme.bubbleRadius,
+      fontSizeBody: theme.fontSizeBody,
+      forceItalic: theme.forceItalic,
+      showThinking: theme.showThinking,
+      blurType: isDarkTheme(theme.bgPrimary, theme.textMuted)
+        ? ('dark' as const)
+        : ('light' as const),
+      overlay: overlayColor(theme.bgPrimary),
+    }),
+    [
+      theme.accentColor,
+      theme.dangerColor,
+      theme.bgPrimary,
+      theme.bgSecondary,
+      theme.borderPrimary,
+      theme.userBubbleBg,
+      theme.textPrimary,
+      theme.textSecondary,
+      theme.textMuted,
+      theme.bubbleRadius,
+      theme.fontSizeBody,
+      theme.forceItalic,
+      theme.showThinking,
+    ],
+  );
 
   const items = useMemo<CardItem[]>(() => {
     const variants: ReplyVariant[] = message.variants ?? [];
@@ -165,14 +198,16 @@ export default function Carousel({
       content: v.content,
       timestamp: v.timestamp,
       live: false,
-      ...(v.thinkingMs !== undefined ? {thinkingMs: v.thinkingMs} : {}),
+      ...(v.thinkingMs !== undefined ? { thinkingMs: v.thinkingMs } : {}),
     }));
     list.push({
       key: 'live',
       content: message.content,
       timestamp: message.timestamp,
       live: true,
-      ...(message.thinkingMs !== undefined ? {thinkingMs: message.thinkingMs} : {}),
+      ...(message.thinkingMs !== undefined
+        ? { thinkingMs: message.thinkingMs }
+        : {}),
     });
     list.sort((a, b) => a.timestamp - b.timestamp);
     return list;
@@ -183,7 +218,8 @@ export default function Carousel({
   const standardMaxW = CARD_W;
   const isUser = message.role === 'user';
   const isError = message.id === '__error__';
-  const showCounter = !isUser && !isError && (message.variants?.length ?? 0) > 0;
+  const showCounter =
+    !isUser && !isError && (message.variants?.length ?? 0) > 0;
   const streamingThis = isStreaming && replacingMessageId === message.id;
   const liveStreamText = streamingThis ? streamingContent : null;
 
@@ -194,7 +230,10 @@ export default function Carousel({
   const dragging = useSharedValue(false);
   const overlayRef = useRef<ViewInstance | null>(null);
   const [centered, setCentered] = useState(liveIndex);
-  const [targetCenter, setTargetCenter] = useState<{x: number; y: number} | null>(null);
+  const [targetCenter, setTargetCenter] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [overlayH, setOverlayH] = useState(SCREEN_H);
   const focusKeyRef = useRef<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -203,7 +242,7 @@ export default function Carousel({
   const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
 
   const handleCardHeight = useCallback((key: string, h: number) => {
-    setCardHeights(prev => (prev[key] === h ? prev : {...prev, [key]: h}));
+    setCardHeights(prev => (prev[key] === h ? prev : { ...prev, [key]: h }));
   }, []);
 
   const jsonText = useMemo(() => {
@@ -233,7 +272,7 @@ export default function Carousel({
 
   const initialPull = useMemo(() => {
     if (!origin?.viewport) return 0;
-    const {y: by, height: bh, viewport} = origin;
+    const { y: by, height: bh, viewport } = origin;
     if (bh <= viewport.height) return 0;
     const visTop = Math.max(by, viewport.y);
     const visBot = Math.min(by + bh, viewport.y + viewport.height);
@@ -265,14 +304,16 @@ export default function Carousel({
   );
 
   useEffect(() => {
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    type KbEvent = {endCoordinates: {height: number}};
+    const showEvt =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt =
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    type KbEvent = { endCoordinates: { height: number } };
     const showSub = Keyboard.addListener(showEvt, (e: KbEvent) => {
-      kbHeight.value = withTiming(e.endCoordinates.height, {duration: 250});
+      kbHeight.value = withTiming(e.endCoordinates.height, { duration: 250 });
     });
     const hideSub = Keyboard.addListener(hideEvt, () => {
-      kbHeight.value = withTiming(0, {duration: 250});
+      kbHeight.value = withTiming(0, { duration: 250 });
     });
     return () => {
       showSub.remove();
@@ -287,10 +328,10 @@ export default function Carousel({
       overlayRef.current?.measureInWindow((x, y, w, h) => {
         if (cancelled) return;
         if (w > 0 && h > 0) {
-          setTargetCenter({x: x + w / 2, y: y + h / 2});
+          setTargetCenter({ x: x + w / 2, y: y + h / 2 });
           setOverlayH(h);
         } else {
-          setTargetCenter({x: SCREEN_W / 2, y: SCREEN_H / 2});
+          setTargetCenter({ x: SCREEN_W / 2, y: SCREEN_H / 2 });
         }
       });
     });
@@ -301,7 +342,10 @@ export default function Carousel({
 
   useEffect(() => {
     if (origin === undefined || !targetCenter) return;
-    appear.value = withTiming(1, {duration: Math.max(0, theme.carouselAnimMs), easing: Easing.inOut(Easing.cubic)});
+    appear.value = withTiming(1, {
+      duration: Math.max(0, theme.carouselAnimMs),
+      easing: Easing.inOut(Easing.cubic),
+    });
     onReady();
   }, [appear, origin, targetCenter, onReady, theme.carouselAnimMs]);
 
@@ -313,7 +357,11 @@ export default function Carousel({
 
     let desiredKey: string | null = focusKeyRef.current;
     if (desiredKey && !items.some(i => i.key === desiredKey)) desiredKey = null;
-    if (!desiredKey && centeredKeyRef.current && items.some(i => i.key === centeredKeyRef.current)) {
+    if (
+      !desiredKey &&
+      centeredKeyRef.current &&
+      items.some(i => i.key === centeredKeyRef.current)
+    ) {
       desiredKey = centeredKeyRef.current;
     }
     if (!desiredKey) {
@@ -331,13 +379,22 @@ export default function Carousel({
     if (focusKeyRef.current) focusKeyRef.current = null;
   }, [items, pos, pullY]);
 
-  const snapTo = useCallback((target: number) => {
-    const clamped = Math.min(Math.max(Math.round(target), 0), items.length - 1);
-    pos.value = withTiming(clamped, {duration: 260, easing: Easing.out(Easing.ease)});
-    pullY.value = withTiming(0, {duration: 200});
-    setCentered(clamped);
-    centeredKeyRef.current = items[clamped]?.key ?? null;
-  }, [items, pos, pullY]);
+  const snapTo = useCallback(
+    (target: number) => {
+      const clamped = Math.min(
+        Math.max(Math.round(target), 0),
+        items.length - 1,
+      );
+      pos.value = withTiming(clamped, {
+        duration: 260,
+        easing: Easing.out(Easing.ease),
+      });
+      pullY.value = withTiming(0, { duration: 200 });
+      setCentered(clamped);
+      centeredKeyRef.current = items[clamped]?.key ?? null;
+    },
+    [items, pos, pullY],
+  );
   const snapToRef = useRef(snapTo);
   snapToRef.current = snapTo;
 
@@ -352,9 +409,17 @@ export default function Carousel({
   const commitAndCloseRef = useRef(commitAndClose);
   commitAndCloseRef.current = commitAndClose;
 
-  const panRef = useRef({moved: false, anchor: 0, axis: null as 'x' | 'y' | null, pullAnchor: 0});
+  const panRef = useRef({
+    moved: false,
+    anchor: 0,
+    axis: null as 'x' | 'y' | null,
+    pullAnchor: 0,
+  });
   const cardSpanRef = useRef(SCREEN_W / 2 + CARD_W / 2 - PEEK);
-  cardSpanRef.current = SCREEN_W / 2 + (origin && origin.width > 0 ? origin.width : CARD_W) / 2 - PEEK;
+  cardSpanRef.current =
+    SCREEN_W / 2 +
+    (origin && origin.width > 0 ? origin.width : CARD_W) / 2 -
+    PEEK;
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !editingRef.current,
@@ -480,36 +545,111 @@ export default function Carousel({
   const canPrev = cIndex > 0;
   const canNext = cIndex < count - 1;
 
-  const actionsNode = useMemo(() => isError ? (
-    <View style={styles.actionRow}>
-      <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
-    </View>
-  ) : editing ? null : (
-    <>
-      <View style={styles.actionRow}>
-        <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
-        <ActionButton label="Edit" onPress={startEdit} color={colors.accent} disabled={streamingThis} />
-        <ActionButton label="Fork" onPress={handleFork} color={colors.accent} disabled={streamingThis} />
-        <ActionButton label="Fresh" onPress={handleFresh} color={colors.accent} disabled={streamingThis} />
-        <ArrowButton disabled={!canNext} onPress={() => snapTo(cIndex + 1)} colors={colors} dir="›" />
-      </View>
-      <View style={styles.actionRow}>
-        {streamingThis ? (
-          <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
-        ) : canRegenerate && (
+  const actionsNode = useMemo(
+    () =>
+      isError ? (
+        <View style={styles.actionRow}>
           <ActionButton
-            label="Regen"
-            onPress={onRegenerate}
+            label="Copy"
+            onPress={() => onCopy(message)}
             color={colors.accent}
-            disabled={sending}
           />
-        )}
-        <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
-        <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
-        <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
-      </View>
-    </>
-  ), [isError, editing, message, colors, canPrev, canNext, cIndex, snapTo, startEdit, handleFork, handleFresh, streamingThis, onStop, canRegenerate, onRegenerate, sending, onCopy, jsonText, handleDelete, handleDeleteAll]);
+        </View>
+      ) : editing ? null : (
+        <>
+          <View style={styles.actionRow}>
+            <ArrowButton
+              disabled={!canPrev}
+              onPress={() => snapTo(cIndex - 1)}
+              colors={colors}
+              dir="‹"
+            />
+            <ActionButton
+              label="Edit"
+              onPress={startEdit}
+              color={colors.accent}
+              disabled={streamingThis}
+            />
+            <ActionButton
+              label="Fork"
+              onPress={handleFork}
+              color={colors.accent}
+              disabled={streamingThis}
+            />
+            <ActionButton
+              label="Fresh"
+              onPress={handleFresh}
+              color={colors.accent}
+              disabled={streamingThis}
+            />
+            <ArrowButton
+              disabled={!canNext}
+              onPress={() => snapTo(cIndex + 1)}
+              colors={colors}
+              dir="›"
+            />
+          </View>
+          <View style={styles.actionRow}>
+            {streamingThis ? (
+              <ActionButton
+                label="Stop"
+                onPress={onStop}
+                color={colors.danger}
+              />
+            ) : (
+              canRegenerate && (
+                <ActionButton
+                  label="Regen"
+                  onPress={onRegenerate}
+                  color={colors.accent}
+                  disabled={sending}
+                />
+              )
+            )}
+            <ActionButton
+              label="Copy"
+              onPress={() => onCopy(message)}
+              color={colors.accent}
+            />
+            <ActionButton
+              label="JSON"
+              onPress={() => setJsonVisible(true)}
+              color={colors.accent}
+              disabled={!jsonText || streamingThis}
+            />
+            <ActionButton
+              label="Delete"
+              onPress={handleDelete}
+              onLongPress={handleDeleteAll}
+              color={colors.danger}
+              disabled={streamingThis}
+            />
+          </View>
+        </>
+      ),
+    [
+      isError,
+      editing,
+      message,
+      colors,
+      canPrev,
+      canNext,
+      cIndex,
+      snapTo,
+      startEdit,
+      handleFork,
+      handleFresh,
+      streamingThis,
+      onStop,
+      canRegenerate,
+      onRegenerate,
+      sending,
+      onCopy,
+      jsonText,
+      handleDelete,
+      handleDeleteAll,
+    ],
+  );
 
   const overflows = vh / 2 - cardH / 2 < ACTION_STACK_H;
 
@@ -547,13 +687,36 @@ export default function Carousel({
       );
     }
     return out;
-  }, [items, count, pos, appear, pullY, colors, origin, targetCenter, standardMaxW, isUser, showCounter, editing, editDraft, cIndex, liveStreamText, handleCardHeight, actionsNode, overflows, initialPull, vh, theme.carouselAnimMs, cardH]);
+  }, [
+    items,
+    count,
+    pos,
+    appear,
+    pullY,
+    colors,
+    origin,
+    targetCenter,
+    standardMaxW,
+    isUser,
+    showCounter,
+    editing,
+    editDraft,
+    cIndex,
+    liveStreamText,
+    handleCardHeight,
+    actionsNode,
+    overflows,
+    initialPull,
+    vh,
+    theme.carouselAnimMs,
+    cardH,
+  ]);
 
   const ready = origin !== undefined && targetCenter !== null;
 
-  const blurStyle = useAnimatedStyle(() => ({opacity: appear.value}));
+  const blurStyle = useAnimatedStyle(() => ({ opacity: appear.value }));
 
-  const uiStyle = useAnimatedStyle(() => ({opacity: appear.value}));
+  const uiStyle = useAnimatedStyle(() => ({ opacity: appear.value }));
 
   const belowOpenStyle = useAnimatedStyle(() => {
     const open =
@@ -569,7 +732,7 @@ export default function Carousel({
     const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
     const open =
       vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= ACTION_STACK_H;
-    return {opacity: open && appear.value >= 1 ? 0 : appear.value};
+    return { opacity: open && appear.value >= 1 ? 0 : appear.value };
   }, [cardH, vh]);
 
   const editStackStyle = useAnimatedStyle(() => {
@@ -587,10 +750,7 @@ export default function Carousel({
     // minus a little" once it's up so the card sits closer to the keyboard.
     const kb = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2);
     return {
-      transform: [
-        {perspective: 1000},
-        {translateY: -kb / 2},
-      ],
+      transform: [{ perspective: 1000 }, { translateY: -kb / 2 }],
     };
   });
 
@@ -605,14 +765,19 @@ export default function Carousel({
         />
       </Animated.View>
       {ready && (
-        <Animated.View style={[styles.stage, stageStyle]} pointerEvents="box-none">
+        <Animated.View
+          style={[styles.stage, stageStyle]}
+          pointerEvents="box-none"
+        >
           {cards}
         </Animated.View>
       )}
 
       <Animated.View style={[styles.topBar, uiStyle]}>
         <TouchableOpacity onPress={commitAndClose} style={styles.closeBtn}>
-          <Text style={[styles.closeText, {color: colors.textPrimary}]}>Close</Text>
+          <Text style={[styles.closeText, { color: colors.textPrimary }]}>
+            Close
+          </Text>
         </TouchableOpacity>
       </Animated.View>
 
@@ -620,33 +785,82 @@ export default function Carousel({
         <>
           <Animated.View
             pointerEvents={belowActions ? 'none' : 'box-none'}
-            style={[styles.sideCol, styles.sideColLeft, sideFadeStyle]}>
-            <ArrowButton disabled={!canPrev} onPress={() => snapTo(cIndex - 1)} colors={colors} dir="‹" />
-            <ActionButton label="Edit" onPress={startEdit} color={colors.accent} disabled={streamingThis} />
-            <ActionButton label="Fork" onPress={handleFork} color={colors.accent} disabled={streamingThis} />
-            <ActionButton label="Fresh" onPress={handleFresh} color={colors.accent} disabled={streamingThis} />
+            style={[styles.sideCol, styles.sideColLeft, sideFadeStyle]}
+          >
+            <ArrowButton
+              disabled={!canPrev}
+              onPress={() => snapTo(cIndex - 1)}
+              colors={colors}
+              dir="‹"
+            />
+            <ActionButton
+              label="Edit"
+              onPress={startEdit}
+              color={colors.accent}
+              disabled={streamingThis}
+            />
+            <ActionButton
+              label="Fork"
+              onPress={handleFork}
+              color={colors.accent}
+              disabled={streamingThis}
+            />
+            <ActionButton
+              label="Fresh"
+              onPress={handleFresh}
+              color={colors.accent}
+              disabled={streamingThis}
+            />
           </Animated.View>
           <Animated.View
             pointerEvents={belowActions ? 'none' : 'box-none'}
-            style={[styles.sideCol, styles.sideColRight, sideFadeStyle]}>
-            <ArrowButton disabled={!canNext} onPress={() => snapTo(cIndex + 1)} colors={colors} dir="›" />
+            style={[styles.sideCol, styles.sideColRight, sideFadeStyle]}
+          >
+            <ArrowButton
+              disabled={!canNext}
+              onPress={() => snapTo(cIndex + 1)}
+              colors={colors}
+              dir="›"
+            />
             {streamingThis ? (
-              <ActionButton label="Stop" onPress={onStop} color={colors.danger} />
-            ) : canRegenerate && (
               <ActionButton
-                label="Regen"
-                onPress={onRegenerate}
-                color={colors.accent}
-                disabled={sending}
+                label="Stop"
+                onPress={onStop}
+                color={colors.danger}
               />
+            ) : (
+              canRegenerate && (
+                <ActionButton
+                  label="Regen"
+                  onPress={onRegenerate}
+                  color={colors.accent}
+                  disabled={sending}
+                />
+              )
             )}
-            <ActionButton label="Copy" onPress={() => onCopy(message)} color={colors.accent} />
-            <ActionButton label="JSON" onPress={() => setJsonVisible(true)} color={colors.accent} disabled={!jsonText || streamingThis} />
-            <ActionButton label="Delete" onPress={handleDelete} onLongPress={handleDeleteAll} color={colors.danger} disabled={streamingThis} />
+            <ActionButton
+              label="Copy"
+              onPress={() => onCopy(message)}
+              color={colors.accent}
+            />
+            <ActionButton
+              label="JSON"
+              onPress={() => setJsonVisible(true)}
+              color={colors.accent}
+              disabled={!jsonText || streamingThis}
+            />
+            <ActionButton
+              label="Delete"
+              onPress={handleDelete}
+              onLongPress={handleDeleteAll}
+              color={colors.danger}
+              disabled={streamingThis}
+            />
           </Animated.View>
           <Animated.View
             pointerEvents={belowActions ? 'box-none' : 'none'}
-            style={[styles.belowStack, belowOpenStyle]}>
+            style={[styles.belowStack, belowOpenStyle]}
+          >
             {actionsNode}
           </Animated.View>
         </>
@@ -655,22 +869,37 @@ export default function Carousel({
       {editing && (
         <Animated.View
           pointerEvents={belowActions || !overflows ? 'box-none' : 'none'}
-          style={[styles.belowStack, editStackStyle]}>
+          style={[styles.belowStack, editStackStyle]}
+        >
           <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
-          <ActionButton label="Cancel" onPress={cancelEdit} color={colors.danger} />
+          <ActionButton
+            label="Cancel"
+            onPress={cancelEdit}
+            color={colors.danger}
+          />
         </Animated.View>
       )}
       {editing && overflows && (
         <>
           <Animated.View
             pointerEvents={belowActions ? 'none' : 'box-none'}
-            style={[styles.sideCol, styles.sideColLeft, sideFadeStyle]}>
-            <ActionButton label="Save" onPress={saveEdit} color={colors.accent} />
+            style={[styles.sideCol, styles.sideColLeft, sideFadeStyle]}
+          >
+            <ActionButton
+              label="Save"
+              onPress={saveEdit}
+              color={colors.accent}
+            />
           </Animated.View>
           <Animated.View
             pointerEvents={belowActions ? 'none' : 'box-none'}
-            style={[styles.sideCol, styles.sideColRight, sideFadeStyle]}>
-            <ActionButton label="Cancel" onPress={cancelEdit} color={colors.danger} />
+            style={[styles.sideCol, styles.sideColRight, sideFadeStyle]}
+          >
+            <ActionButton
+              label="Cancel"
+              onPress={cancelEdit}
+              color={colors.danger}
+            />
           </Animated.View>
         </>
       )}
@@ -679,22 +908,40 @@ export default function Carousel({
         visible={jsonVisible && jsonText !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setJsonVisible(false)}>
-        <View style={[styles.jsonOverlay, {backgroundColor: 'rgba(0,0,0,0.6)'}]}>
-          <View style={[styles.jsonModal, {
-            backgroundColor: colors.bgSecondary,
-            borderColor: colors.borderPrimary,
-          }]}>
+        onRequestClose={() => setJsonVisible(false)}
+      >
+        <View
+          style={[styles.jsonOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}
+        >
+          <View
+            style={[
+              styles.jsonModal,
+              {
+                backgroundColor: colors.bgSecondary,
+                borderColor: colors.borderPrimary,
+              },
+            ]}
+          >
             <View style={styles.jsonHeader}>
-              <Text style={[styles.jsonTitle, {color: colors.textPrimary}]}>Request</Text>
-              <TouchableOpacity onPress={() => setJsonVisible(false)} style={styles.jsonCloseBtn}>
-                <Text style={[styles.jsonCloseText, {color: colors.textPrimary}]}>×</Text>
+              <Text style={[styles.jsonTitle, { color: colors.textPrimary }]}>
+                Request
+              </Text>
+              <TouchableOpacity
+                onPress={() => setJsonVisible(false)}
+                style={styles.jsonCloseBtn}
+              >
+                <Text
+                  style={[styles.jsonCloseText, { color: colors.textPrimary }]}
+                >
+                  ×
+                </Text>
               </TouchableOpacity>
             </View>
             <ScrollView
               style={styles.jsonScroll}
-              contentContainerStyle={styles.jsonScrollContent}>
-              <Text style={[styles.jsonText, {color: colors.textSecondary}]}>
+              contentContainerStyle={styles.jsonScrollContent}
+            >
+              <Text style={[styles.jsonText, { color: colors.textSecondary }]}>
                 {jsonText}
               </Text>
             </ScrollView>
@@ -734,7 +981,7 @@ function CarouselCard({
   pull: SharedValue<number>;
   colors: Colors;
   origin?: OriginFrame | null;
-  target: {x: number; y: number} | null;
+  target: { x: number; y: number } | null;
   maxW: number;
   counter: string | null;
   isUser: boolean;
@@ -766,8 +1013,18 @@ function CarouselCard({
         restX = sign * (span + (absRel - 1) * (w + 16));
       }
     }
-    const scale = interpolate(absRel, [0, 1, 2], [1, 0.86, 0.74], Extrapolate.CLAMP);
-    const opacity = interpolate(absRel, [0, 1, 2, 2.5], [1, 0.6, 0.3, 0], Extrapolate.CLAMP);
+    const scale = interpolate(
+      absRel,
+      [0, 1, 2],
+      [1, 0.86, 0.74],
+      Extrapolate.CLAMP,
+    );
+    const opacity = interpolate(
+      absRel,
+      [0, 1, 2, 2.5],
+      [1, 0.6, 0.3, 0],
+      Extrapolate.CLAMP,
+    );
     const es = 1 - enter.value;
     let enterDx = 0;
     let enterTy = 0;
@@ -786,9 +1043,9 @@ function CarouselCard({
     }
     return {
       transform: [
-        {translateX: restX + enterDx},
-        {translateY: enterTy + pull.value},
-        {scale: scale * enterScale},
+        { translateX: restX + enterDx },
+        { translateY: enterTy + pull.value },
+        { scale: scale * enterScale },
       ],
       opacity,
       zIndex: 1000 - Math.round(absRel * 100),
@@ -798,8 +1055,13 @@ function CarouselCard({
 
   const scrim = useAnimatedStyle(() => {
     const rel = i - pos.value;
-    const s = interpolate(Math.abs(rel), [0, 1, 2], [0, 0.45, 0.7], Extrapolate.CLAMP);
-    return {opacity: s};
+    const s = interpolate(
+      Math.abs(rel),
+      [0, 1, 2],
+      [0, 0.45, 0.7],
+      Extrapolate.CLAMP,
+    );
+    return { opacity: s };
   });
 
   const bubbleLook = isUser
@@ -818,7 +1080,8 @@ function CarouselCard({
   const displayContent = liveStreamText ?? item.content;
   const thought = splitThinking(displayContent);
   const thoughtDuration = liveStreamText != null ? undefined : item.thinkingMs;
-  const showThoughtBlock = thought.hasThinking && (colors.showThinking || !thought.answer);
+  const showThoughtBlock =
+    thought.hasThinking && (colors.showThinking || !thought.answer);
 
   useEffect(() => {
     if (!thought.open) {
@@ -828,11 +1091,16 @@ function CarouselCard({
     }
     if (!openSinceRef.current) openSinceRef.current = Date.now();
     setThinkElapsed(Date.now() - openSinceRef.current);
-    const t = setInterval(() => setThinkElapsed(Date.now() - openSinceRef.current), 500);
+    const t = setInterval(
+      () => setThinkElapsed(Date.now() - openSinceRef.current),
+      500,
+    );
     return () => clearInterval(t);
   }, [thought.open]);
 
-  const measureCard = (ev: {nativeEvent: {layout: {width: number; height: number}}}) => {
+  const measureCard = (ev: {
+    nativeEvent: { layout: { width: number; height: number } };
+  }) => {
     const next = Math.round(ev.nativeEvent.layout.width);
     if (cardW !== next) setCardW(next);
     const nextH = Math.round(ev.nativeEvent.layout.height);
@@ -855,101 +1123,177 @@ function CarouselCard({
           style={[
             animatedStyle,
             styles.cardCluster,
-            editing && {width: maxW},
-          ]}>
-        <View
-          onLayout={measureCard}
-          style={[
-            styles.card,
-            {maxWidth: maxW},
-            {
-              borderRadius: colors.bubbleRadius,
-              ...bubbleLook,
-            },
-          ]}>
-          <View style={styles.cardInner}>
-            {editing ? (
-              <TextInput
-                style={[
-                  styles.cardInput,
-                  {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
-                ]}
-                value={editDraft}
-                onChangeText={onEditDraftChange}
-                multiline
-                autoFocus
-                textAlignVertical="top"
-              />
-            ) : (
-              <>
-                {showTyping ? (
-                  <TypingDots color={textColor} />
-                ) : showThoughtBlock ? (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => setThoughtExpanded(v => !v)}
-                      activeOpacity={0.7}>
-                      <Text style={{color: colors.textMuted, fontSize: 12, fontStyle: 'italic'}}>
-                        {(thought.open || thoughtExpanded) ? '▾ ' : '▸ '}
-                        {thought.open
-                          ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
-                          : thoughtDuration !== undefined
-                            ? `thought for ${formatThinkingDuration(thoughtDuration)}`
-                            : 'thought'}
-                      </Text>
-                    </TouchableOpacity>
-                    {(thought.open || thoughtExpanded) && !!thought.thinking && colors.showThinking && (
-                      <Text
-                        style={[
-                          styles.cardText,
-                          {color: colors.textMuted, fontSize: colors.fontSizeBody, lineHeight: 20},
-                        ]}>
-                        {renderFormattedText(thought.thinking, {color: colors.textMuted, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
-                      </Text>
-                    )}
-                    {!!thought.answer && (
-                      <Text
-                        style={[
-                          styles.cardText,
-                          {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
-                        ]}>
-                        {(thought.open || thoughtExpanded) && !!thought.thinking && colors.showThinking ? '\n\n' : null}
-                        {renderFormattedText(thought.answer, {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
-                      </Text>
-                    )}
-                  </>
-                ) : (
-                  <Text
-                    style={[
-                      styles.cardText,
-                      {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20},
-                    ]}>
-                    {renderFormattedText(visibleContent(displayContent, colors.showThinking), {color: textColor, fontSize: colors.fontSizeBody, lineHeight: 20}, colors.forceItalic)}
-                  </Text>
-                )}
-                <View style={styles.cardMetaRow}>
-                  <Text style={[styles.cardMeta, {color: colors.textMuted}]}>
-                    {new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                  </Text>
-                  {counter && (
-                    <Text style={[styles.cardMeta, {color: colors.textMuted, marginLeft: 8, fontSize: 12}]}>
-                      {counter}
+            editing && { width: maxW },
+          ]}
+        >
+          <View
+            onLayout={measureCard}
+            style={[
+              styles.card,
+              { maxWidth: maxW },
+              {
+                borderRadius: colors.bubbleRadius,
+                ...bubbleLook,
+              },
+            ]}
+          >
+            <View style={styles.cardInner}>
+              {editing ? (
+                <TextInput
+                  style={[
+                    styles.cardInput,
+                    {
+                      color: textColor,
+                      fontSize: colors.fontSizeBody,
+                      lineHeight: 20,
+                    },
+                  ]}
+                  value={editDraft}
+                  onChangeText={onEditDraftChange}
+                  multiline
+                  autoFocus
+                  textAlignVertical="top"
+                />
+              ) : (
+                <>
+                  {showTyping ? (
+                    <TypingDots color={textColor} />
+                  ) : showThoughtBlock ? (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => setThoughtExpanded(v => !v)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textMuted,
+                            fontSize: 12,
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          {thought.open || thoughtExpanded ? '▾ ' : '▸ '}
+                          {thought.open
+                            ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
+                            : thoughtDuration !== undefined
+                              ? `thought for ${formatThinkingDuration(thoughtDuration)}`
+                              : 'thought'}
+                        </Text>
+                      </TouchableOpacity>
+                      {(thought.open || thoughtExpanded) &&
+                        !!thought.thinking &&
+                        colors.showThinking && (
+                          <Text
+                            style={[
+                              styles.cardText,
+                              {
+                                color: colors.textMuted,
+                                fontSize: colors.fontSizeBody,
+                                lineHeight: 20,
+                              },
+                            ]}
+                          >
+                            {renderFormattedText(
+                              thought.thinking,
+                              {
+                                color: colors.textMuted,
+                                fontSize: colors.fontSizeBody,
+                                lineHeight: 20,
+                              },
+                              colors.forceItalic,
+                            )}
+                          </Text>
+                        )}
+                      {!!thought.answer && (
+                        <Text
+                          style={[
+                            styles.cardText,
+                            {
+                              color: textColor,
+                              fontSize: colors.fontSizeBody,
+                              lineHeight: 20,
+                            },
+                          ]}
+                        >
+                          {(thought.open || thoughtExpanded) &&
+                          !!thought.thinking &&
+                          colors.showThinking
+                            ? '\n\n'
+                            : null}
+                          {renderFormattedText(
+                            thought.answer,
+                            {
+                              color: textColor,
+                              fontSize: colors.fontSizeBody,
+                              lineHeight: 20,
+                            },
+                            colors.forceItalic,
+                          )}
+                        </Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.cardText,
+                        {
+                          color: textColor,
+                          fontSize: colors.fontSizeBody,
+                          lineHeight: 20,
+                        },
+                      ]}
+                    >
+                      {renderFormattedText(
+                        visibleContent(displayContent, colors.showThinking),
+                        {
+                          color: textColor,
+                          fontSize: colors.fontSizeBody,
+                          lineHeight: 20,
+                        },
+                        colors.forceItalic,
+                      )}
                     </Text>
                   )}
-                </View>
-              </>
-            )}
+                  <View style={styles.cardMetaRow}>
+                    <Text
+                      style={[styles.cardMeta, { color: colors.textMuted }]}
+                    >
+                      {new Date(item.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                    {counter && (
+                      <Text
+                        style={[
+                          styles.cardMeta,
+                          {
+                            color: colors.textMuted,
+                            marginLeft: 8,
+                            fontSize: 12,
+                          },
+                        ]}
+                      >
+                        {counter}
+                      </Text>
+                    )}
+                  </View>
+                </>
+              )}
+            </View>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                scrim,
+                { backgroundColor: colors.overlay },
+              ]}
+            />
           </View>
-          <Animated.View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, scrim, {backgroundColor: colors.overlay}]}
-          />
-        </View>
-        {actions ? (
-          <View pointerEvents="box-none" style={styles.clusterActions}>
-            {actions}
-          </View>
-        ) : null}
+          {actions ? (
+            <View pointerEvents="box-none" style={styles.clusterActions}>
+              {actions}
+            </View>
+          ) : null}
         </Animated.View>
       </View>
     </View>
@@ -971,8 +1315,13 @@ function ArrowButton({
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled}
-      style={[styles.arrowBtn, {borderColor: colors.accent}, disabled && {opacity: 0.35}]}>
-      <Text style={[styles.arrowText, {color: colors.accent}]}>{dir}</Text>
+      style={[
+        styles.arrowBtn,
+        { borderColor: colors.accent },
+        disabled && { opacity: 0.35 },
+      ]}
+    >
+      <Text style={[styles.arrowText, { color: colors.accent }]}>{dir}</Text>
     </TouchableOpacity>
   );
 }
@@ -996,20 +1345,31 @@ function ActionButton({
       onLongPress={onLongPress}
       disabled={disabled}
       delayLongPress={500}
-      style={[styles.actionBtn, {borderColor: color}, disabled && {opacity: 0.4}]}>
-      <Text style={[styles.actionBtnText, {color}]}>{label}</Text>
+      style={[
+        styles.actionBtn,
+        { borderColor: color },
+        disabled && { opacity: 0.4 },
+      ]}
+    >
+      <Text style={[styles.actionBtnText, { color }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-function TypingDots({color}: {color: string}) {
+function TypingDots({ color }: { color: string }) {
   const o1 = useSharedValue(0.3);
   const o2 = useSharedValue(0.3);
   const o3 = useSharedValue(0.3);
 
   useEffect(() => {
     const anim = () =>
-      withRepeat(withSequence(withTiming(1, {duration: 400}), withTiming(0.3, {duration: 400})), -1);
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 400 }),
+          withTiming(0.3, { duration: 400 }),
+        ),
+        -1,
+      );
     o1.value = withDelay(0, anim());
     o2.value = withDelay(200, anim());
     o3.value = withDelay(400, anim());
@@ -1018,7 +1378,10 @@ function TypingDots({color}: {color: string}) {
   return (
     <View style={styles.typingDots}>
       {[o1, o2, o3].map((v, i) => (
-        <Animated.View key={i} style={[styles.typingDot, {backgroundColor: color, opacity: v}]} />
+        <Animated.View
+          key={i}
+          style={[styles.typingDot, { backgroundColor: color, opacity: v }]}
+        />
       ))}
     </View>
   );
@@ -1044,7 +1407,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   centerShift: {
-    transform: [{translateY: '-50%'}],
+    transform: [{ translateY: '-50%' }],
   },
   cardCluster: {
     flexDirection: 'column',

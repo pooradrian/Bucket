@@ -1,4 +1,4 @@
-import {applyDisplacements, parseDisplacements} from '../src/displacement';
+import { applyDisplacements, parseDisplacements } from '../src/displacement';
 
 describe('parseDisplacements', () => {
   it('parses all rule forms from the example format', () => {
@@ -12,11 +12,11 @@ describe('parseDisplacements', () => {
       ].join('\n'),
     );
     expect(rules).toEqual([
-      {kind: 'remove', word: 'word1'},
-      {kind: 'replace', word: 'word2', replacements: [' ']},
-      {kind: 'replace', word: 'word3', replacements: ['word4']},
-      {kind: 'replace', word: 'word5', replacements: ['word6', 'word7']},
-      {kind: 'swap', a: 'word8', b: 'word9'},
+      { kind: 'remove', word: 'word1' },
+      { kind: 'replace', word: 'word2', replacements: [' '] },
+      { kind: 'replace', word: 'word3', replacements: ['word4'] },
+      { kind: 'replace', word: 'word5', replacements: ['word6', 'word7'] },
+      { kind: 'swap', a: 'word8', b: 'word9' },
     ]);
   });
 
@@ -46,7 +46,9 @@ describe('applyDisplacements', () => {
   it('picks among alternatives across seeds', () => {
     const rules = parseDisplacements('cat => dog ~ fish');
     const picks = new Set(
-      Array.from({length: 20}, (_, i) => applyDisplacements('a cat', rules, i)),
+      Array.from({ length: 20 }, (_, i) =>
+        applyDisplacements('a cat', rules, i),
+      ),
     );
     expect([...picks].every(p => p === 'a dog' || p === 'a fish')).toBe(true);
   });

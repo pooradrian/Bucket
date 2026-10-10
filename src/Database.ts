@@ -1,7 +1,7 @@
-import {open, NitroSQLiteConnection} from 'react-native-nitro-sqlite';
-import {ChatSession, ChatMessage, ReplyVariant} from './useChat';
-import {encrypt, decrypt} from './Crypto';
-import {LorebookEntry, LorebookState} from './RAGHandler';
+import { open, NitroSQLiteConnection } from 'react-native-nitro-sqlite';
+import { ChatSession, ChatMessage, ReplyVariant } from './useChat';
+import { encrypt, decrypt } from './Crypto';
+import { LorebookEntry, LorebookState } from './RAGHandler';
 
 const DB_NAME = 'bucket';
 const CURRENT_VERSION = 15;
@@ -99,9 +99,15 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
             FOREIGN KEY (lorebook_id) REFERENCES lorebooks(id) ON DELETE CASCADE
           )
         `);
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)');
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_sessions_character ON chat_sessions(character_id)');
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_lorebook_entries_lorebook ON lorebook_entries(lorebook_id)');
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)',
+        );
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_sessions_character ON chat_sessions(character_id)',
+        );
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_lorebook_entries_lorebook ON lorebook_entries(lorebook_id)',
+        );
       }
 
       if (v === 2) {
@@ -119,7 +125,9 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
             lorebook_id TEXT DEFAULT ''
           )
         `);
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_characters_name ON characters(name)');
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_characters_name ON characters(name)',
+        );
       }
 
       if (v === 3) {
@@ -141,9 +149,21 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
             FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
           )
         `);
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_group_chat_members_group ON group_chat_members(group_chat_id)');
-        addColumnIfMissing(conn, 'chat_sessions', 'group_chat_id', 'TEXT DEFAULT ""');
-        addColumnIfMissing(conn, 'chat_sessions', 'last_reply_character_id', 'TEXT DEFAULT ""');
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_group_chat_members_group ON group_chat_members(group_chat_id)',
+        );
+        addColumnIfMissing(
+          conn,
+          'chat_sessions',
+          'group_chat_id',
+          'TEXT DEFAULT ""',
+        );
+        addColumnIfMissing(
+          conn,
+          'chat_sessions',
+          'last_reply_character_id',
+          'TEXT DEFAULT ""',
+        );
       }
 
       if (v === 4) {
@@ -158,12 +178,16 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
             FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
           )
         `);
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_session ON quick_characters(session_id)');
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_qc_session ON quick_characters(session_id)',
+        );
       }
 
       if (v === 5) {
         conn.execute('DROP TABLE IF EXISTS quick_characters_old');
-        conn.execute('ALTER TABLE quick_characters RENAME TO quick_characters_old');
+        conn.execute(
+          'ALTER TABLE quick_characters RENAME TO quick_characters_old',
+        );
         conn.execute(`
           CREATE TABLE IF NOT EXISTS quick_characters (
             id TEXT PRIMARY KEY NOT NULL,
@@ -182,16 +206,30 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
           LEFT JOIN chat_sessions s ON s.id = q.session_id
         `);
         conn.execute('DROP TABLE IF EXISTS quick_characters_old');
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_session ON quick_characters(session_id)');
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_qc_character ON quick_characters(character_id)');
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_qc_session ON quick_characters(session_id)',
+        );
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_qc_character ON quick_characters(character_id)',
+        );
       }
 
       if (v === 6) {
-        addColumnIfMissing(conn, 'chat_messages', 'variants', 'TEXT DEFAULT ""');
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'variants',
+          'TEXT DEFAULT ""',
+        );
       }
 
       if (v === 7) {
-        addColumnIfMissing(conn, 'characters', 'custom_fields', 'TEXT DEFAULT ""');
+        addColumnIfMissing(
+          conn,
+          'characters',
+          'custom_fields',
+          'TEXT DEFAULT ""',
+        );
       }
 
       if (v === 8) {
@@ -199,7 +237,12 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
       }
 
       if (v === 9) {
-        addColumnIfMissing(conn, 'chat_messages', 'request_info', 'TEXT DEFAULT ""');
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'request_info',
+          'TEXT DEFAULT ""',
+        );
       }
 
       if (v === 10) {
@@ -210,11 +253,21 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
       }
 
       if (v === 11) {
-        addColumnIfMissing(conn, 'chat_messages', 'thinking_ms', 'INTEGER DEFAULT 0');
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'thinking_ms',
+          'INTEGER DEFAULT 0',
+        );
       }
 
       if (v === 12) {
-        addColumnIfMissing(conn, 'chat_messages', 'seq', 'INTEGER NOT NULL DEFAULT 0');
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'seq',
+          'INTEGER NOT NULL DEFAULT 0',
+        );
         conn.execute(`
           UPDATE chat_messages
           SET seq = (
@@ -225,7 +278,12 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
       }
 
       if (v === 13) {
-        addColumnIfMissing(conn, 'chat_messages', 'character_id', 'TEXT DEFAULT ""');
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'character_id',
+          'TEXT DEFAULT ""',
+        );
       }
 
       if (v === 14) {
@@ -233,7 +291,12 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
       }
 
       if (v === 15) {
-        addColumnIfMissing(conn, 'chat_messages', 'speaker_name', 'TEXT DEFAULT ""');
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'speaker_name',
+          'TEXT DEFAULT ""',
+        );
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -250,13 +313,14 @@ export function initDB(): NitroSQLiteConnection {
     return db;
   }
 
-  db = open({name: DB_NAME});
+  db = open({ name: DB_NAME });
 
   db.execute('PRAGMA foreign_keys = ON');
   db.execute('PRAGMA journal_mode = WAL');
 
   const versionResult = db.execute('PRAGMA user_version');
-  const currentVersion = (versionResult.results?.[0]?.user_version as number) ?? 0;
+  const currentVersion =
+    (versionResult.results?.[0]?.user_version as number) ?? 0;
 
   if (currentVersion < CURRENT_VERSION) {
     migrate(db, currentVersion, CURRENT_VERSION);
@@ -287,20 +351,27 @@ function compactDatabase(): void {
   }
 }
 
-async function decryptMessages(messages: Array<Omit<ChatMessage, 'variants' | 'requestInfo'> & {variants?: string; requestInfo?: string}>): Promise<ChatMessage[]> {
+async function decryptMessages(
+  messages: Array<
+    Omit<ChatMessage, 'variants' | 'requestInfo'> & {
+      variants?: string;
+      requestInfo?: string;
+    }
+  >,
+): Promise<ChatMessage[]> {
   return Promise.all(
     messages.map(async msg => ({
       ...msg,
       content: await decrypt(msg.content),
       variants: msg.variants ? await decryptVariants(msg.variants) : undefined,
       requestInfo: msg.requestInfo ? await decrypt(msg.requestInfo) : undefined,
-    }))
+    })),
   );
 }
 
 async function encryptVariants(variants: ReplyVariant[]): Promise<string> {
   const encrypted = await Promise.all(
-    variants.map(async v => ({...v, content: await encrypt(v.content)})),
+    variants.map(async v => ({ ...v, content: await encrypt(v.content) })),
   );
   return JSON.stringify(encrypted);
 }
@@ -311,7 +382,7 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
   try {
     const parsed = JSON.parse(raw) as ReplyVariant[];
     return Promise.all(
-      parsed.map(async v => ({...v, content: await decrypt(v.content)})),
+      parsed.map(async v => ({ ...v, content: await decrypt(v.content) })),
     );
   } catch (e) {
     console.warn('Failed to decrypt message variants:', e);
@@ -342,7 +413,9 @@ async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   );
 }
 
-export async function getSessionForCharacter(characterId: string): Promise<ChatSession | null> {
+export async function getSessionForCharacter(
+  characterId: string,
+): Promise<ChatSession | null> {
   const d = initDB();
 
   const sessionResult = d.execute(
@@ -374,19 +447,42 @@ export async function createSession(session: ChatSession): Promise<void> {
   try {
     d.execute(
       'INSERT INTO chat_sessions (id, character_id, group_chat_id, last_reply_character_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [session.id, session.characterId, session.groupChatId || '', session.lastReplyCharacterId || '', session.name || '', session.createdAt, session.updatedAt],
+      [
+        session.id,
+        session.characterId,
+        session.groupChatId || '',
+        session.lastReplyCharacterId || '',
+        session.name || '',
+        session.createdAt,
+        session.updatedAt,
+      ],
     );
 
     for (const msg of session.messages) {
       const encryptedContent = await encrypt(msg.content);
-      const encryptedVariants = msg.variants && msg.variants.length > 0
-        ? await encryptVariants(msg.variants)
+      const encryptedVariants =
+        msg.variants && msg.variants.length > 0
+          ? await encryptVariants(msg.variants)
+          : '';
+      const encryptedRequest = msg.requestInfo
+        ? await encrypt(msg.requestInfo)
         : '';
-      const encryptedRequest = msg.requestInfo ? await encrypt(msg.requestInfo) : '';
       d.execute(
         `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name)
          VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?)`,
-        [msg.id, session.id, msg.role, encryptedContent, msg.timestamp, session.id, encryptedVariants, encryptedRequest, msg.thinkingMs ?? 0, msg.characterId ?? '', msg.speakerName ?? ''],
+        [
+          msg.id,
+          session.id,
+          msg.role,
+          encryptedContent,
+          msg.timestamp,
+          session.id,
+          encryptedVariants,
+          encryptedRequest,
+          msg.thinkingMs ?? 0,
+          msg.characterId ?? '',
+          msg.speakerName ?? '',
+        ],
       );
     }
     d.execute('COMMIT');
@@ -399,30 +495,61 @@ export async function createSession(session: ChatSession): Promise<void> {
   }
 }
 
-export function updateSessionTimestamp(sessionId: string, updatedAt: number): void {
+export function updateSessionTimestamp(
+  sessionId: string,
+  updatedAt: number,
+): void {
   const d = initDB();
-  d.execute('UPDATE chat_sessions SET updated_at = ? WHERE id = ?', [updatedAt, sessionId]);
+  d.execute('UPDATE chat_sessions SET updated_at = ? WHERE id = ?', [
+    updatedAt,
+    sessionId,
+  ]);
 }
 
-export function setLastReplyCharacterId(sessionId: string, characterId: string): void {
+export function setLastReplyCharacterId(
+  sessionId: string,
+  characterId: string,
+): void {
   const d = initDB();
-  d.execute('UPDATE chat_sessions SET last_reply_character_id = ? WHERE id = ?', [characterId, sessionId]);
+  d.execute(
+    'UPDATE chat_sessions SET last_reply_character_id = ? WHERE id = ?',
+    [characterId, sessionId],
+  );
 }
 
-export async function addMessage(sessionId: string, message: ChatMessage, atStart = false): Promise<void> {
+export async function addMessage(
+  sessionId: string,
+  message: ChatMessage,
+  atStart = false,
+): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(message.content);
-  const encryptedVariants = message.variants && message.variants.length > 0
-    ? await encryptVariants(message.variants)
+  const encryptedVariants =
+    message.variants && message.variants.length > 0
+      ? await encryptVariants(message.variants)
+      : '';
+  const encryptedRequest = message.requestInfo
+    ? await encrypt(message.requestInfo)
     : '';
-  const encryptedRequest = message.requestInfo ? await encrypt(message.requestInfo) : '';
   const position = atStart
     ? 'COALESCE(MIN(seq), 1) - 1'
     : 'COALESCE(MAX(seq), 0) + 1';
   d.execute(
     `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name)
      VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?)`,
-    [message.id, sessionId, message.role, encryptedContent, message.timestamp, sessionId, encryptedVariants, encryptedRequest, message.thinkingMs ?? 0, message.characterId ?? '', message.speakerName ?? ''],
+    [
+      message.id,
+      sessionId,
+      message.role,
+      encryptedContent,
+      message.timestamp,
+      sessionId,
+      encryptedVariants,
+      encryptedRequest,
+      message.thinkingMs ?? 0,
+      message.characterId ?? '',
+      message.speakerName ?? '',
+    ],
   );
   searchCachePut(sessionId, message);
 }
@@ -446,7 +573,9 @@ const SESSION_SUMMARY_SELECT = `
   LEFT JOIN chat_messages m ON m.session_id = s.id
 `;
 
-async function mapSessionSummaries(result: {results?: Array<Record<string, unknown>>}): Promise<SessionSummary[]> {
+async function mapSessionSummaries(result: {
+  results?: Array<Record<string, unknown>>;
+}): Promise<SessionSummary[]> {
   if (!result.results) {
     return [];
   }
@@ -466,7 +595,9 @@ async function mapSessionSummaries(result: {results?: Array<Record<string, unkno
   );
 }
 
-export async function getAllSessionsForCharacter(characterId: string): Promise<SessionSummary[]> {
+export async function getAllSessionsForCharacter(
+  characterId: string,
+): Promise<SessionSummary[]> {
   const d = initDB();
   const result = d.execute(
     `${SESSION_SUMMARY_SELECT}
@@ -478,7 +609,9 @@ export async function getAllSessionsForCharacter(characterId: string): Promise<S
   return mapSessionSummaries(result);
 }
 
-export async function getSessionById(sessionId: string): Promise<ChatSession | null> {
+export async function getSessionById(
+  sessionId: string,
+): Promise<ChatSession | null> {
   const d = initDB();
   const sessionResult = d.execute(
     'SELECT id, character_id, group_chat_id, last_reply_character_id, name, created_at, updated_at FROM chat_sessions WHERE id = ?',
@@ -494,7 +627,7 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
     characterId: row.character_id as string,
     groupChatId: (row.group_chat_id as string) || undefined,
     lastReplyCharacterId: (row.last_reply_character_id as string) || undefined,
-    ...(row.name ? {name: row.name as string} : {}),
+    ...(row.name ? { name: row.name as string } : {}),
     messages,
     createdAt: row.created_at as number,
     updatedAt: row.updated_at as number,
@@ -503,17 +636,29 @@ export async function getSessionById(sessionId: string): Promise<ChatSession | n
 
 export function renameSession(sessionId: string, name: string): void {
   const d = initDB();
-  d.execute('UPDATE chat_sessions SET name = ? WHERE id = ?', [name.trim(), sessionId]);
+  d.execute('UPDATE chat_sessions SET name = ? WHERE id = ?', [
+    name.trim(),
+    sessionId,
+  ]);
 }
 
-export function migrateSessionToGroup(sessionId: string, groupChatId: string): void {
+export function migrateSessionToGroup(
+  sessionId: string,
+  groupChatId: string,
+): void {
   const d = initDB();
-  d.execute('UPDATE chat_sessions SET character_id = \'\', group_chat_id = ? WHERE id = ?', [groupChatId, sessionId]);
+  d.execute(
+    "UPDATE chat_sessions SET character_id = '', group_chat_id = ? WHERE id = ?",
+    [groupChatId, sessionId],
+  );
 }
 
 export function deleteSession(sessionId: string): void {
   const d = initDB();
-  d.execute('DELETE FROM quick_characters WHERE session_id = ? AND starred = 0', [sessionId]);
+  d.execute(
+    'DELETE FROM quick_characters WHERE session_id = ? AND starred = 0',
+    [sessionId],
+  );
   d.execute('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
   for (const [id, entry] of searchCache) {
     if (entry.sessionId === sessionId) {
@@ -523,10 +668,16 @@ export function deleteSession(sessionId: string): void {
   checkpointWAL();
 }
 
-export async function updateMessage(messageId: string, content: string): Promise<void> {
+export async function updateMessage(
+  messageId: string,
+  content: string,
+): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
-  d.execute('UPDATE chat_messages SET content = ?, thinking_ms = 0 WHERE id = ?', [encryptedContent, messageId]);
+  d.execute(
+    'UPDATE chat_messages SET content = ?, thinking_ms = 0 WHERE id = ?',
+    [encryptedContent, messageId],
+  );
   const cached = searchCache.get(messageId);
   if (cached) {
     cached.content = content;
@@ -545,11 +696,21 @@ export async function updateMessageWithVariants(
 ): Promise<void> {
   const d = initDB();
   const encryptedContent = await encrypt(content);
-  const encryptedVariants = variants.length > 0 ? await encryptVariants(variants) : '';
+  const encryptedVariants =
+    variants.length > 0 ? await encryptVariants(variants) : '';
   const encryptedRequest = requestInfo ? await encrypt(requestInfo) : null;
   d.execute(
     'UPDATE chat_messages SET content = ?, timestamp = ?, variants = ?, request_info = COALESCE(?, request_info), thinking_ms = ?, character_id = COALESCE(?, character_id), speaker_name = ? WHERE id = ?',
-    [encryptedContent, timestamp, encryptedVariants, encryptedRequest, thinkingMs ?? 0, characterId ?? null, speakerName ?? '', messageId],
+    [
+      encryptedContent,
+      timestamp,
+      encryptedVariants,
+      encryptedRequest,
+      thinkingMs ?? 0,
+      characterId ?? null,
+      speakerName ?? '',
+      messageId,
+    ],
   );
   const cached = searchCache.get(messageId);
   if (cached) {
@@ -568,13 +729,13 @@ export function getDbConnection(): NitroSQLiteConnection {
   return initDB();
 }
 
-export function getDBInfo(): {sessionCount: number; messageCount: number} {
+export function getDBInfo(): { sessionCount: number; messageCount: number } {
   const d = initDB();
   const sessions = d.execute('SELECT COUNT(*) as count FROM chat_sessions');
   const messages = d.execute('SELECT COUNT(*) as count FROM chat_messages');
   return {
-    sessionCount: sessions.results?.[0]?.count as number ?? 0,
-    messageCount: messages.results?.[0]?.count as number ?? 0,
+    sessionCount: (sessions.results?.[0]?.count as number) ?? 0,
+    messageCount: (messages.results?.[0]?.count as number) ?? 0,
   };
 }
 
@@ -609,7 +770,7 @@ const searchCache = new Map<string, SearchCacheEntry>();
 function searchCacheSync(): void {
   const d = initDB();
   const result = d.execute('SELECT COUNT(*) as count FROM chat_messages');
-  const dbCount = result.results?.[0]?.count as number ?? 0;
+  const dbCount = (result.results?.[0]?.count as number) ?? 0;
   if (searchCache.size !== dbCount) {
     searchCache.clear();
   }
@@ -625,7 +786,9 @@ function searchCachePut(sessionId: string, msg: ChatMessage): void {
   });
 }
 
-export async function searchMessages(query: string): Promise<MessageSearchResult[]> {
+export async function searchMessages(
+  query: string,
+): Promise<MessageSearchResult[]> {
   const needle = query.toLowerCase();
   if (!needle) {
     return [];
@@ -672,7 +835,7 @@ export async function searchMessages(query: string): Promise<MessageSearchResult
         };
         searchCache.set(id, entry);
         return entry;
-      })
+      }),
     );
 
     for (const msg of decrypted) {
@@ -701,14 +864,19 @@ export async function searchMessages(query: string): Promise<MessageSearchResult
  * their own id prefix and their session id prefix so no stress rows are left
  * orphaned.
  */
-export function deleteAllByPrefix(prefix: string): {sessions: number; messages: number} {
+export function deleteAllByPrefix(prefix: string): {
+  sessions: number;
+  messages: number;
+} {
   const d = initDB();
   const like = `${prefix}%`;
   const msgResult = d.execute(
     'DELETE FROM chat_messages WHERE id LIKE ? OR session_id LIKE ?',
     [like, like],
   );
-  const sessResult = d.execute('DELETE FROM chat_sessions WHERE id LIKE ?', [like]);
+  const sessResult = d.execute('DELETE FROM chat_sessions WHERE id LIKE ?', [
+    like,
+  ]);
   searchCache.clear();
   compactDatabase();
   return {
@@ -728,7 +896,10 @@ export function getKV(key: string): string | null {
 
 export function setKV(key: string, value: string): void {
   const d = initDB();
-  d.execute('INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)', [key, value]);
+  d.execute('INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?)', [
+    key,
+    value,
+  ]);
 }
 
 export function getAllKVKeys(): string[] {
@@ -750,8 +921,13 @@ export async function saveLorebookToDB(lorebook: LorebookState): Promise<void> {
   );
   d.execute('BEGIN');
   try {
-    d.execute('INSERT OR REPLACE INTO lorebooks (id, file_name) VALUES (?, ?)', [lorebook.id, lorebook.fileName]);
-    d.execute('DELETE FROM lorebook_entries WHERE lorebook_id = ?', [lorebook.id]);
+    d.execute(
+      'INSERT OR REPLACE INTO lorebooks (id, file_name) VALUES (?, ?)',
+      [lorebook.id, lorebook.fileName],
+    );
+    d.execute('DELETE FROM lorebook_entries WHERE lorebook_id = ?', [
+      lorebook.id,
+    ]);
     for (const entry of encryptedEntries) {
       d.execute(
         'INSERT INTO lorebook_entries (lorebook_id, entry_index, text) VALUES (?, ?, ?)',
@@ -791,7 +967,9 @@ export function getAllLorebooksFromDB(): LorebookState[] {
   }));
 }
 
-export async function getLorebookEntriesFromDB(lorebookId: string): Promise<LorebookEntry[]> {
+export async function getLorebookEntriesFromDB(
+  lorebookId: string,
+): Promise<LorebookEntry[]> {
   const d = initDB();
   const entriesResult = d.execute(
     'SELECT entry_index, text FROM lorebook_entries WHERE lorebook_id = ? ORDER BY entry_index',
@@ -804,7 +982,10 @@ export async function getLorebookEntriesFromDB(lorebookId: string): Promise<Lore
     })),
   );
   return entrySettled
-    .filter((r): r is PromiseFulfilledResult<LorebookEntry> => r.status === 'fulfilled')
+    .filter(
+      (r): r is PromiseFulfilledResult<LorebookEntry> =>
+        r.status === 'fulfilled',
+    )
     .map(r => r.value);
 }
 
@@ -838,7 +1019,20 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
     `INSERT OR REPLACE INTO characters
       (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [char.id, char.name, encrypted.description, encrypted.initial_message, encrypted.writing_style, encrypted.personality, encrypted.scenario, encrypted.example_messages, char.icon, char.lorebook_id, encrypted.custom_fields, char.persona_id],
+    [
+      char.id,
+      char.name,
+      encrypted.description,
+      encrypted.initial_message,
+      encrypted.writing_style,
+      encrypted.personality,
+      encrypted.scenario,
+      encrypted.example_messages,
+      char.icon,
+      char.lorebook_id,
+      encrypted.custom_fields,
+      char.persona_id,
+    ],
   );
 }
 
@@ -870,7 +1064,7 @@ export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
       lorebook_id: (row.lorebook_id as string) || '',
       custom_fields: await decrypt((row.custom_fields as string) || ''),
       persona_id: (row.persona_id as string) || '',
-    }))
+    })),
   );
 }
 
@@ -895,25 +1089,42 @@ export async function saveQuickCharacter(qc: DBQuickCharacter): Promise<void> {
   const encryptedPers = await encrypt(qc.personality);
   d.execute(
     'INSERT OR REPLACE INTO quick_characters (id, session_id, character_id, name, description, personality, starred, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [qc.id, qc.session_id, qc.character_id, qc.name, encryptedDesc, encryptedPers, qc.starred, qc.icon ?? ''],
+    [
+      qc.id,
+      qc.session_id,
+      qc.character_id,
+      qc.name,
+      encryptedDesc,
+      encryptedPers,
+      qc.starred,
+      qc.icon ?? '',
+    ],
   );
 }
 
-export async function getQuickCharactersForSession(sessionId: string): Promise<DBQuickCharacter[]> {
+export async function getQuickCharactersForSession(
+  sessionId: string,
+): Promise<DBQuickCharacter[]> {
   return queryQuickCharacters(
     'SELECT id, session_id, character_id, name, description, personality, starred, icon FROM quick_characters WHERE session_id = ? ORDER BY rowid',
     [sessionId],
   );
 }
 
-export async function getQuickCharactersForCharacter(characterId: string, sessionId: string): Promise<DBQuickCharacter[]> {
+export async function getQuickCharactersForCharacter(
+  characterId: string,
+  sessionId: string,
+): Promise<DBQuickCharacter[]> {
   return queryQuickCharacters(
     'SELECT id, session_id, character_id, name, description, personality, starred, icon FROM quick_characters WHERE character_id = ? OR session_id = ? ORDER BY rowid',
     [characterId, sessionId],
   );
 }
 
-async function queryQuickCharacters(query: string, params: (string | number)[]): Promise<DBQuickCharacter[]> {
+async function queryQuickCharacters(
+  query: string,
+  params: (string | number)[],
+): Promise<DBQuickCharacter[]> {
   const result = initDB().execute(query, params);
   if (!result.results) {
     return [];
@@ -928,7 +1139,7 @@ async function queryQuickCharacters(query: string, params: (string | number)[]):
       personality: await decrypt((row.personality as string) || ''),
       starred: (row.starred as number) ?? 0,
       icon: (row.icon as string) || '',
-    }))
+    })),
   );
 }
 
@@ -937,7 +1148,10 @@ export function deleteQuickCharacter(id: string): void {
   d.execute('DELETE FROM quick_characters WHERE id = ?', [id]);
 }
 
-export async function preserveSpeakerNames(deletedId: string, name: string): Promise<void> {
+export async function preserveSpeakerNames(
+  deletedId: string,
+  name: string,
+): Promise<void> {
   const d = initDB();
   const rows = d.execute(
     'SELECT id, variants FROM chat_messages WHERE character_id = ?',
@@ -950,15 +1164,24 @@ export async function preserveSpeakerNames(deletedId: string, name: string): Pro
       try {
         const parsed = JSON.parse(rawVariants) as ReplyVariant[];
         const stamped = JSON.stringify(
-          parsed.map(v => ({...v, speakerName: name})),
+          parsed.map(v => ({ ...v, speakerName: name })),
         );
-        d.execute('UPDATE chat_messages SET speaker_name = ?, variants = ? WHERE id = ?', [name, stamped, id]);
+        d.execute(
+          'UPDATE chat_messages SET speaker_name = ?, variants = ? WHERE id = ?',
+          [name, stamped, id],
+        );
       } catch (e) {
         console.warn('Failed to stamp deleted speaker variants:', e);
-        d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [name, id]);
+        d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [
+          name,
+          id,
+        ]);
       }
     } else {
-      d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [name, id]);
+      d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [
+        name,
+        id,
+      ]);
     }
   }
 }
@@ -984,7 +1207,9 @@ export async function saveGroupChatToDB(group: GroupChatRow): Promise<void> {
       'INSERT OR REPLACE INTO group_chats (id, name, description, icon) VALUES (?, ?, ?, ?)',
       [group.id, group.name, encryptedDescription, group.icon],
     );
-    d.execute('DELETE FROM group_chat_members WHERE group_chat_id = ?', [group.id]);
+    d.execute('DELETE FROM group_chat_members WHERE group_chat_id = ?', [
+      group.id,
+    ]);
     for (let i = 0; i < group.characterIds.length; i++) {
       d.execute(
         'INSERT INTO group_chat_members (group_chat_id, character_id, position) VALUES (?, ?, ?)',
@@ -1015,7 +1240,9 @@ export function deleteGroupChatFromDB(id: string): void {
 
 export async function getAllGroupChatsFromDB(): Promise<GroupChatRow[]> {
   const d = initDB();
-  const result = d.execute('SELECT id, name, description, icon FROM group_chats ORDER BY name');
+  const result = d.execute(
+    'SELECT id, name, description, icon FROM group_chats ORDER BY name',
+  );
   if (!result.results) {
     return [];
   }
@@ -1026,7 +1253,9 @@ export async function getAllGroupChatsFromDB(): Promise<GroupChatRow[]> {
         'SELECT character_id FROM group_chat_members WHERE group_chat_id = ? ORDER BY position',
         [id],
       );
-      const characterIds = (membersResult.results || []).map(m => m.character_id as string);
+      const characterIds = (membersResult.results || []).map(
+        m => m.character_id as string,
+      );
       return {
         id,
         name: row.name as string,
@@ -1034,11 +1263,13 @@ export async function getAllGroupChatsFromDB(): Promise<GroupChatRow[]> {
         icon: (row.icon as string) || '',
         characterIds,
       };
-    })
+    }),
   );
 }
 
-export async function getSessionsForGroupChat(groupChatId: string): Promise<SessionSummary[]> {
+export async function getSessionsForGroupChat(
+  groupChatId: string,
+): Promise<SessionSummary[]> {
   const d = initDB();
   const result = d.execute(
     `${SESSION_SUMMARY_SELECT}

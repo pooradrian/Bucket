@@ -1,5 +1,9 @@
-export async function saveToDisk(filePath: string, mimeType: string, fileName?: string): Promise<void> {
-  const {saveDocuments} = await import('@react-native-documents/picker');
+export async function saveToDisk(
+  filePath: string,
+  mimeType: string,
+  fileName?: string,
+): Promise<void> {
+  const { saveDocuments } = await import('@react-native-documents/picker');
   const sourceUri = `file://${filePath}`;
   const result = await saveDocuments({
     sourceUris: [sourceUri],

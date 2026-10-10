@@ -1,5 +1,5 @@
-import {DimensionValue, Platform, StyleSheet} from 'react-native';
-import {AppSettings} from './store';
+import { DimensionValue, Platform, StyleSheet } from 'react-native';
+import { AppSettings } from './store';
 
 export function createStyles(s: AppSettings) {
   const monospace = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -8,11 +8,11 @@ export function createStyles(s: AppSettings) {
     // =========================================================================
     // Theme primitives
     // =========================================================================
-    bgPrimary: {backgroundColor: s.bgPrimary},
-    bgSecondary: {backgroundColor: s.bgSecondary},
-    textPrimary: {color: s.textPrimary},
-    textSecondary: {color: s.textSecondary},
-    textMuted: {color: s.textMuted},
+    bgPrimary: { backgroundColor: s.bgPrimary },
+    bgSecondary: { backgroundColor: s.bgSecondary },
+    textPrimary: { color: s.textPrimary },
+    textSecondary: { color: s.textSecondary },
+    textMuted: { color: s.textMuted },
 
     // =========================================================================
     // Card design system
@@ -688,9 +688,9 @@ export function createStyles(s: AppSettings) {
       backgroundColor: s.textMuted,
       opacity: 0.4,
     },
-    typingDot1: {opacity: 0.3},
-    typingDot2: {opacity: 0.6},
-    typingDot3: {opacity: 0.9},
+    typingDot1: { opacity: 0.3 },
+    typingDot2: { opacity: 0.6 },
+    typingDot3: { opacity: 0.9 },
     errorBubble: {
       backgroundColor: 'rgba(204, 51, 51, 0.12)',
       borderColor: s.dangerColor,

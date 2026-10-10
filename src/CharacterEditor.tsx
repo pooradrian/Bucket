@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   Modal,
@@ -10,17 +10,21 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import {launchImageLibrary} from 'react-native-image-picker';
+import { launchImageLibrary } from 'react-native-image-picker';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import {useAppStore, GroupChat} from './store';
-import {generateId} from './Database';
-import {useTheme} from './ThemeContext';
-import {estimateTokens, loadPromptConfig, Persona} from './PromptHandler';
-import {CUSTOM_FIELDS, CustomFieldValue, getCustomField} from './CustomFields';
+import { useAppStore, GroupChat } from './store';
+import { generateId } from './Database';
+import { useTheme } from './ThemeContext';
+import { estimateTokens, loadPromptConfig, Persona } from './PromptHandler';
+import {
+  CUSTOM_FIELDS,
+  CustomFieldValue,
+  getCustomField,
+} from './CustomFields';
 import AutoGrowTextInput from './components/AutoGrowTextInput';
 import GroupEditor from './components/GroupEditor';
 
@@ -57,7 +61,9 @@ export default function CharacterEditor({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [initialMessage, setInitialMessage] = useState('');
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+  const [customFieldValues, setCustomFieldValues] = useState<
+    Record<string, string>
+  >({});
   const [personality, setPersonality] = useState('');
   const [scenario, setScenario] = useState('');
   const [exampleMessages, setExampleMessages] = useState('');
@@ -71,16 +77,16 @@ export default function CharacterEditor({
 
   const lorebookSlide = useSharedValue(300);
   const lorebookContentStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: lorebookSlide.value}],
+    transform: [{ translateY: lorebookSlide.value }],
   }));
   const personaSlide = useSharedValue(300);
   const personaContentStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: personaSlide.value}],
+    transform: [{ translateY: personaSlide.value }],
   }));
 
   useEffect(() => {
     if (showLorebookPicker) {
-      lorebookSlide.value = withTiming(0, {duration: 250});
+      lorebookSlide.value = withTiming(0, { duration: 250 });
     } else {
       lorebookSlide.value = 300;
     }
@@ -89,7 +95,7 @@ export default function CharacterEditor({
 
   useEffect(() => {
     if (showPersonaPicker) {
-      personaSlide.value = withTiming(0, {duration: 250});
+      personaSlide.value = withTiming(0, { duration: 250 });
     } else {
       personaSlide.value = 300;
     }
@@ -187,12 +193,15 @@ export default function CharacterEditor({
   return (
     <View style={st.editorScreen}>
       <View style={st.editorHeader}>
-        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={onClose} style={st.editorCancelBtn}>
             <Text style={st.editorCancelText}>Cancel</Text>
           </TouchableOpacity>
           {onMakeGroup && (
-            <TouchableOpacity onPress={() => setShowGroupEditor(true)} style={st.makeGroupBtn}>
+            <TouchableOpacity
+              onPress={() => setShowGroupEditor(true)}
+              style={st.makeGroupBtn}
+            >
               <Text style={st.makeGroupBtnText}>Make Group</Text>
             </TouchableOpacity>
           )}
@@ -208,22 +217,19 @@ export default function CharacterEditor({
       <KeyboardAvoidingView
         style={st.editorKeyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}>
+        keyboardVerticalOffset={0}
+      >
         <ScrollView
           contentContainerStyle={st.editorScroll}
           keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets>
+          automaticallyAdjustKeyboardInsets
+        >
           {/* Icon */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Avatar</Text>
-            <TouchableOpacity
-              onPress={handlePickIcon}
-              style={st.iconCircle}>
+            <TouchableOpacity onPress={handlePickIcon} style={st.iconCircle}>
               {icon ? (
-                <Image
-                  source={{uri: icon}}
-                  style={st.iconImage}
-                />
+                <Image source={{ uri: icon }} style={st.iconImage} />
               ) : (
                 <Text style={st.iconPlaceholder}>Tap to{'\n'}pick image</Text>
               )}
@@ -278,7 +284,7 @@ export default function CharacterEditor({
                   minHeight={80}
                   value={customFieldValues[def.id] || ''}
                   onChangeText={text =>
-                    setCustomFieldValues(prev => ({...prev, [def.id]: text}))
+                    setCustomFieldValues(prev => ({ ...prev, [def.id]: text }))
                   }
                   placeholder={def.placeholder}
                   placeholderTextColor={st.textMuted.color}
@@ -288,7 +294,7 @@ export default function CharacterEditor({
                   style={st.cardInput}
                   value={customFieldValues[def.id] || ''}
                   onChangeText={text =>
-                    setCustomFieldValues(prev => ({...prev, [def.id]: text}))
+                    setCustomFieldValues(prev => ({ ...prev, [def.id]: text }))
                   }
                   placeholder={def.placeholder}
                   placeholderTextColor={st.textMuted.color}
@@ -339,12 +345,15 @@ export default function CharacterEditor({
           {/* Lorebooks */}
           <View style={st.card}>
             <Text style={st.cardTitle}>Lorebooks</Text>
-            <TouchableOpacity
-              onPress={() => setShowLorebookPicker(true)}>
+            <TouchableOpacity onPress={() => setShowLorebookPicker(true)}>
               <Text style={st.cardDescription}>
                 {lorebookIds.length > 0
                   ? lorebookIds
-                      .map(id => lorebooks.find(l => l.id === id)?.fileName || 'Unknown')
+                      .map(
+                        id =>
+                          lorebooks.find(l => l.id === id)?.fileName ||
+                          'Unknown',
+                      )
                       .join(', ')
                   : 'No lorebooks assigned'}
               </Text>
@@ -352,8 +361,11 @@ export default function CharacterEditor({
             {lorebookIds.length > 0 && (
               <TouchableOpacity
                 onPress={() => setLorebookIds([])}
-                style={st.removeAssignment}>
-                <Text style={st.removeAssignmentText}>Remove all assignments</Text>
+                style={st.removeAssignment}
+              >
+                <Text style={st.removeAssignmentText}>
+                  Remove all assignments
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -364,14 +376,16 @@ export default function CharacterEditor({
             <TouchableOpacity onPress={() => setShowPersonaPicker(true)}>
               <Text style={st.cardDescription}>
                 {personaId
-                  ? (personas.find(p => p.id === personaId)?.name || 'Unknown persona')
+                  ? personas.find(p => p.id === personaId)?.name ||
+                    'Unknown persona'
                   : 'No persona assigned (follows global settings)'}
               </Text>
             </TouchableOpacity>
             {personaId && (
               <TouchableOpacity
                 onPress={() => setPersonaId('')}
-                style={st.removeAssignment}>
+                style={st.removeAssignment}
+              >
                 <Text style={st.removeAssignmentText}>Remove assignment</Text>
               </TouchableOpacity>
             )}
@@ -382,16 +396,18 @@ export default function CharacterEditor({
             visible={showLorebookPicker}
             animationType="none"
             transparent
-            onRequestClose={() => setShowLorebookPicker(false)}>
+            onRequestClose={() => setShowLorebookPicker(false)}
+          >
             <View style={st.lorebookModalOverlay}>
-              <Animated.View style={[st.lorebookModalContent, lorebookContentStyle]}>
+              <Animated.View
+                style={[st.lorebookModalContent, lorebookContentStyle]}
+              >
                 <View style={st.lorebookModalHeader}>
-                  <Text style={st.lorebookModalTitle}>
-                    Choose Lorebooks
-                  </Text>
+                  <Text style={st.lorebookModalTitle}>Choose Lorebooks</Text>
                   <TouchableOpacity
                     onPress={() => setShowLorebookPicker(false)}
-                    style={st.lorebookCloseBtn}>
+                    style={st.lorebookCloseBtn}
+                  >
                     <Text style={st.lorebookCloseBtnText}>×</Text>
                   </TouchableOpacity>
                 </View>
@@ -409,8 +425,18 @@ export default function CharacterEditor({
                               : [...prev, lorebook.id],
                           );
                         }}
-                        style={[st.lorebookOption, isSelected && st.lorebookOptionActive]}>
-                        <Text style={isSelected ? st.lorebookOptionTextActive : st.lorebookOptionText}>
+                        style={[
+                          st.lorebookOption,
+                          isSelected && st.lorebookOptionActive,
+                        ]}
+                      >
+                        <Text
+                          style={
+                            isSelected
+                              ? st.lorebookOptionTextActive
+                              : st.lorebookOptionText
+                          }
+                        >
                           {lorebook.fileName}
                         </Text>
                         <Text style={st.lorebookEntryCount}>
@@ -435,16 +461,18 @@ export default function CharacterEditor({
             visible={showPersonaPicker}
             animationType="none"
             transparent
-            onRequestClose={() => setShowPersonaPicker(false)}>
+            onRequestClose={() => setShowPersonaPicker(false)}
+          >
             <View style={st.lorebookModalOverlay}>
-              <Animated.View style={[st.lorebookModalContent, personaContentStyle]}>
+              <Animated.View
+                style={[st.lorebookModalContent, personaContentStyle]}
+              >
                 <View style={st.lorebookModalHeader}>
-                  <Text style={st.lorebookModalTitle}>
-                    Choose Persona
-                  </Text>
+                  <Text style={st.lorebookModalTitle}>Choose Persona</Text>
                   <TouchableOpacity
                     onPress={() => setShowPersonaPicker(false)}
-                    style={st.lorebookCloseBtn}>
+                    style={st.lorebookCloseBtn}
+                  >
                     <Text style={st.lorebookCloseBtnText}>×</Text>
                   </TouchableOpacity>
                 </View>
@@ -455,8 +483,18 @@ export default function CharacterEditor({
                       setPersonaId('');
                       setShowPersonaPicker(false);
                     }}
-                    style={[st.lorebookOption, !personaId && st.lorebookOptionActive]}>
-                    <Text style={!personaId ? st.lorebookOptionTextActive : st.lorebookOptionText}>
+                    style={[
+                      st.lorebookOption,
+                      !personaId && st.lorebookOptionActive,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        !personaId
+                          ? st.lorebookOptionTextActive
+                          : st.lorebookOptionText
+                      }
+                    >
                       None (follow global settings)
                     </Text>
                   </TouchableOpacity>
@@ -470,8 +508,18 @@ export default function CharacterEditor({
                           setPersonaId(persona.id);
                           setShowPersonaPicker(false);
                         }}
-                        style={[st.lorebookOption, isSelected && st.lorebookOptionActive]}>
-                        <Text style={isSelected ? st.lorebookOptionTextActive : st.lorebookOptionText}>
+                        style={[
+                          st.lorebookOption,
+                          isSelected && st.lorebookOptionActive,
+                        ]}
+                      >
+                        <Text
+                          style={
+                            isSelected
+                              ? st.lorebookOptionTextActive
+                              : st.lorebookOptionText
+                          }
+                        >
                           {persona.name}
                         </Text>
                         {persona.description ? (
@@ -485,7 +533,8 @@ export default function CharacterEditor({
 
                   {personas.length === 0 && (
                     <Text style={st.lorebookEmptyText}>
-                      No personas defined yet.{'\n'}Create them in Settings → System Prompt.
+                      No personas defined yet.{'\n'}Create them in Settings →
+                      System Prompt.
                     </Text>
                   )}
                 </ScrollView>
@@ -495,9 +544,7 @@ export default function CharacterEditor({
 
           {/* Token Counter */}
           <View style={st.tokenCounter}>
-            <Text style={st.tokenCounterLabel}>
-              Estimated tokens
-            </Text>
+            <Text style={st.tokenCounterLabel}>Estimated tokens</Text>
             <Text style={st.tokenCounterValue}>
               ~{totalTokens.toLocaleString()}
             </Text>

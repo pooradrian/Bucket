@@ -1,4 +1,4 @@
-import {Character} from './CharacterEditor';
+import { Character } from './CharacterEditor';
 
 export interface LogEntry {
   id: string;
@@ -37,7 +37,10 @@ export function parseArgs(input: string): string[] {
   return args;
 }
 
-export function findCharacter(characters: Character[], query: string): Character | undefined {
+export function findCharacter(
+  characters: Character[],
+  query: string,
+): Character | undefined {
   return (
     characters.find(c => c.id === query) ||
     characters.find(c => c.name.toLowerCase() === query.toLowerCase()) ||

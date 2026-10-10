@@ -1,5 +1,5 @@
 import RNFS from 'react-native-fs';
-import {getKV, setKV} from './Database';
+import { getKV, setKV } from './Database';
 
 const EVENTS_KEY = 'activity_log';
 const MAX_MEMORY_EVENTS = 50;
@@ -35,7 +35,12 @@ let enabled = false;
 const originalConsoleWarn = console.warn.bind(console);
 const originalConsoleError = console.error.bind(console);
 
-function extractErrorInfo(args: unknown[]): {errorMsg: string; errorName: string; errorStack: string; fullMsg: string} {
+function extractErrorInfo(args: unknown[]): {
+  errorMsg: string;
+  errorName: string;
+  errorStack: string;
+  fullMsg: string;
+} {
   let errorMsg = '';
   let errorName = '';
   let errorStack = '';
@@ -63,7 +68,7 @@ function extractErrorInfo(args: unknown[]): {errorMsg: string; errorName: string
     errorMsg = fullMsg;
   }
 
-  return {errorMsg, errorName, errorStack, fullMsg};
+  return { errorMsg, errorName, errorStack, fullMsg };
 }
 
 function overrideWarn(...args: unknown[]): void {
@@ -137,13 +142,14 @@ function appendToLogFile(event: ActivityEvent): void {
   }
 
   try {
-    const line = JSON.stringify({
-      id: event.id,
-      type: event.type,
-      timestamp: event.timestamp,
-      stats: event.stats,
-      summary: event.summary,
-    }) + '\n';
+    const line =
+      JSON.stringify({
+        id: event.id,
+        type: event.type,
+        timestamp: event.timestamp,
+        stats: event.stats,
+        summary: event.summary,
+      }) + '\n';
     RNFS.appendFile(LOG_FILE, line, 'utf8').catch(() => {});
   } catch {}
 
@@ -161,7 +167,10 @@ export async function readLogFile(): Promise<string> {
   }
 }
 
-function buildSummary(type: string, stats: Record<string, number | string | boolean>): string {
+function buildSummary(
+  type: string,
+  stats: Record<string, number | string | boolean>,
+): string {
   switch (type) {
     case 'character_saved': {
       const fields: string[] = [];
@@ -182,7 +191,8 @@ function buildSummary(type: string, stats: Record<string, number | string | bool
     case 'message_sent':
       return `Sent message [${stats.charCount} chars, session has ${stats.sessionMsgCount} msgs${stats.isGroupChat ? ', group' : ''}${stats.isQC ? ', QC persona' : ''}]`;
     case 'message_streamed': {
-      const dur = typeof stats.durationMs === 'number' ? `${stats.durationMs}ms` : '?ms';
+      const dur =
+        typeof stats.durationMs === 'number' ? `${stats.durationMs}ms` : '?ms';
       return `Streamed ${stats.charCount} chars in ${dur} [session: ${stats.sessionMsgCount} msgs]`;
     }
     case 'message_edited':
@@ -241,31 +251,52 @@ function buildSummary(type: string, stats: Record<string, number | string | bool
       return `Imported character from ${stats.source || 'file'} [name(${stats.nameLen}c), desc(${stats.descLen}c)]`;
     case 'runtime_warn': {
       const wName = (stats.errorName as string) || 'Warning';
-      const wMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 120) : '';
+      const wMsg =
+        typeof stats.errorMsg === 'string' && stats.errorMsg
+          ? (stats.errorMsg as string).slice(0, 120)
+          : '';
       if (!wMsg) {
-        const fallback = typeof stats.fullMsg === 'string' ? (stats.fullMsg as string).slice(0, 120) : '';
+        const fallback =
+          typeof stats.fullMsg === 'string'
+            ? (stats.fullMsg as string).slice(0, 120)
+            : '';
         return fallback ? `${wName}: ${fallback}` : wName;
       }
       return `${wName}: ${wMsg}`;
     }
     case 'runtime_error': {
       const eName = (stats.errorName as string) || 'Error';
-      const eMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 200) : '';
-      const hasStack = typeof stats.errorStack === 'string' && (stats.errorStack as string).length > 0;
+      const eMsg =
+        typeof stats.errorMsg === 'string' && stats.errorMsg
+          ? (stats.errorMsg as string).slice(0, 200)
+          : '';
+      const hasStack =
+        typeof stats.errorStack === 'string' &&
+        (stats.errorStack as string).length > 0;
       if (!eMsg) {
-        const fallback = typeof stats.fullMsg === 'string' ? (stats.fullMsg as string).slice(0, 200) : '';
+        const fallback =
+          typeof stats.fullMsg === 'string'
+            ? (stats.fullMsg as string).slice(0, 200)
+            : '';
         return `${eName}${fallback ? `: ${fallback}` : ''}${hasStack ? ' (+stack)' : ''}`;
       }
       return `${eName}: ${eMsg}${hasStack ? ' (+stack)' : ''}`;
     }
     case 'fatal_error': {
       const fName = (stats.errorName as string) || 'Error';
-      const fMsg = typeof stats.errorMsg === 'string' && stats.errorMsg ? (stats.errorMsg as string).slice(0, 200) : '';
-      const fStack = typeof stats.errorStack === 'string' && (stats.errorStack as string).length > 0;
+      const fMsg =
+        typeof stats.errorMsg === 'string' && stats.errorMsg
+          ? (stats.errorMsg as string).slice(0, 200)
+          : '';
+      const fStack =
+        typeof stats.errorStack === 'string' &&
+        (stats.errorStack as string).length > 0;
       return `FATAL ${fName}${fMsg ? `: ${fMsg}` : ''}${fStack ? ' (+stack)' : ''}`;
     }
     default:
-      return `${type} [${Object.entries(stats).map(([k, v]) => `${k}=${v}`).join(', ')}]`;
+      return `${type} [${Object.entries(stats)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(', ')}]`;
   }
 }
 
@@ -278,23 +309,28 @@ function flushPersist(): void {
 
   try {
     const stored = getKV(EVENTS_KEY);
-    let existing: PersistedLog = {events: []};
+    let existing: PersistedLog = { events: [] };
     if (stored) {
       existing = JSON.parse(stored);
     }
-    const merged = [...existing.events, ...pendingPersist.map(e => ({
-      id: e.id,
-      type: e.type,
-      timestamp: e.timestamp,
-      stats: e.stats,
-      summary: e.summary,
-    }))].slice(-MAX_MEMORY_EVENTS);
-    setKV(EVENTS_KEY, JSON.stringify({events: merged}));
-  } catch {
-  }
+    const merged = [
+      ...existing.events,
+      ...pendingPersist.map(e => ({
+        id: e.id,
+        type: e.type,
+        timestamp: e.timestamp,
+        stats: e.stats,
+        summary: e.summary,
+      })),
+    ].slice(-MAX_MEMORY_EVENTS);
+    setKV(EVENTS_KEY, JSON.stringify({ events: merged }));
+  } catch {}
 
   for (const e of pendingPersist) {
-    const isError = e.type === 'runtime_error' || e.type === 'runtime_warn' || e.type === 'fatal_error';
+    const isError =
+      e.type === 'runtime_error' ||
+      e.type === 'runtime_warn' ||
+      e.type === 'fatal_error';
     if (!isError) {
       appendToLogFile(e);
     }
@@ -334,7 +370,10 @@ export function logEvent(
     schedulePersist();
   }
 
-  const isError = type === 'runtime_error' || type === 'runtime_warn' || type === 'fatal_error';
+  const isError =
+    type === 'runtime_error' ||
+    type === 'runtime_warn' ||
+    type === 'fatal_error';
   if (isError) {
     appendToLogFile(event);
   }
@@ -365,7 +404,7 @@ export function clearEvents(): void {
     clearTimeout(persistTimer);
     persistTimer = null;
   }
-  setKV(EVENTS_KEY, JSON.stringify({events: []}));
+  setKV(EVENTS_KEY, JSON.stringify({ events: [] }));
 }
 
 export function shutdown(): void {

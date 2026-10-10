@@ -28,7 +28,9 @@ describe('isPngSignature', () => {
   });
 
   test('rejects a wrong signature', () => {
-    expect(isPngSignature(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]))).toBe(false);
+    expect(isPngSignature(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]))).toBe(
+      false,
+    );
   });
 
   test('rejects input shorter than 8 bytes', () => {
@@ -75,8 +77,8 @@ describe('writePngWithCharaMetadata', () => {
   });
 
   test('throws on non-PNG input', () => {
-    expect(() => writePngWithCharaMetadata(bytesToBase64([1, 2, 3, 4]), '{}')).toThrow(
-      'Not a valid PNG file',
-    );
+    expect(() =>
+      writePngWithCharaMetadata(bytesToBase64([1, 2, 3, 4]), '{}'),
+    ).toThrow('Not a valid PNG file');
   });
 });

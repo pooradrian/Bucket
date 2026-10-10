@@ -1,4 +1,8 @@
-import {formatThinkingDuration, splitThinking, visibleContent} from '../src/thinking';
+import {
+  formatThinkingDuration,
+  splitThinking,
+  visibleContent,
+} from '../src/thinking';
 
 describe('splitThinking', () => {
   it('reports no thinking for plain content', () => {
@@ -57,7 +61,9 @@ describe('visibleContent', () => {
   });
 
   it('strips the think block when thinking is hidden', () => {
-    expect(visibleContent('<think>hmm</think>the answer', false)).toBe('the answer');
+    expect(visibleContent('<think>hmm</think>the answer', false)).toBe(
+      'the answer',
+    );
   });
 
   it('leaves plain content untouched when thinking is hidden', () => {

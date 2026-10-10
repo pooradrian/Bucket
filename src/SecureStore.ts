@@ -1,5 +1,5 @@
 import * as Keychain from 'react-native-keychain';
-import {getKV, setKV} from './Database';
+import { getKV, setKV } from './Database';
 
 const PROVIDERS_KEY = 'providers';
 const ACTIVE_PROVIDER_KEY = 'activeProvider';
@@ -36,9 +36,14 @@ export function setActiveProviderId(id: string): void {
   setKV(ACTIVE_PROVIDER_KEY, id);
 }
 
-export async function setProviderKey(providerId: string, key: string): Promise<void> {
+export async function setProviderKey(
+  providerId: string,
+  key: string,
+): Promise<void> {
   if (!key) {
-    await Keychain.resetGenericPassword({service: KEY_SERVICE_PREFIX + providerId});
+    await Keychain.resetGenericPassword({
+      service: KEY_SERVICE_PREFIX + providerId,
+    });
     return;
   }
   await Keychain.setGenericPassword(providerId, key, {
@@ -47,8 +52,12 @@ export async function setProviderKey(providerId: string, key: string): Promise<v
   });
 }
 
-export async function getProviderKey(providerId: string): Promise<string | null> {
-  const result = await Keychain.getGenericPassword({service: KEY_SERVICE_PREFIX + providerId});
+export async function getProviderKey(
+  providerId: string,
+): Promise<string | null> {
+  const result = await Keychain.getGenericPassword({
+    service: KEY_SERVICE_PREFIX + providerId,
+  });
   if (result) {
     return result.password;
   }
@@ -56,7 +65,9 @@ export async function getProviderKey(providerId: string): Promise<string | null>
 }
 
 async function deleteProviderKey(providerId: string): Promise<void> {
-  await Keychain.resetGenericPassword({service: KEY_SERVICE_PREFIX + providerId});
+  await Keychain.resetGenericPassword({
+    service: KEY_SERVICE_PREFIX + providerId,
+  });
 }
 
 export async function deleteProvider(providerId: string): Promise<void> {
@@ -71,7 +82,11 @@ export async function deleteProvider(providerId: string): Promise<void> {
 }
 
 export function maskKey(key: string): string {
-  if (!key) {return '';}
-  if (key.length <= 5) {return '•'.repeat(key.length);}
+  if (!key) {
+    return '';
+  }
+  if (key.length <= 5) {
+    return '•'.repeat(key.length);
+  }
   return key.slice(0, 5) + '•'.repeat(key.length - 5);
 }

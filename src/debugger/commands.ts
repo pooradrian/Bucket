@@ -1,5 +1,5 @@
-import {parseArgs} from '../debuggerUtils';
-import {DebuggerEnv, DebuggerIO, CommandHandler} from './types';
+import { parseArgs } from '../debuggerUtils';
+import { DebuggerEnv, DebuggerIO, CommandHandler } from './types';
 import {
   charsCommand,
   charCommand,
@@ -26,9 +26,9 @@ import {
   encryptCommand,
   settingsCommand,
 } from './toolCommands';
-import {dbCommand, DB_HELP_TEXT} from './dbCommands';
-import {embedCommand, ragCommand} from './ragCommands';
-import {MIN_SIMILARITY} from '../RAGHandler';
+import { dbCommand, DB_HELP_TEXT } from './dbCommands';
+import { embedCommand, ragCommand } from './ragCommands';
+import { MIN_SIMILARITY } from '../RAGHandler';
 
 const GENERAL_HELP = [
   'General:',
@@ -65,13 +65,13 @@ const GENERAL_HELP = [
   '  storage.set <key> <value>         Write stored value',
   '  storage.keys                      List all stored keys',
   '',
-   'Lorebooks:',
-   '  lorebooks                         List all lorebooks',
-   '  lorebook <id>                     Show lorebook entries',
-   '',
-   'RAG / Embeddings:',
-   '  embed [text]                      Test the embeddings endpoint',
-   '  rag <id> <query>                  Rank lorebook entries vs query',
+  'Lorebooks:',
+  '  lorebooks                         List all lorebooks',
+  '  lorebook <id>                     Show lorebook entries',
+  '',
+  'RAG / Embeddings:',
+  '  embed [text]                      Test the embeddings endpoint',
+  '  rag <id> <query>                  Rank lorebook entries vs query',
   '',
   'Theme & Settings:',
   '  settings                          Show current app settings',
@@ -107,7 +107,7 @@ const LOREBOOK_HELP = [
 const RAG_HELP = [
   'RAG / Embedding Commands:',
   '  embed [text]                      POST text to the embeddings endpoint; shows URL, model, dims and latency',
-  '  rag <id> <query>                  Rank a lorebook\'s entries against the query by cosine similarity',
+  "  rag <id> <query>                  Rank a lorebook's entries against the query by cosine similarity",
   '',
   '  Retrieval uses the Embedding Model setting (config.set ragmodel <name>, blank = main model).',
   `  Entries scoring >= ${MIN_SIMILARITY} are injected, at most "max results" of them.`,
@@ -200,7 +200,10 @@ export async function executeDebuggerCommand(
     if (handler) {
       await handler(rest, env, io);
     } else {
-      io.log('error', `Unknown command: "${cmd}". Type "help" for available commands.`);
+      io.log(
+        'error',
+        `Unknown command: "${cmd}". Type "help" for available commands.`,
+      );
     }
   } catch (e: unknown) {
     io.log('error', `Error: ${e instanceof Error ? e.message : String(e)}`);

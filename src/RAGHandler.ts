@@ -1,7 +1,12 @@
-import {pick, types} from '@react-native-documents/picker';
-import {ChatMessageObject, PromptConfig} from './PromptHandler';
-import {getEmbeddings} from './Endpoint';
-import {generateId, saveLorebookToDB, deleteLorebookFromDB, getAllLorebooksFromDB} from './Database';
+import { pick, types } from '@react-native-documents/picker';
+import { ChatMessageObject, PromptConfig } from './PromptHandler';
+import { getEmbeddings } from './Endpoint';
+import {
+  generateId,
+  saveLorebookToDB,
+  deleteLorebookFromDB,
+  getAllLorebooksFromDB,
+} from './Database';
 
 export interface LorebookEntry {
   id: number;
@@ -23,7 +28,7 @@ export interface LorebookState {
 }
 
 export function parseLorebook(raw: string): LorebookEntry[] {
-  return splitBulkLines(raw).map((text, i) => ({id: i, text}));
+  return splitBulkLines(raw).map((text, i) => ({ id: i, text }));
 }
 
 export function splitBulkLines(raw: string): string[] {
@@ -33,9 +38,13 @@ export function splitBulkLines(raw: string): string[] {
     .filter(line => line.length > 0);
 }
 
-export function buildLorebookState(id: string, fileName: string, texts: string[]): LorebookState {
-  const entries = texts.map((text, i) => ({id: i, text}));
-  return {id, entries, entryCount: entries.length, fileName};
+export function buildLorebookState(
+  id: string,
+  fileName: string,
+  texts: string[],
+): LorebookState {
+  const entries = texts.map((text, i) => ({ id: i, text }));
+  return { id, entries, entryCount: entries.length, fileName };
 }
 
 export function lorebookExportName(fileName: string): string {
@@ -49,14 +58,16 @@ export function lorebookDisplayName(fileName: string): string {
   return stripped.trim().length > 0 ? stripped : fileName;
 }
 
-export async function saveLorebookState(lorebook: LorebookState): Promise<LorebookState[]> {
+export async function saveLorebookState(
+  lorebook: LorebookState,
+): Promise<LorebookState[]> {
   await saveLorebookToDB(lorebook);
   return await getAllLorebooksFromDB();
 }
 
 export async function loadLorebook(): Promise<LorebookState | null> {
   try {
-    const result = await pick({type: [types.plainText]});
+    const result = await pick({ type: [types.plainText] });
     if (!result || result.length === 0) {
       return null;
     }
@@ -67,9 +78,19 @@ export async function loadLorebook(): Promise<LorebookState | null> {
     if (entries.length === 0) {
       return null;
     }
-    return {id: generateId(), entries, entryCount: entries.length, fileName: lorebookDisplayName(file.name || 'lorebook')};
+    return {
+      id: generateId(),
+      entries,
+      entryCount: entries.length,
+      fileName: lorebookDisplayName(file.name || 'lorebook'),
+    };
   } catch (e: unknown) {
-    if (e && typeof e === 'object' && 'code' in e && (e as {code: string}).code === 'OPERATION_CANCELED') {
+    if (
+      e &&
+      typeof e === 'object' &&
+      'code' in e &&
+      (e as { code: string }).code === 'OPERATION_CANCELED'
+    ) {
       return null;
     }
     throw e;
@@ -85,7 +106,9 @@ export async function loadAllLorebooks(): Promise<LorebookState[]> {
   return [];
 }
 
-export async function addLorebook(lorebook: LorebookState): Promise<LorebookState[]> {
+export async function addLorebook(
+  lorebook: LorebookState,
+): Promise<LorebookState[]> {
   await saveLorebookToDB(lorebook);
   return await getAllLorebooksFromDB();
 }
@@ -103,7 +126,12 @@ export async function retrieveRelevantLorebook(
 ): Promise<string[]> {
   const maxToReturn = Number(ragConfig.maxResults) || 5;
   const query = buildQuery(recentMessages);
-  const ranked = await rankLorebookEntries(query, lorebook.entries, ragConfig, promptConfig);
+  const ranked = await rankLorebookEntries(
+    query,
+    lorebook.entries,
+    ragConfig,
+    promptConfig,
+  );
   return ranked
     .filter(r => r.score >= MIN_SIMILARITY)
     .slice(0, maxToReturn)
@@ -138,10 +166,16 @@ function buildQuery(recentMessages: ChatMessageObject[]): string {
     .slice(-QUERY_MESSAGE_COUNT)
     .map(m => m.content)
     .join('\n');
-  return joined.length > QUERY_MAX_CHARS ? joined.slice(-QUERY_MAX_CHARS) : joined;
+  return joined.length > QUERY_MAX_CHARS
+    ? joined.slice(-QUERY_MAX_CHARS)
+    : joined;
 }
 
-async function embedTexts(texts: string[], model: string, config: PromptConfig): Promise<number[][]> {
+async function embedTexts(
+  texts: string[],
+  model: string,
+  config: PromptConfig,
+): Promise<number[][]> {
   const cached = texts.map(t => EMBEDDING_CACHE.get(`${model}\u0000${t}`));
   const missingIdx: number[] = [];
   cached.forEach((v, i) => {
@@ -173,9 +207,16 @@ export async function rankLorebookEntries(
     return [];
   }
   const model = ragConfig.model?.trim() || promptConfig.model;
-  const vectors = await embedTexts([query, ...capped.map(e => e.text)], model, promptConfig);
+  const vectors = await embedTexts(
+    [query, ...capped.map(e => e.text)],
+    model,
+    promptConfig,
+  );
   return capped
-    .map((entry, i) => ({entry, score: cosineSimilarity(vectors[0], vectors[i + 1])}))
+    .map((entry, i) => ({
+      entry,
+      score: cosineSimilarity(vectors[0], vectors[i + 1]),
+    }))
     .sort((a, b) => b.score - a.score);
 }
 

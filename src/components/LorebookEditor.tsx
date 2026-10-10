@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Keyboard,
@@ -16,8 +16,8 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import {useTheme} from '../ThemeContext';
-import {generateId, getLorebookEntriesFromDB} from '../Database';
+import { useTheme } from '../ThemeContext';
+import { generateId, getLorebookEntriesFromDB } from '../Database';
 import {
   LorebookState,
   buildLorebookState,
@@ -37,7 +37,12 @@ interface LorebookEditorProps {
   onSaved: (lorebooks: LorebookState[], savedId: string) => void;
 }
 
-export default function LorebookEditor({visible, lorebook, onClose, onSaved}: LorebookEditorProps) {
+export default function LorebookEditor({
+  visible,
+  lorebook,
+  onClose,
+  onSaved,
+}: LorebookEditorProps) {
   const st = useTheme();
   const [name, setName] = useState('');
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -50,7 +55,7 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
 
   const slide = useSharedValue(300);
   const contentStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: slide.value}],
+    transform: [{ translateY: slide.value }],
   }));
 
   const nextKey = () => {
@@ -64,7 +69,7 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
       return;
     }
     closingRef.current = false;
-    slide.value = withTiming(0, {duration: 250});
+    slide.value = withTiming(0, { duration: 250 });
     setBulk('');
     setSaving(false);
     if (lorebook) {
@@ -73,20 +78,20 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
       setDrafts([]);
       getLorebookEntriesFromDB(lorebook.id)
         .then(entries => {
-          setDrafts(entries.map(e => ({key: `entry-${e.id}`, text: e.text})));
+          setDrafts(entries.map(e => ({ key: `entry-${e.id}`, text: e.text })));
         })
         .catch(e => console.warn('Failed to load lorebook entries:', e))
         .finally(() => setLoading(false));
     } else {
       setName('');
       setLoading(false);
-      setDrafts([{key: nextKey(), text: ''}]);
+      setDrafts([{ key: nextKey(), text: '' }]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const updateDraft = (key: string, text: string) => {
-    setDrafts(prev => prev.map(d => (d.key === key ? {...d, text} : d)));
+    setDrafts(prev => prev.map(d => (d.key === key ? { ...d, text } : d)));
   };
 
   const deleteDraft = (key: string) => {
@@ -107,7 +112,10 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
   const handleAddBulk = () => {
     const lines = splitBulkLines(bulk);
     if (lines.length === 0) return;
-    setDrafts(prev => [...prev, ...lines.map(text => ({key: nextKey(), text}))]);
+    setDrafts(prev => [
+      ...prev,
+      ...lines.map(text => ({ key: nextKey(), text })),
+    ]);
     setBulk('');
   };
 
@@ -115,7 +123,7 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
     if (closingRef.current) return;
     closingRef.current = true;
     Keyboard.dismiss();
-    slide.value = withTiming(300, {duration: 200});
+    slide.value = withTiming(300, { duration: 200 });
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(onClose, 210);
   };
@@ -140,12 +148,16 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
     }
     setSaving(true);
     try {
-      const state = buildLorebookState(lorebook?.id ?? generateId(), trimmedName, texts);
+      const state = buildLorebookState(
+        lorebook?.id ?? generateId(),
+        trimmedName,
+        texts,
+      );
       const updated = await saveLorebookState(state);
       if (closingRef.current) return;
       closingRef.current = true;
       Keyboard.dismiss();
-      slide.value = withTiming(300, {duration: 200});
+      slide.value = withTiming(300, { duration: 200 });
       if (closeTimer.current) clearTimeout(closeTimer.current);
       closeTimer.current = setTimeout(() => onSaved(updated, state.id), 210);
     } catch (e) {
@@ -156,25 +168,37 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
   };
 
   return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
+    <Modal
+      visible={visible}
+      animationType="none"
+      transparent
+      onRequestClose={handleClose}
+    >
       <KeyboardAvoidingView
-        style={{flex: 1}}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}>
+        keyboardVerticalOffset={0}
+      >
         <View style={st.groupEditorOverlay}>
           <Animated.View style={[st.groupEditorContent, contentStyle]}>
             <View style={st.groupEditorHeader}>
-              <Text style={st.groupEditorTitle}>{lorebook ? 'Edit Lorebook' : 'New Lorebook'}</Text>
-              <TouchableOpacity onPress={handleClose} style={st.groupEditorCloseBtn}>
+              <Text style={st.groupEditorTitle}>
+                {lorebook ? 'Edit Lorebook' : 'New Lorebook'}
+              </Text>
+              <TouchableOpacity
+                onPress={handleClose}
+                style={st.groupEditorCloseBtn}
+              >
                 <Text style={st.groupEditorCloseBtnText}>×</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView
               style={st.groupEditorBody}
-              contentContainerStyle={{paddingBottom: 8}}
+              contentContainerStyle={{ paddingBottom: 8 }}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets>
+              automaticallyAdjustKeyboardInsets
+            >
               <View style={st.groupEditorField}>
                 <Text style={st.groupEditorLabel}>Name</Text>
                 <TextInput
@@ -187,34 +211,70 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
               </View>
 
               <View style={st.groupEditorField}>
-                <Text style={st.groupEditorLabel}>Entries ({drafts.length})</Text>
-                {loading && <Text style={st.lorebookEmptyText}>Loading entries...</Text>}
+                <Text style={st.groupEditorLabel}>
+                  Entries ({drafts.length})
+                </Text>
+                {loading && (
+                  <Text style={st.lorebookEmptyText}>Loading entries...</Text>
+                )}
                 {!loading &&
                   drafts.map((d, i) => (
-                    <View key={d.key} style={{flexDirection: 'row', marginBottom: 8}}>
+                    <View
+                      key={d.key}
+                      style={{ flexDirection: 'row', marginBottom: 8 }}
+                    >
                       <TextInput
-                        style={[st.groupEditorInput, {flex: 1, minHeight: 44, textAlignVertical: 'top'}]}
+                        style={[
+                          st.groupEditorInput,
+                          { flex: 1, minHeight: 44, textAlignVertical: 'top' },
+                        ]}
                         value={d.text}
                         onChangeText={text => updateDraft(d.key, text)}
                         placeholder={`Fact ${i + 1}`}
                         placeholderTextColor={st.textMuted.color}
                         multiline
                       />
-                      <View style={{justifyContent: 'center', marginLeft: 6, gap: 4}}>
+                      <View
+                        style={{
+                          justifyContent: 'center',
+                          marginLeft: 6,
+                          gap: 4,
+                        }}
+                      >
                         <TouchableOpacity
                           onPress={() => moveDraft(d.key, -1)}
                           disabled={i === 0}
-                          style={{opacity: i === 0 ? 0.3 : 1, padding: 2}}>
-                          <Text style={{color: st.textMuted.color, fontSize: 14}}>↑</Text>
+                          style={{ opacity: i === 0 ? 0.3 : 1, padding: 2 }}
+                        >
+                          <Text
+                            style={{ color: st.textMuted.color, fontSize: 14 }}
+                          >
+                            ↑
+                          </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => moveDraft(d.key, 1)}
                           disabled={i === drafts.length - 1}
-                          style={{opacity: i === drafts.length - 1 ? 0.3 : 1, padding: 2}}>
-                          <Text style={{color: st.textMuted.color, fontSize: 14}}>↓</Text>
+                          style={{
+                            opacity: i === drafts.length - 1 ? 0.3 : 1,
+                            padding: 2,
+                          }}
+                        >
+                          <Text
+                            style={{ color: st.textMuted.color, fontSize: 14 }}
+                          >
+                            ↓
+                          </Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => deleteDraft(d.key)} style={{padding: 2}}>
-                          <Text style={{color: st.dangerText.color, fontSize: 16}}>×</Text>
+                        <TouchableOpacity
+                          onPress={() => deleteDraft(d.key)}
+                          style={{ padding: 2 }}
+                        >
+                          <Text
+                            style={{ color: st.dangerText.color, fontSize: 16 }}
+                          >
+                            ×
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -223,16 +283,27 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
                   <Text style={st.lorebookEmptyText}>No entries yet.</Text>
                 )}
                 <TouchableOpacity
-                  onPress={() => setDrafts(prev => [...prev, {key: nextKey(), text: ''}])}
-                  style={[st.cardActionBtn, {alignSelf: 'flex-start', marginTop: 4}]}>
+                  onPress={() =>
+                    setDrafts(prev => [...prev, { key: nextKey(), text: '' }])
+                  }
+                  style={[
+                    st.cardActionBtn,
+                    { alignSelf: 'flex-start', marginTop: 4 },
+                  ]}
+                >
                   <Text style={st.cardActionBtnText}>+ Add entry</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={st.groupEditorField}>
-                <Text style={st.groupEditorLabel}>Bulk add (one fact per line)</Text>
+                <Text style={st.groupEditorLabel}>
+                  Bulk add (one fact per line)
+                </Text>
                 <TextInput
-                  style={[st.groupEditorInput, {minHeight: 60, textAlignVertical: 'top'}]}
+                  style={[
+                    st.groupEditorInput,
+                    { minHeight: 60, textAlignVertical: 'top' },
+                  ]}
                   value={bulk}
                   onChangeText={setBulk}
                   placeholder={'Elf capital is Sylvara\nDragons fear bells'}
@@ -244,21 +315,30 @@ export default function LorebookEditor({visible, lorebook, onClose, onSaved}: Lo
                   disabled={splitBulkLines(bulk).length === 0}
                   style={[
                     st.cardActionBtn,
-                    {alignSelf: 'flex-start', marginTop: 8},
-                    splitBulkLines(bulk).length === 0 && {opacity: 0.4},
-                  ]}>
+                    { alignSelf: 'flex-start', marginTop: 8 },
+                    splitBulkLines(bulk).length === 0 && { opacity: 0.4 },
+                  ]}
+                >
                   <Text style={st.cardActionBtnText}>Add lines</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
 
-            <View style={{paddingHorizontal: 16, paddingTop: 4}}>
+            <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
               <TouchableOpacity
                 onPress={handleSave}
                 disabled={!name.trim() || saving}
-                style={[st.groupEditorSaveBtn, (!name.trim() || saving) && {opacity: 0.4}]}>
+                style={[
+                  st.groupEditorSaveBtn,
+                  (!name.trim() || saving) && { opacity: 0.4 },
+                ]}
+              >
                 <Text style={st.groupEditorSaveBtnText}>
-                  {saving ? 'Saving...' : lorebook ? 'Save Lorebook' : 'Create Lorebook'}
+                  {saving
+                    ? 'Saving...'
+                    : lorebook
+                      ? 'Save Lorebook'
+                      : 'Create Lorebook'}
                 </Text>
               </TouchableOpacity>
             </View>
