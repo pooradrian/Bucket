@@ -1,5 +1,5 @@
-import {useState} from 'react';
-import {Alert, Text, TextInput, TouchableOpacity, View} from 'react-native';
+import { useState } from 'react';
+import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import {
   Persona,
   PromptConfig,
@@ -8,8 +8,8 @@ import {
   deletePersona,
   activatePersona,
 } from '../PromptHandler';
-import {useTheme} from '../ThemeContext';
-import {Settings} from '../settingsDraft';
+import { useTheme } from '../ThemeContext';
+import { Settings } from '../settingsDraft';
 
 interface PersonasViewProps {
   values: Settings;
@@ -33,7 +33,7 @@ export default function PersonasView({
   return (
     <View style={st.settingsField}>
       <Text style={st.settingsLabel}>User Personas</Text>
-      <Text style={[st.settingsDefaultText, {marginBottom: 10}]}>
+      <Text style={[st.settingsDefaultText, { marginBottom: 10 }]}>
         Create persona profiles to quickly switch your user description.
       </Text>
 
@@ -41,7 +41,7 @@ export default function PersonasView({
         const isActive = promptValues.activePersonaId === persona.id;
         const isEditing = editingPersonaIdx === idx;
         return (
-          <View key={persona.id} style={{marginBottom: 10}}>
+          <View key={persona.id} style={{ marginBottom: 10 }}>
             <TouchableOpacity
               style={[
                 st.settingsToggleButton,
@@ -106,7 +106,7 @@ export default function PersonasView({
                   value={persona.name}
                   onChangeText={text => {
                     setPromptValues(prev =>
-                      updatePersona(prev, idx, {name: text}),
+                      updatePersona(prev, idx, { name: text }),
                     );
                   }}
                   placeholder="Persona name"
@@ -125,7 +125,7 @@ export default function PersonasView({
                   value={persona.description}
                   onChangeText={text => {
                     setPromptValues(prev =>
-                      updatePersona(prev, idx, {description: text}),
+                      updatePersona(prev, idx, { description: text }),
                     );
                   }}
                   placeholder="Describe yourself for the AI"
@@ -149,14 +149,12 @@ export default function PersonasView({
                         'Delete persona',
                         `Delete "${persona.name}"?`,
                         [
-                          {text: 'Cancel', style: 'cancel'},
+                          { text: 'Cancel', style: 'cancel' },
                           {
                             text: 'Delete',
                             style: 'destructive',
                             onPress: () => {
-                              setPromptValues(prev =>
-                                deletePersona(prev, idx),
-                              );
+                              setPromptValues(prev => deletePersona(prev, idx));
                               setEditingPersonaIdx(null);
                             },
                           },
@@ -164,7 +162,9 @@ export default function PersonasView({
                       );
                     }}
                   >
-                    <Text style={{color: values.dangerColor, fontSize: 13}}>Delete</Text>
+                    <Text style={{ color: values.dangerColor, fontSize: 13 }}>
+                      Delete
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
@@ -202,7 +202,10 @@ export default function PersonasView({
           setEditingPersonaIdx((promptValues.personas ?? []).length);
         }}
         disabled={!promptLoaded}
-        style={[st.settingsToggleButton, {borderStyle: 'dashed', marginTop: 4}]}
+        style={[
+          st.settingsToggleButton,
+          { borderStyle: 'dashed', marginTop: 4 },
+        ]}
       >
         <Text style={st.settingsToggleText}>
           {promptLoaded ? '+ Add Persona' : 'Loading personas...'}

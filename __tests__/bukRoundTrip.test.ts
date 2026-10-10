@@ -2,18 +2,20 @@ jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn().mockResolvedValue([]),
   saveDocuments: jest.fn().mockResolvedValue([]),
   isKnownType: jest.fn().mockReturnValue(true),
-  types: {allFiles: 'public.all-files'},
+  types: { allFiles: 'public.all-files' },
 }));
 
 jest.mock('react-native-keychain', () => ({
   getGenericPassword: jest.fn().mockResolvedValue(false),
   setGenericPassword: jest.fn().mockResolvedValue(true),
   resetGenericPassword: jest.fn().mockResolvedValue(true),
-  ACCESSIBLE: {WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly'},
+  ACCESSIBLE: {
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly',
+  },
 }));
 
 jest.mock('react-native-nitro-sqlite', () => {
-  const {DatabaseSync} = require('node:sqlite');
+  const { DatabaseSync } = require('node:sqlite');
   const conn = new DatabaseSync(':memory:');
   return {
     open: jest.fn(() => ({
@@ -21,10 +23,10 @@ jest.mock('react-native-nitro-sqlite', () => {
         const returnsRows = /^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql);
         const stmt = conn.prepare(sql);
         if (returnsRows) {
-          return {results: stmt.all(...params)};
+          return { results: stmt.all(...params) };
         }
         const info = stmt.run(...params);
-        return {results: [], rowsAffected: Number(info.changes)};
+        return { results: [], rowsAffected: Number(info.changes) };
       },
     })),
   };
@@ -46,8 +48,8 @@ import {
   getSessionById,
   deleteSession,
 } from '../src/Database';
-import {exportBuk, importBuk} from '../src/import/bukImportExport';
-import type {ChatSession} from '../src/useChat';
+import { exportBuk, importBuk } from '../src/import/bukImportExport';
+import type { ChatSession } from '../src/useChat';
 
 const db = () => initDB();
 
@@ -69,7 +71,11 @@ function clearAll() {
 
 let bundleBase64: string | null = null;
 
-async function exportBundle(charIds: string[], groupIds: string[] = [], includeChats = true) {
+async function exportBundle(
+  charIds: string[],
+  groupIds: string[] = [],
+  includeChats = true,
+) {
   bundleBase64 = null;
   await exportBuk({
     format: 'buk',
@@ -120,8 +126,8 @@ beforeEach(async () => {
     id: sessionId,
     characterId: charId,
     messages: [
-      {id: 'm1', role: 'user', content: 'hello alice', timestamp: 1000},
-      {id: 'm2', role: 'assistant', content: 'hi there', timestamp: 2000},
+      { id: 'm1', role: 'user', content: 'hello alice', timestamp: 1000 },
+      { id: 'm2', role: 'assistant', content: 'hi there', timestamp: 2000 },
     ],
     createdAt: 1000,
     updatedAt: 2000,
@@ -181,7 +187,10 @@ describe('fresh device import', () => {
     const sessions = await getAllSessionsForCharacter(newCharId);
     expect(sessions).toHaveLength(1);
     const loaded = await getSessionById(sessions[0].id);
-    expect(loaded!.messages.map(m => m.content)).toEqual(['hello alice', 'hi there']);
+    expect(loaded!.messages.map(m => m.content)).toEqual([
+      'hello alice',
+      'hi there',
+    ]);
   });
 });
 
@@ -217,8 +226,12 @@ describe('re-import into the same database', () => {
     await exportBundle([charId]);
     await importBundle();
 
-    const starred = (await getQuickCharactersForSession(sessionId)).find(q => q.id === starredQcId);
-    expect(starred!.description).toBe('edited locally after the backup was taken');
+    const starred = (await getQuickCharactersForSession(sessionId)).find(
+      q => q.id === starredQcId,
+    );
+    expect(starred!.description).toBe(
+      'edited locally after the backup was taken',
+    );
   });
 });
 
@@ -377,7 +390,9 @@ describe('quick character icon bundling', () => {
 
     await exportBundle([charId]);
     const bundle = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
-    const chat = JSON.parse(await bundle.file(`chats/${sessionId}.json`)!.async('string'));
+    const chat = JSON.parse(
+      await bundle.file(`chats/${sessionId}.json`)!.async('string'),
+    );
     for (const qc of chat.quickCharacters) {
       expect(qc.icon).toBe('');
     }
@@ -402,7 +417,10 @@ describe('quick character icon bundling', () => {
     const file = bundle.file(`quickcharacters/${charId}.json`);
     expect(file).not.toBeNull();
     const parsed = JSON.parse(await file!.async('string'));
-    expect(parsed.quickCharacters.find((q: {id: string}) => q.id === starredQcId).icon).toBe('');
+    expect(
+      parsed.quickCharacters.find((q: { id: string }) => q.id === starredQcId)
+        .icon,
+    ).toBe('');
   });
 
   test('icons transfer to a fresh device under a local path', async () => {
@@ -423,10 +441,14 @@ describe('quick character icon bundling', () => {
 
     const qcs = await getQuickCharactersForSession(sessionId);
     const sessionQc = qcs.find(q => q.id === sessionQcId)!;
-    expect(sessionQc.icon).toMatch(new RegExp(`^file:///tmp/documents/icons/qc-${sessionQcId}\\.png$`));
+    expect(sessionQc.icon).toMatch(
+      new RegExp(`^file:///tmp/documents/icons/qc-${sessionQcId}\\.png$`),
+    );
 
     const writeFile = RNFS.writeFile as jest.Mock;
-    const iconWrite = writeFile.mock.calls.find(c => String(c[0]).includes(`qc-${sessionQcId}`));
+    const iconWrite = writeFile.mock.calls.find(c =>
+      String(c[0]).includes(`qc-${sessionQcId}`),
+    );
     expect(iconWrite).toBeTruthy();
     expect(iconWrite![1]).toBe('aWNvbg==');
 

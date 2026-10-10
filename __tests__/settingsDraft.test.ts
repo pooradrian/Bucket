@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 jest.mock('@react-native-documents/picker', () => ({
   pick: jest.fn(),
   types: {},
@@ -12,8 +12,13 @@ jest.mock('react-native-keychain', () => ({
   ACCESSIBLE: {},
 }));
 
-import {toDraft, SETTINGS_KEYS, CUSTOMIZATION_KEYS, NUMERIC_KEYS} from '../src/settingsDraft';
-import {AppSettings, DEFAULT_APP_SETTINGS} from '../src/store';
+import {
+  toDraft,
+  SETTINGS_KEYS,
+  CUSTOMIZATION_KEYS,
+  NUMERIC_KEYS,
+} from '../src/settingsDraft';
+import { AppSettings, DEFAULT_APP_SETTINGS } from '../src/store';
 
 describe('toDraft', () => {
   it('stringifies every SETTINGS_KEYS field', () => {
@@ -24,12 +29,16 @@ describe('toDraft', () => {
   });
 
   it('preserves themeMode as a non-string union', () => {
-    const draft = toDraft({...DEFAULT_APP_SETTINGS, themeMode: 'light'});
+    const draft = toDraft({ ...DEFAULT_APP_SETTINGS, themeMode: 'light' });
     expect(draft.themeMode).toBe('light');
   });
 
   it('round-trips numeric values through String()', () => {
-    const s: AppSettings = {...DEFAULT_APP_SETTINGS, cardRadius: 24, fontSizeBody: 18};
+    const s: AppSettings = {
+      ...DEFAULT_APP_SETTINGS,
+      cardRadius: 24,
+      fontSizeBody: 18,
+    };
     const draft = toDraft(s);
     expect(draft.cardRadius).toBe('24');
     expect(draft.fontSizeBody).toBe('18');
@@ -45,7 +54,9 @@ describe('key sets', () => {
 
   it('carries showThinking through the draft', () => {
     expect(SETTINGS_KEYS).toContain('showThinking');
-    expect(toDraft({...DEFAULT_APP_SETTINGS, showThinking: false}).showThinking).toBe('false');
+    expect(
+      toDraft({ ...DEFAULT_APP_SETTINGS, showThinking: false }).showThinking,
+    ).toBe('false');
   });
 
   it('NUMERIC_KEYS are a subset of SETTINGS_KEYS', () => {

@@ -1,4 +1,4 @@
-import type {Character} from './CharacterEditor';
+import type { Character } from './CharacterEditor';
 
 export interface CustomFieldDefinition {
   id: string;
@@ -31,7 +31,9 @@ export function hasCustomFields(character: Character): boolean {
   return (character.customFields || []).some(f => f.value.trim().length > 0);
 }
 
-export function parseCustomFields(raw: string | null | undefined): CustomFieldValue[] {
+export function parseCustomFields(
+  raw: string | null | undefined,
+): CustomFieldValue[] {
   if (!raw) {
     return [];
   }

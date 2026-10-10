@@ -1,6 +1,6 @@
-import {Character} from '../CharacterEditor';
-import {CustomFieldValue} from '../CustomFields';
-import {generateId} from '../Database';
+import { Character } from '../CharacterEditor';
+import { CustomFieldValue } from '../CustomFields';
+import { generateId } from '../Database';
 
 interface CharacterCardExtensions {
   lorebookIds?: string[];
@@ -43,7 +43,10 @@ export function parseV1Json(json: CharacterCardJson, id?: string): Character {
 export function parseV2Json(json: CharacterCardJson, id?: string): Character {
   const data: CharacterCardData = json.data ?? json;
   let lorebookIds: string[] = [];
-  if (data.extensions?.lorebookIds && Array.isArray(data.extensions.lorebookIds)) {
+  if (
+    data.extensions?.lorebookIds &&
+    Array.isArray(data.extensions.lorebookIds)
+  ) {
     lorebookIds = data.extensions.lorebookIds;
   } else if (data.extensions?.lorebookId) {
     lorebookIds = [data.extensions.lorebookId];

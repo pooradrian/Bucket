@@ -2,11 +2,13 @@ jest.mock('react-native-keychain', () => ({
   getGenericPassword: jest.fn().mockResolvedValue(false),
   setGenericPassword: jest.fn().mockResolvedValue(true),
   resetGenericPassword: jest.fn().mockResolvedValue(true),
-  ACCESSIBLE: {WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly'},
+  ACCESSIBLE: {
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly',
+  },
 }));
 
 jest.mock('react-native-nitro-sqlite', () => {
-  const {DatabaseSync} = require('node:sqlite');
+  const { DatabaseSync } = require('node:sqlite');
   const conn = new DatabaseSync(':memory:');
   return {
     open: jest.fn(() => ({
@@ -14,16 +16,16 @@ jest.mock('react-native-nitro-sqlite', () => {
         const returnsRows = /^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql);
         const stmt = conn.prepare(sql);
         if (returnsRows) {
-          return {results: stmt.all(...params)};
+          return { results: stmt.all(...params) };
         }
         const info = stmt.run(...params);
-        return {results: [], rowsAffected: Number(info.changes)};
+        return { results: [], rowsAffected: Number(info.changes) };
       },
     })),
   };
 });
 
-import {encrypt} from '../src/Crypto';
+import { encrypt } from '../src/Crypto';
 import {
   initDB,
   getSessionById,
@@ -32,18 +34,25 @@ import {
   updateMessageWithVariants,
   preserveSpeakerNames,
 } from '../src/Database';
-import type {ChatMessage} from '../src/useChat';
+import type { ChatMessage } from '../src/useChat';
 
 type Exec = {
-  execute: (sql: string, params?: (string | number | null)[]) => {results?: Record<string, unknown>[]};
+  execute: (
+    sql: string,
+    params?: (string | number | null)[],
+  ) => { results?: Record<string, unknown>[] };
 };
 
-const db: Exec = require('react-native-nitro-sqlite').open({name: 'test'});
+const db: Exec = require('react-native-nitro-sqlite').open({ name: 'test' });
 
 const contents = (messages: ChatMessage[]) => messages.map(m => m.content);
 
-const msg = (id: string, role: ChatMessage['role'], content: string, timestamp: number): ChatMessage =>
-  ({id, role, content, timestamp});
+const msg = (
+  id: string,
+  role: ChatMessage['role'],
+  content: string,
+  timestamp: number,
+): ChatMessage => ({ id, role, content, timestamp });
 
 beforeAll(async () => {
   db.execute(`
@@ -83,12 +92,10 @@ beforeAll(async () => {
   db.execute('CREATE INDEX idx_messages_session ON chat_messages(session_id)');
   db.execute('PRAGMA user_version = 11');
 
-  db.execute('INSERT INTO chat_sessions (id, character_id, created_at, updated_at) VALUES (?, ?, ?, ?)', [
-    's1',
-    'char1',
-    1,
-    1,
-  ]);
+  db.execute(
+    'INSERT INTO chat_sessions (id, character_id, created_at, updated_at) VALUES (?, ?, ?, ?)',
+    ['s1', 'char1', 1, 1],
+  );
 
   const seeded: [string, ChatMessage['role'], string, number][] = [
     ['m1', 'user', 'u1', 1000],
@@ -123,7 +130,15 @@ test('rewriting a timestamp no longer reorders the thread', async () => {
 });
 
 test('variant updates persist the message speaker so it survives reopening', async () => {
-  await updateMessageWithVariants('m2', 'a1 (regenerated)', 500_001, [], undefined, undefined, 'qc-9');
+  await updateMessageWithVariants(
+    'm2',
+    'a1 (regenerated)',
+    500_001,
+    [],
+    undefined,
+    undefined,
+    'qc-9',
+  );
   const session = await getSessionById('s1');
   const m2 = session!.messages.find(m => m.id === 'm2');
   expect(m2!.characterId).toBe('qc-9');
@@ -145,7 +160,15 @@ test('appends land last and front inserts land first regardless of timestamp', a
   await addMessage('s1', msg('m6', 'user', 'u4', 8));
 
   const session = await getSessionById('s1');
-  expect(contents(session!.messages)).toEqual(['[Summary] s', 'u1*', 'a1', 'u2', 'a2', 'u3', 'u4']);
+  expect(contents(session!.messages)).toEqual([
+    '[Summary] s',
+    'u1*',
+    'a1',
+    'u2',
+    'a2',
+    'u3',
+    'u4',
+  ]);
 });
 
 test('thread preview follows sequence, not the highest timestamp', async () => {
@@ -176,10 +199,21 @@ test('fresh installs track sequence without a migration', async () => {
   expect(contents(loaded!.messages)).toEqual(['fu1', 'fa1', 'fu2', 'fa2']);
 
   await fresh.addMessage('fs1', msg('f5', 'user', 'fu3', 1));
-  await fresh.addMessage('fs1', msg('fsum', 'assistant', '[Summary] s', 2), true);
+  await fresh.addMessage(
+    'fs1',
+    msg('fsum', 'assistant', '[Summary] s', 2),
+    true,
+  );
 
   loaded = await fresh.getSessionById('fs1');
-  expect(contents(loaded!.messages)).toEqual(['[Summary] s', 'fu1', 'fa1', 'fu2', 'fa2', 'fu3']);
+  expect(contents(loaded!.messages)).toEqual([
+    '[Summary] s',
+    'fu1',
+    'fa1',
+    'fu2',
+    'fa2',
+    'fu3',
+  ]);
 });
 
 describe('preserveSpeakerNames', () => {
@@ -188,7 +222,7 @@ describe('preserveSpeakerNames', () => {
       'm2',
       'a1 (deck)',
       500_002,
-      [{id: 'v1', content: 'a1 variant', timestamp: 500_100}],
+      [{ id: 'v1', content: 'a1 variant', timestamp: 500_100 }],
       undefined,
       undefined,
       'qc-dead',

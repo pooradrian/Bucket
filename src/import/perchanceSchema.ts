@@ -1,12 +1,12 @@
-import {Character} from '../CharacterEditor';
-import {generateId} from '../Database';
+import { Character } from '../CharacterEditor';
+import { generateId } from '../Database';
 
 export interface PerchanceCharacter {
   name: string;
   roleInstruction: string;
   generalWritingInstructions: string;
-  initialMessages: Array<{author: string; content: string}>;
-  avatar: {url: string; size: number; shape: string};
+  initialMessages: Array<{ author: string; content: string }>;
+  avatar: { url: string; size: number; shape: string };
   loreBookUrls: string[];
   id: number;
   [key: string]: unknown;
@@ -32,7 +32,8 @@ export interface PerchanceMessage {
 }
 
 export function parsePerchanceCharacter(pChar: PerchanceCharacter): Character {
-  const initialMessage = pChar.initialMessages?.find(m => m.author === 'ai')?.content || '';
+  const initialMessage =
+    pChar.initialMessages?.find(m => m.author === 'ai')?.content || '';
   const writingInstructions = pChar.generalWritingInstructions || '';
   return {
     id: generateId(),
@@ -42,7 +43,9 @@ export function parsePerchanceCharacter(pChar: PerchanceCharacter): Character {
     scenario: '',
     initialMessage,
     exampleMessages: '',
-    customFields: writingInstructions ? [{id: 'writingStyle', value: writingInstructions}] : [],
+    customFields: writingInstructions
+      ? [{ id: 'writingStyle', value: writingInstructions }]
+      : [],
     lorebookIds: [],
   };
 }

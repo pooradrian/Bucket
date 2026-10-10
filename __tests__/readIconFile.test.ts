@@ -1,5 +1,5 @@
 import RNFS from 'react-native-fs';
-import {readIconFile} from '../src/import/util';
+import { readIconFile } from '../src/import/util';
 
 const fsReadFile = RNFS.readFile as jest.Mock;
 
@@ -10,12 +10,16 @@ afterEach(() => {
 
 test('data URIs return their embedded bytes without touching the filesystem', async () => {
   const spy = jest.spyOn(globalThis, 'fetch');
-  await expect(readIconFile('data:image/png;base64,aWNvbg==')).resolves.toBe('aWNvbg==');
+  await expect(readIconFile('data:image/png;base64,aWNvbg==')).resolves.toBe(
+    'aWNvbg==',
+  );
   expect(spy).not.toHaveBeenCalled();
 });
 
 test('falls back to the filesystem when fetch cannot read the uri', async () => {
-  jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unsupported scheme'));
+  jest
+    .spyOn(globalThis, 'fetch')
+    .mockRejectedValue(new Error('unsupported scheme'));
   fsReadFile.mockResolvedValue('Zm9v');
   await expect(readIconFile('content://media/images/1')).resolves.toBe('Zm9v');
   expect(fsReadFile).toHaveBeenCalledWith('content://media/images/1', 'base64');

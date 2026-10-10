@@ -1,6 +1,6 @@
-import {Text, TouchableOpacity, View} from 'react-native';
-import {GroupChat} from '../store';
-import {useTheme} from '../ThemeContext';
+import { Text, TouchableOpacity, View } from 'react-native';
+import { GroupChat } from '../store';
+import { useTheme } from '../ThemeContext';
 
 interface GroupCardProps {
   item: GroupChat;
@@ -28,16 +28,15 @@ export default function GroupCard({
       <View
         style={[
           st.characterAvatar,
-          {justifyContent: 'center', alignItems: 'center'},
-        ]}>
-        <Text style={{color: st.textMuted.color, fontSize: 20}}>
+          { justifyContent: 'center', alignItems: 'center' },
+        ]}
+      >
+        <Text style={{ color: st.textMuted.color, fontSize: 20 }}>
           {item.characterIds.length}
         </Text>
       </View>
       <View style={st.characterInfo}>
-        <TouchableOpacity
-          onPress={() => onOpenChat(item)}
-          activeOpacity={0.7}>
+        <TouchableOpacity onPress={() => onOpenChat(item)} activeOpacity={0.7}>
           <Text style={st.characterName}>{item.name}</Text>
           {item.description ? (
             <Text style={st.characterDesc} numberOfLines={2}>
@@ -55,12 +54,14 @@ export default function GroupCard({
             <>
               <TouchableOpacity
                 onPress={() => onConfirmDelete(item.id)}
-                style={st.confirmBtn}>
+                style={st.confirmBtn}
+              >
                 <Text style={st.confirmBtnText}>Confirm</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={onCancelDelete}
-                style={[st.cardActionBtn, st.cardActionBtnLast]}>
+                style={[st.cardActionBtn, st.cardActionBtnLast]}
+              >
                 <Text style={st.cardActionBtnText}>Cancel</Text>
               </TouchableOpacity>
             </>
@@ -68,12 +69,14 @@ export default function GroupCard({
             <>
               <TouchableOpacity
                 onPress={() => onEdit(item)}
-                style={st.cardActionBtn}>
+                style={st.cardActionBtn}
+              >
                 <Text style={st.cardActionBtnText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onTriggerDelete(item.id)}
-                style={[st.cardActionBtn, st.cardActionBtnLast]}>
+                style={[st.cardActionBtn, st.cardActionBtnLast]}
+              >
                 <Text style={st.cardActionBtnTextDanger}>Delete</Text>
               </TouchableOpacity>
             </>

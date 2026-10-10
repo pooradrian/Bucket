@@ -1,11 +1,13 @@
 jest.mock('react-native-keychain', () => ({
   getGenericPassword: jest.fn().mockResolvedValue(false),
   setGenericPassword: jest.fn().mockResolvedValue(true),
-  ACCESSIBLE: {WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly'},
+  ACCESSIBLE: {
+    WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly',
+  },
 }));
 
 import * as Keychain from 'react-native-keychain';
-import {encrypt, decrypt} from '../src/Crypto';
+import { encrypt, decrypt } from '../src/Crypto';
 
 beforeAll(() => {
   (Keychain.getGenericPassword as jest.Mock).mockResolvedValue(false);
@@ -37,7 +39,8 @@ describe('encrypt / decrypt round-trip', () => {
 describe('decrypt tamper detection', () => {
   test('rejects a modified ciphertext (GCM auth tag mismatch)', async () => {
     const ciphertext = await encrypt('secret');
-    const tampered = ciphertext.slice(0, -1) + (ciphertext.slice(-1) === '0' ? '1' : '0');
+    const tampered =
+      ciphertext.slice(0, -1) + (ciphertext.slice(-1) === '0' ? '1' : '0');
     await expect(decrypt(tampered)).rejects.toThrow();
   });
 
@@ -53,6 +56,8 @@ describe('key caching', () => {
     await encrypt('a');
     await encrypt('b');
     await encrypt('c');
-    expect((Keychain.getGenericPassword as jest.Mock).mock.calls.length).toBe(before);
+    expect((Keychain.getGenericPassword as jest.Mock).mock.calls.length).toBe(
+      before,
+    );
   });
 });

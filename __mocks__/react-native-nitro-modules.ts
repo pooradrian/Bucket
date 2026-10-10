@@ -1,4 +1,4 @@
-import {createCipheriv, createDecipheriv, randomBytes} from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 const NONCE_HEX_LEN = 24;
 const TAG_HEX_LEN = 32;
@@ -8,8 +8,15 @@ const NativeCrypto = {
     const key = Buffer.from(keyHex, 'hex');
     const nonce = randomBytes(12);
     const cipher = createCipheriv('aes-256-gcm', key, nonce);
-    const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-    return nonce.toString('hex') + ciphertext.toString('hex') + cipher.getAuthTag().toString('hex');
+    const ciphertext = Buffer.concat([
+      cipher.update(plaintext, 'utf8'),
+      cipher.final(),
+    ]);
+    return (
+      nonce.toString('hex') +
+      ciphertext.toString('hex') +
+      cipher.getAuthTag().toString('hex')
+    );
   },
   decrypt(ciphertextHex: string, keyHex: string): string {
     const key = Buffer.from(keyHex, 'hex');
@@ -21,7 +28,10 @@ const NativeCrypto = {
     );
     const decipher = createDecipheriv('aes-256-gcm', key, nonce);
     decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(ciphertext),
+      decipher.final(),
+    ]).toString('utf8');
   },
 };
 

@@ -1,8 +1,9 @@
 import * as Keychain from 'react-native-keychain';
-import {NitroModules} from 'react-native-nitro-modules';
-import type {NativeCrypto} from './NativeCrypto.nitro';
+import { NitroModules } from 'react-native-nitro-modules';
+import type { NativeCrypto } from './NativeCrypto.nitro';
 
-const NativeCryptoModule = NitroModules.createHybridObject<NativeCrypto>('NativeCrypto');
+const NativeCryptoModule =
+  NitroModules.createHybridObject<NativeCrypto>('NativeCrypto');
 
 /**
  * ── Threat model ──────────────────────────────────────────────────
@@ -55,7 +56,9 @@ async function getKey(): Promise<Uint8Array> {
     return cachedKey;
   }
 
-  const existing = await Keychain.getGenericPassword({service: KEYCHAIN_SERVICE});
+  const existing = await Keychain.getGenericPassword({
+    service: KEYCHAIN_SERVICE,
+  });
   let rawKey: string;
 
   if (existing) {

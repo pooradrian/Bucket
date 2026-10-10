@@ -1,8 +1,12 @@
-import {loadPromptConfig} from '../PromptHandler';
-import {getLorebookEntriesFromDB, getAllLorebooksFromDB} from '../Database';
-import {embeddingsUrl, getEmbeddings} from '../Endpoint';
-import {rankLorebookEntries, MIN_SIMILARITY, ScoredEntry} from '../RAGHandler';
-import {CommandHandler} from './types';
+import { loadPromptConfig } from '../PromptHandler';
+import { getLorebookEntriesFromDB, getAllLorebooksFromDB } from '../Database';
+import { embeddingsUrl, getEmbeddings } from '../Endpoint';
+import {
+  rankLorebookEntries,
+  MIN_SIMILARITY,
+  ScoredEntry,
+} from '../RAGHandler';
+import { CommandHandler } from './types';
 
 export const embedCommand: CommandHandler = async (rest, env, io) => {
   const text = rest.join(' ') || 'The quick brown fox jumps over the lazy dog.';
@@ -12,7 +16,10 @@ export const embedCommand: CommandHandler = async (rest, env, io) => {
     return;
   }
   const model = config.ragModel?.trim() || config.model;
-  io.log('info', `POST ${embeddingsUrl(config.apiUrl)}\nModel: ${model}\nInput: "${text}"`);
+  io.log(
+    'info',
+    `POST ${embeddingsUrl(config.apiUrl)}\nModel: ${model}\nInput: "${text}"`,
+  );
   try {
     const t0 = performance.now();
     const vectors = await getEmbeddings([text], model, config);
@@ -31,8 +38,14 @@ export const embedCommand: CommandHandler = async (rest, env, io) => {
       ].join('\n'),
     );
   } catch (e: unknown) {
-    io.log('error', `Embeddings failed: ${e instanceof Error ? e.message : String(e)}`);
-    io.log('info', 'Set an embedding model with config.set ragmodel <name> — your server must expose the /embeddings endpoint.');
+    io.log(
+      'error',
+      `Embeddings failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    io.log(
+      'info',
+      'Set an embedding model with config.set ragmodel <name> — your server must expose the /embeddings endpoint.',
+    );
   }
 };
 
@@ -44,7 +57,9 @@ export const ragCommand: CommandHandler = async (rest, env, io) => {
     return;
   }
   const lorebooks = await getAllLorebooksFromDB();
-  const lb = lorebooks.find(l => l.id === id || l.fileName.toLowerCase().startsWith(id.toLowerCase()));
+  const lb = lorebooks.find(
+    l => l.id === id || l.fileName.toLowerCase().startsWith(id.toLowerCase()),
+  );
   if (!lb) {
     io.log('error', `Lorebook "${id}" not found.`);
     return;
@@ -73,12 +88,19 @@ export const ragCommand: CommandHandler = async (rest, env, io) => {
 
   try {
     const t0 = performance.now();
-    const ranked: ScoredEntry[] = await rankLorebookEntries(query, entries, ragConfig, config);
+    const ranked: ScoredEntry[] = await rankLorebookEntries(
+      query,
+      entries,
+      ragConfig,
+      config,
+    );
     const ms = (performance.now() - t0).toFixed(0);
 
     const lines = ranked.map((r, i) => {
-      const injected = i < maxResults && r.score >= MIN_SIMILARITY ? '=> ' : '   ';
-      const snippet = r.entry.text.slice(0, 60) + (r.entry.text.length > 60 ? '...' : '');
+      const injected =
+        i < maxResults && r.score >= MIN_SIMILARITY ? '=> ' : '   ';
+      const snippet =
+        r.entry.text.slice(0, 60) + (r.entry.text.length > 60 ? '...' : '');
       return `  ${injected}${r.score.toFixed(4)}  #${r.entry.id + 1}  ${snippet}`;
     });
     const above = ranked.filter(r => r.score >= MIN_SIMILARITY).length;
@@ -93,7 +115,13 @@ export const ragCommand: CommandHandler = async (rest, env, io) => {
       ].join('\n'),
     );
   } catch (e: unknown) {
-    io.log('error', `RAG ranking failed: ${e instanceof Error ? e.message : String(e)}`);
-    io.log('info', 'Set an embedding model with config.set ragmodel <name> — your server must expose the /embeddings endpoint.');
+    io.log(
+      'error',
+      `RAG ranking failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    io.log(
+      'info',
+      'Set an embedding model with config.set ragmodel <name> — your server must expose the /embeddings endpoint.',
+    );
   }
 };

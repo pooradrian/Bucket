@@ -1,7 +1,12 @@
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 
-import {parseV1Json, parseV2Json, serializeV1, serializeV2} from '../src/import/characterCardSchema';
-import {Character} from '../src/CharacterEditor';
+import {
+  parseV1Json,
+  parseV2Json,
+  serializeV1,
+  serializeV2,
+} from '../src/import/characterCardSchema';
+import { Character } from '../src/CharacterEditor';
 
 const fullChar: Character = {
   id: 'char-1',
@@ -11,7 +16,7 @@ const fullChar: Character = {
   scenario: 'in a forest',
   initialMessage: 'Hello there!',
   exampleMessages: 'user: hi',
-  customFields: [{id: 'writingStyle', value: 'concise'}],
+  customFields: [{ id: 'writingStyle', value: 'concise' }],
   lorebookIds: ['lb-1', 'lb-2'],
   icon: 'file:///icon.png',
 };
@@ -39,13 +44,13 @@ describe('parseV1Json', () => {
   });
 
   it('defaults missing optional fields to empty strings', () => {
-    const char = parseV1Json({name: 'X'});
+    const char = parseV1Json({ name: 'X' });
     expect(char.description).toBe('');
     expect(char.initialMessage).toBe('');
   });
 
   it('uses provided id when given', () => {
-    expect(parseV1Json({name: 'X'}, 'fixed-id').id).toBe('fixed-id');
+    expect(parseV1Json({ name: 'X' }, 'fixed-id').id).toBe('fixed-id');
   });
 });
 
@@ -53,27 +58,27 @@ describe('parseV2Json', () => {
   it('reads from data envelope', () => {
     const char = parseV2Json({
       spec: 'chara_card_v2',
-      data: {name: 'V2', first_mes: 'greet'},
+      data: { name: 'V2', first_mes: 'greet' },
     });
     expect(char.name).toBe('V2');
     expect(char.initialMessage).toBe('greet');
   });
 
   it('falls back to top-level fields when data is absent', () => {
-    const char = parseV2Json({name: 'Flat'});
+    const char = parseV2Json({ name: 'Flat' });
     expect(char.name).toBe('Flat');
   });
 
   it('maps extensions.lorebookIds array', () => {
     const char = parseV2Json({
-      data: {name: 'X', extensions: {lorebookIds: ['a', 'b']}},
+      data: { name: 'X', extensions: { lorebookIds: ['a', 'b'] } },
     });
     expect(char.lorebookIds).toEqual(['a', 'b']);
   });
 
   it('wraps single extensions.lorebookId into an array', () => {
     const char = parseV2Json({
-      data: {name: 'X', extensions: {lorebookId: 'solo'}},
+      data: { name: 'X', extensions: { lorebookId: 'solo' } },
     });
     expect(char.lorebookIds).toEqual(['solo']);
   });
@@ -82,14 +87,18 @@ describe('parseV2Json', () => {
     const char = parseV2Json({
       data: {
         name: 'X',
-        extensions: {bucket: {customFields: [{id: 'writingStyle', value: 'poetic'}]}},
+        extensions: {
+          bucket: { customFields: [{ id: 'writingStyle', value: 'poetic' }] },
+        },
       },
     });
-    expect(char.customFields).toEqual([{id: 'writingStyle', value: 'poetic'}]);
+    expect(char.customFields).toEqual([
+      { id: 'writingStyle', value: 'poetic' },
+    ]);
   });
 
   it('defaults customFields to empty when bucket extension is absent', () => {
-    const char = parseV2Json({data: {name: 'X'}});
+    const char = parseV2Json({ data: { name: 'X' } });
     expect(char.customFields).toEqual([]);
   });
 });
@@ -107,7 +116,7 @@ describe('serializeV1', () => {
   });
 
   it('coerces undefined exampleMessages to empty string', () => {
-    const json = serializeV1({...fullChar, exampleMessages: undefined});
+    const json = serializeV1({ ...fullChar, exampleMessages: undefined });
     expect(json.mes_example).toBe('');
   });
 });

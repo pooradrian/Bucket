@@ -1,14 +1,17 @@
 import RNFS from 'react-native-fs';
 import pako from 'pako';
-import {Character} from '../CharacterEditor';
-import {getCustomField} from '../CustomFields';
-import {generateId, saveCharacterToDB} from '../Database';
-import {readPngCharaMetadata, isPngSignature} from '../PngMetadata';
-import {parseV1Json, parseV2Json} from './characterCardSchema';
-import {isGzipSignature, readIconFile} from './util';
-import {ImportFormat, ImportResult} from './types';
+import { Character } from '../CharacterEditor';
+import { getCustomField } from '../CustomFields';
+import { generateId, saveCharacterToDB } from '../Database';
+import { readPngCharaMetadata, isPngSignature } from '../PngMetadata';
+import { parseV1Json, parseV2Json } from './characterCardSchema';
+import { isGzipSignature, readIconFile } from './util';
+import { ImportFormat, ImportResult } from './types';
 
-export async function detectImportFormat(fileUri: string, fileName: string): Promise<ImportFormat> {
+export async function detectImportFormat(
+  fileUri: string,
+  fileName: string,
+): Promise<ImportFormat> {
   if (fileName.endsWith('.buk')) return 'buk';
   if (fileName.toLowerCase().endsWith('.txt')) return 'lorebook';
 
@@ -36,13 +39,18 @@ export async function detectImportFormat(fileUri: string, fileName: string): Pro
     }
     if (json.spec === 'chara_card_v2') return 'ccv2';
     if (json.name || json.first_mes || json.description) return 'ccv1';
-  } catch (e) { console.warn('Failed to detect import format:', e); }
+  } catch (e) {
+    console.warn('Failed to detect import format:', e);
+  }
 
   throw new Error('Unrecognized file format');
 }
 
 export async function importCharacter(fileUri: string): Promise<ImportResult> {
-  const format = await detectImportFormat(fileUri, fileUri.split('/').pop() || '');
+  const format = await detectImportFormat(
+    fileUri,
+    fileUri.split('/').pop() || '',
+  );
 
   if (format === 'buk') {
     throw new Error('Use importBuk() for .buk files');
@@ -67,10 +75,28 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
         const json = JSON.parse(metadata);
         char = parseV2Json(json);
       } else {
-        char = {id: generateId(), name: 'Unknown Character', description: '', personality: '', scenario: '', initialMessage: '', customFields: [], lorebookIds: []};
+        char = {
+          id: generateId(),
+          name: 'Unknown Character',
+          description: '',
+          personality: '',
+          scenario: '',
+          initialMessage: '',
+          customFields: [],
+          lorebookIds: [],
+        };
       }
     } else {
-      char = {id: generateId(), name: 'Unknown Character', description: '', personality: '', scenario: '', initialMessage: '', customFields: [], lorebookIds: []};
+      char = {
+        id: generateId(),
+        name: 'Unknown Character',
+        description: '',
+        personality: '',
+        scenario: '',
+        initialMessage: '',
+        customFields: [],
+        lorebookIds: [],
+      };
     }
   } else {
     const text = new TextDecoder().decode(buffer);
@@ -100,5 +126,5 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
     persona_id: char.personaId || '',
   });
 
-  return {character: char, format};
+  return { character: char, format };
 }

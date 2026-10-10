@@ -10,7 +10,12 @@ export function formatThinkingDuration(ms: number): string {
   return s < 10 ? `${+s.toFixed(1)}s` : `${Math.round(s)}s`;
 }
 
-const NO_THINKING: SplitThinking = {hasThinking: false, thinking: '', answer: '', open: false};
+const NO_THINKING: SplitThinking = {
+  hasThinking: false,
+  thinking: '',
+  answer: '',
+  open: false,
+};
 
 export function splitThinking(content: string): SplitThinking {
   const openMatch = /<think>/i.exec(content);
@@ -28,7 +33,9 @@ export function splitThinking(content: string): SplitThinking {
   return {
     hasThinking: true,
     thinking: content.slice(openEnd, openEnd + closeMatch.index).trim(),
-    answer: content.slice(openEnd + closeMatch.index + closeMatch[0].length).trim(),
+    answer: content
+      .slice(openEnd + closeMatch.index + closeMatch[0].length)
+      .trim(),
     open: false,
   };
 }

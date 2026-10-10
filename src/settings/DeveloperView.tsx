@@ -1,14 +1,17 @@
-import {Text, TouchableOpacity} from 'react-native';
-import {useAppStore} from '../store';
-import {useTheme} from '../ThemeContext';
-import {BoolToggle} from './ui';
+import { Text, TouchableOpacity } from 'react-native';
+import { useAppStore } from '../store';
+import { useTheme } from '../ThemeContext';
+import { BoolToggle } from './ui';
 
 interface DeveloperViewProps {
   accent: string;
   onOpenDebugger?: () => void;
 }
 
-export default function DeveloperView({accent, onOpenDebugger}: DeveloperViewProps) {
+export default function DeveloperView({
+  accent,
+  onOpenDebugger,
+}: DeveloperViewProps) {
   const st = useTheme();
   const appSettings = useAppStore(s => s.appSettings);
   const toggleDebugLogging = useAppStore(s => s.toggleDebugLogging);

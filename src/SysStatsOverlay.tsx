@@ -1,7 +1,13 @@
-import {useEffect, useRef, useState, useCallback} from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, NativeModules} from 'react-native';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  NativeModules,
+} from 'react-native';
 
-const {SysStats} = NativeModules;
+const { SysStats } = NativeModules;
 
 interface Stats {
   fps: number;
@@ -19,7 +25,10 @@ interface SysStatsOverlayProps {
   onClose: () => void;
 }
 
-export default function SysStatsOverlay({visible, onClose}: SysStatsOverlayProps) {
+export default function SysStatsOverlay({
+  visible,
+  onClose,
+}: SysStatsOverlayProps) {
   const [stats, setStats] = useState<Stats | null>(null);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
@@ -35,7 +44,7 @@ export default function SysStatsOverlay({visible, onClose}: SysStatsOverlayProps
       const fps = Math.round((frameCountRef.current * 1000) / elapsed);
       frameCountRef.current = 0;
       lastTimeRef.current = now;
-      setStats(prev => (prev ? {...prev, fps} : null));
+      setStats(prev => (prev ? { ...prev, fps } : null));
     }
   }, []);
 
@@ -98,13 +107,15 @@ export default function SysStatsOverlay({visible, onClose}: SysStatsOverlayProps
     return `${mb.toFixed(1)} MB`;
   };
 
-  const jsPercent = stats.jsHeapTotal > 0
-    ? ((stats.jsHeapUsed / stats.jsHeapTotal) * 100).toFixed(1)
-    : '0';
+  const jsPercent =
+    stats.jsHeapTotal > 0
+      ? ((stats.jsHeapUsed / stats.jsHeapTotal) * 100).toFixed(1)
+      : '0';
 
-  const nativePercent = stats.nativeHeapTotal > 0
-    ? ((stats.nativeHeapAllocated / stats.nativeHeapTotal) * 100).toFixed(1)
-    : '0';
+  const nativePercent =
+    stats.nativeHeapTotal > 0
+      ? ((stats.nativeHeapAllocated / stats.nativeHeapTotal) * 100).toFixed(1)
+      : '0';
 
   return (
     <View style={styles.container}>
@@ -128,21 +139,22 @@ export default function SysStatsOverlay({visible, onClose}: SysStatsOverlayProps
             {formatMB(stats.jsHeapUsed)} / {formatMB(stats.jsHeapTotal)}
           </Text>
         </View>
-        <Text style={styles.subValue}>{jsPercent}% of {formatMB(stats.jsHeapMax)} max</Text>
+        <Text style={styles.subValue}>
+          {jsPercent}% of {formatMB(stats.jsHeapMax)} max
+        </Text>
         <View style={styles.divider} />
         <View style={styles.row}>
           <Text style={styles.label}>Native Heap</Text>
           <Text style={styles.value}>
-            {formatMB(stats.nativeHeapAllocated)} / {formatMB(stats.nativeHeapTotal)}
+            {formatMB(stats.nativeHeapAllocated)} /{' '}
+            {formatMB(stats.nativeHeapTotal)}
           </Text>
         </View>
         <Text style={styles.subValue}>{nativePercent}% allocated</Text>
         <View style={styles.divider} />
         <View style={styles.row}>
           <Text style={styles.label}>CPU</Text>
-          <Text style={styles.value}>
-            {stats.numProcessors} cores
-          </Text>
+          <Text style={styles.value}>{stats.numProcessors} cores</Text>
         </View>
         <Text style={styles.subValue}>
           Process time: {(stats.cpuTimeMs / 1000).toFixed(1)}s
@@ -171,7 +183,7 @@ const styles = StyleSheet.create({
     zIndex: 99999,
     elevation: 99999,
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
   },

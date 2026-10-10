@@ -1,16 +1,26 @@
-import {useEffect, useState} from 'react';
-import {FlatList, Image, KeyboardAvoidingView, Modal, ScrollView, Text, TextInput, TouchableOpacity, View} from 'react-native';
-import {launchImageLibrary} from 'react-native-image-picker';
+import { useEffect, useState } from 'react';
+import {
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
-import {SessionSummary} from '../Database';
-import {useTheme} from '../ThemeContext';
-import {Character} from '../CharacterEditor';
-import {QuickCharacter} from '../useChat';
-import {formatRelativeTime} from '../relativeTime';
+import { SessionSummary } from '../Database';
+import { useTheme } from '../ThemeContext';
+import { Character } from '../CharacterEditor';
+import { QuickCharacter } from '../useChat';
+import { formatRelativeTime } from '../relativeTime';
 
 type HistoryTab = 'threads' | 'characters';
 
@@ -28,8 +38,21 @@ interface HistoryModalProps {
   onConvertToGroup?: () => void;
   onEditGroup?: () => void;
   onClose: () => void;
-  onCreateQC: (qc: {name: string; description: string; personality: string; icon?: string}) => void;
-  onUpdateQC: (id: string, qc: {name: string; description: string; personality: string; icon?: string}) => void;
+  onCreateQC: (qc: {
+    name: string;
+    description: string;
+    personality: string;
+    icon?: string;
+  }) => void;
+  onUpdateQC: (
+    id: string,
+    qc: {
+      name: string;
+      description: string;
+      personality: string;
+      icon?: string;
+    },
+  ) => void;
   onToggleQCStar: (id: string) => void;
   onDeleteQC: (id: string) => void;
 }
@@ -63,16 +86,21 @@ export default function HistoryModal({
   const [qcPersonality, setQcPersonality] = useState('');
   const [qcIcon, setQcIcon] = useState('');
   const [editingQcId, setEditingQcId] = useState<string | null>(null);
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState<{id: string; draft: string} | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(
+    null,
+  );
+  const [renaming, setRenaming] = useState<{
+    id: string;
+    draft: string;
+  } | null>(null);
 
   const historyContentStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: historySlide.value}],
+    transform: [{ translateY: historySlide.value }],
   }));
 
   useEffect(() => {
     if (visible) {
-      historySlide.value = withTiming(0, {duration: 250});
+      historySlide.value = withTiming(0, { duration: 250 });
     } else {
       historySlide.value = 300;
       setTab('threads');
@@ -135,14 +163,17 @@ export default function HistoryModal({
     setRenaming(null);
   };
 
-  const renderSessionRow = ({item}: {item: SessionSummary}) => {
+  const renderSessionRow = ({ item }: { item: SessionSummary }) => {
     const isActive = item.id === activeSessionId;
     const confirming = confirmingDeleteId === item.id;
     const date = new Date(item.updatedAt);
     const timeStr =
-      date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) +
+      date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
       ' ' +
-      date.toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'});
+      date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     return (
       <TouchableOpacity
         onPress={() => {
@@ -150,17 +181,19 @@ export default function HistoryModal({
             onSwitchSession(item.id);
           }
         }}
-        onLongPress={() => setRenaming({id: item.id, draft: item.name})}
-        style={[st.sessionRow, isActive && st.sessionRowActive]}>
+        onLongPress={() => setRenaming({ id: item.id, draft: item.name })}
+        style={[st.sessionRow, isActive && st.sessionRowActive]}
+      >
         <View style={st.sessionInfo}>
           <Text
             numberOfLines={1}
-            style={isActive ? st.sessionDateActive : st.sessionDate}>
+            style={isActive ? st.sessionDateActive : st.sessionDate}
+          >
             {item.name || timeStr}
           </Text>
           <Text style={st.sessionMeta}>
-            {formatRelativeTime(item.updatedAt)} · {item.messageCount}{' '}
-            message{item.messageCount !== 1 ? 's' : ''}
+            {formatRelativeTime(item.updatedAt)} · {item.messageCount} message
+            {item.messageCount !== 1 ? 's' : ''}
           </Text>
           {!confirming && item.preview ? (
             <Text style={st.sessionPreview} numberOfLines={1}>
@@ -172,25 +205,36 @@ export default function HistoryModal({
           <View style={st.sessionActions}>
             <TouchableOpacity
               onPress={() => onDeleteSession(item.id)}
-              style={[st.sessionConfirmBtn, st.sessionConfirmBtnDanger]}>
+              style={[st.sessionConfirmBtn, st.sessionConfirmBtnDanger]}
+            >
               <Text style={st.sessionConfirmBtnText}>Confirm</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setConfirmingDeleteId(null)}
-              style={[st.sessionConfirmBtn, st.sessionConfirmBtnNeutral]}>
-              <Text style={[st.sessionConfirmBtnText, st.sessionConfirmBtnTextNeutral]}>Cancel</Text>
+              style={[st.sessionConfirmBtn, st.sessionConfirmBtnNeutral]}
+            >
+              <Text
+                style={[
+                  st.sessionConfirmBtnText,
+                  st.sessionConfirmBtnTextNeutral,
+                ]}
+              >
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={st.sessionActions}>
             <TouchableOpacity
-              onPress={() => setRenaming({id: item.id, draft: item.name})}
-              style={st.sessionEditBtn}>
+              onPress={() => setRenaming({ id: item.id, draft: item.name })}
+              style={st.sessionEditBtn}
+            >
               <Text style={st.sessionEditBtnText}>{'✎'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setConfirmingDeleteId(item.id)}
-              style={st.sessionDeleteBtn}>
+              style={st.sessionDeleteBtn}
+            >
               <Text style={st.sessionDeleteBtnText}>×</Text>
             </TouchableOpacity>
           </View>
@@ -218,7 +262,8 @@ export default function HistoryModal({
   const renderCharactersTab = () => (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      automaticallyAdjustKeyboardInsets>
+      automaticallyAdjustKeyboardInsets
+    >
       {isGroupChat ? (
         <>
           <Text style={st.historySectionTitle}>Members</Text>
@@ -245,9 +290,12 @@ export default function HistoryModal({
             <View key={qc.id} style={st.historyQCItem}>
               <View style={st.historyQCInfo}>
                 {qc.icon ? (
-                  <Image source={{uri: qc.icon}} style={st.historyQCRowIcon} />
+                  <Image
+                    source={{ uri: qc.icon }}
+                    style={st.historyQCRowIcon}
+                  />
                 ) : null}
-                <View style={{flex: 1}}>
+                <View style={{ flex: 1 }}>
                   <Text style={st.historyQCName}>{qc.name}</Text>
                   {qc.description ? (
                     <Text style={st.historyQCDesc} numberOfLines={1}>
@@ -265,35 +313,54 @@ export default function HistoryModal({
                   setQcIcon(qc.icon || '');
                   setQcFormVisible(true);
                 }}
-                style={st.historyQCActionBtn}>
+                style={st.historyQCActionBtn}
+              >
                 <Text style={st.historyQCActionBtnText}>✎</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onToggleQCStar(qc.id)}
-                style={st.historyQCActionBtn}>
+                style={st.historyQCActionBtn}
+              >
                 <Text
                   style={[
                     st.historyQCActionBtnText,
-                    {color: qc.starred ? '#f39c12' : st.textMuted.color},
-                  ]}>
+                    { color: qc.starred ? '#f39c12' : st.textMuted.color },
+                  ]}
+                >
                   {qc.starred ? '★' : '☆'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onDeleteQC(qc.id)}
-                style={st.historyQCActionBtn}>
-                <Text style={[st.historyQCActionBtnText, {color: st.dangerText.color}]}>×</Text>
+                style={st.historyQCActionBtn}
+              >
+                <Text
+                  style={[
+                    st.historyQCActionBtnText,
+                    { color: st.dangerText.color },
+                  ]}
+                >
+                  ×
+                </Text>
               </TouchableOpacity>
             </View>
           ))}
 
           {qcFormVisible ? (
             <View style={st.historyQCForm}>
-              <TouchableOpacity onPress={handlePickQcIcon} style={st.historyQCIcon}>
+              <TouchableOpacity
+                onPress={handlePickQcIcon}
+                style={st.historyQCIcon}
+              >
                 {qcIcon ? (
-                  <Image source={{uri: qcIcon}} style={st.historyQCIconImage} />
+                  <Image
+                    source={{ uri: qcIcon }}
+                    style={st.historyQCIconImage}
+                  />
                 ) : (
-                  <Text style={st.historyQCIconPlaceholder}>Tap to pick image</Text>
+                  <Text style={st.historyQCIconPlaceholder}>
+                    Tap to pick image
+                  </Text>
                 )}
               </TouchableOpacity>
               <TextInput
@@ -327,11 +394,17 @@ export default function HistoryModal({
                     setQcIcon('');
                     setEditingQcId(null);
                   }}
-                  style={st.historyQCFormBtn}>
+                  style={st.historyQCFormBtn}
+                >
                   <Text style={st.historyQCFormBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleCreateQC} style={st.historyQCFormBtn}>
-                  <Text style={st.historyQCFormBtnText}>{editingQcId ? 'Save' : 'Add'}</Text>
+                <TouchableOpacity
+                  onPress={handleCreateQC}
+                  style={st.historyQCFormBtn}
+                >
+                  <Text style={st.historyQCFormBtnText}>
+                    {editingQcId ? 'Save' : 'Add'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -345,7 +418,8 @@ export default function HistoryModal({
                 setEditingQcId(null);
                 setQcFormVisible(true);
               }}
-              style={st.newChatBtn}>
+              style={st.newChatBtn}
+            >
               <Text style={st.newChatBtnText}>+ Quick Character</Text>
             </TouchableOpacity>
           )}
@@ -365,77 +439,94 @@ export default function HistoryModal({
       visible={visible}
       animationType="none"
       transparent
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
-        style={{flex: 1}}
+        style={{ flex: 1 }}
         behavior="padding"
-        keyboardVerticalOffset={0}>
-      <View style={st.historyModalOverlay}>
-        <Animated.View style={[st.historyModalContent, historyContentStyle]}>
-          <View style={st.historyHeader}>
-            <Text style={st.historyHeaderText}>Chat History</Text>
-            <TouchableOpacity onPress={onClose} style={st.historyCloseBtn}>
-              <Text style={st.historyCloseBtnText}>×</Text>
-            </TouchableOpacity>
-          </View>
+        keyboardVerticalOffset={0}
+      >
+        <View style={st.historyModalOverlay}>
+          <Animated.View style={[st.historyModalContent, historyContentStyle]}>
+            <View style={st.historyHeader}>
+              <Text style={st.historyHeaderText}>Chat History</Text>
+              <TouchableOpacity onPress={onClose} style={st.historyCloseBtn}>
+                <Text style={st.historyCloseBtnText}>×</Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={st.historyTabs}>
-            <TouchableOpacity
-              onPress={() => switchTab('threads')}
-              style={[st.historyTabBtn, tab === 'threads' && st.historyTabBtnActive]}>
-              <Text
+            <View style={st.historyTabs}>
+              <TouchableOpacity
+                onPress={() => switchTab('threads')}
                 style={[
-                  st.historyTabBtnText,
-                  tab === 'threads' && st.historyTabBtnTextActive,
-                ]}>
-                Threads
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => switchTab('characters')}
-              style={[st.historyTabBtn, tab === 'characters' && st.historyTabBtnActive]}>
-              <Text
+                  st.historyTabBtn,
+                  tab === 'threads' && st.historyTabBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    st.historyTabBtnText,
+                    tab === 'threads' && st.historyTabBtnTextActive,
+                  ]}
+                >
+                  Threads
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => switchTab('characters')}
                 style={[
-                  st.historyTabBtnText,
-                  tab === 'characters' && st.historyTabBtnTextActive,
-                ]}>
-                Characters
-              </Text>
-            </TouchableOpacity>
-          </View>
+                  st.historyTabBtn,
+                  tab === 'characters' && st.historyTabBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    st.historyTabBtnText,
+                    tab === 'characters' && st.historyTabBtnTextActive,
+                  ]}
+                >
+                  Characters
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-          {tab === 'threads' ? renderThreadsTab() : renderCharactersTab()}
-        </Animated.View>
+            {tab === 'threads' ? renderThreadsTab() : renderCharactersTab()}
+          </Animated.View>
 
-        {renaming && (
-          <View style={st.historyPopupOverlay}>
-            <View style={st.historyPopupCard}>
-              <Text style={st.historyPopupTitle}>Rename Chat</Text>
-              <TextInput
-                style={st.historyQCInput}
-                placeholder="Chat name..."
-                placeholderTextColor={st.textMuted.color}
-                value={renaming.draft}
-                onChangeText={draft => setRenaming({...renaming, draft})}
-                autoFocus
-                onSubmitEditing={handleRenameSave}
-              />
-              <View style={st.historyQCFormActions}>
-                <TouchableOpacity
-                  onPress={() => setRenaming(null)}
-                  style={st.historyQCFormBtn}>
-                  <Text style={st.historyQCFormBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleRenameSave}
-                  style={[st.historyQCFormBtn, !renaming.draft.trim() && {opacity: 0.4}]}>
-                  <Text style={st.historyQCFormBtnText}>Save</Text>
-                </TouchableOpacity>
+          {renaming && (
+            <View style={st.historyPopupOverlay}>
+              <View style={st.historyPopupCard}>
+                <Text style={st.historyPopupTitle}>Rename Chat</Text>
+                <TextInput
+                  style={st.historyQCInput}
+                  placeholder="Chat name..."
+                  placeholderTextColor={st.textMuted.color}
+                  value={renaming.draft}
+                  onChangeText={draft => setRenaming({ ...renaming, draft })}
+                  autoFocus
+                  onSubmitEditing={handleRenameSave}
+                />
+                <View style={st.historyQCFormActions}>
+                  <TouchableOpacity
+                    onPress={() => setRenaming(null)}
+                    style={st.historyQCFormBtn}
+                  >
+                    <Text style={st.historyQCFormBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleRenameSave}
+                    style={[
+                      st.historyQCFormBtn,
+                      !renaming.draft.trim() && { opacity: 0.4 },
+                    ]}
+                  >
+                    <Text style={st.historyQCFormBtnText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );

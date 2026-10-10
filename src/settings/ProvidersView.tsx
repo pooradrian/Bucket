@@ -1,10 +1,15 @@
-import {useEffect, useState} from 'react';
+import { useEffect, useState } from 'react';
 
 import ProvidersHandler from '../ProvidersHandler';
-import {PromptConfig, DEFAULT_PROMPT_CONFIG, applyModelField, detachModelPreset} from '../PromptHandler';
-import {getActiveProviderId} from '../SecureStore';
-import {useAppStore} from '../store';
-import {TextField} from './ui';
+import {
+  PromptConfig,
+  DEFAULT_PROMPT_CONFIG,
+  applyModelField,
+  detachModelPreset,
+} from '../PromptHandler';
+import { getActiveProviderId } from '../SecureStore';
+import { useAppStore } from '../store';
+import { TextField } from './ui';
 
 interface ProvidersViewProps {
   promptValues: PromptConfig;
@@ -28,14 +33,16 @@ export default function ProvidersView({
         activeProviderId={activeProviderId}
         onSelect={id => {
           setActiveProviderId(id);
-          setPromptValues(prev => ({...prev, providerId: id}));
+          setPromptValues(prev => ({ ...prev, providerId: id }));
         }}
       />
 
       <TextField
         label="Model"
         value={promptValues.model}
-        onChangeText={text => setPromptValues(prev => applyModelField(prev, text))}
+        onChangeText={text =>
+          setPromptValues(prev => applyModelField(prev, text))
+        }
         placeholder={DEFAULT_PROMPT_CONFIG.model}
       />
 
@@ -43,7 +50,9 @@ export default function ProvidersView({
         label="Temperature"
         value={promptValues.temperature}
         onChangeText={text =>
-          setPromptValues(prev => detachModelPreset(prev, {temperature: text}))
+          setPromptValues(prev =>
+            detachModelPreset(prev, { temperature: text }),
+          )
         }
         placeholder={DEFAULT_PROMPT_CONFIG.temperature}
         keyboardType="decimal-pad"
@@ -51,9 +60,13 @@ export default function ProvidersView({
 
       <TextField
         label="Extra body"
-        note={'Merged into every request body (your keys win). JSON object only, e.g. {"reasoning_effort": "high"}'}
+        note={
+          'Merged into every request body (your keys win). JSON object only, e.g. {"reasoning_effort": "high"}'
+        }
         value={promptValues.extraBody}
-        onChangeText={text => setPromptValues(prev => ({...prev, extraBody: text}))}
+        onChangeText={text =>
+          setPromptValues(prev => ({ ...prev, extraBody: text }))
+        }
         placeholder="{}"
       />
     </>

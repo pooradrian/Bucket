@@ -1,5 +1,5 @@
-import {parseArgs, findCharacter} from '../src/debuggerUtils';
-import {Character} from '../src/CharacterEditor';
+import { parseArgs, findCharacter } from '../src/debuggerUtils';
+import { Character } from '../src/CharacterEditor';
 
 const char = (id: string, name: string): Character => ({
   id,
@@ -16,15 +16,27 @@ const characters = [char('abc', 'Alice'), char('def', 'Bob')];
 
 describe('parseArgs', () => {
   it('splits on spaces', () => {
-    expect(parseArgs('set bgPrimary #fff')).toEqual(['set', 'bgPrimary', '#fff']);
+    expect(parseArgs('set bgPrimary #fff')).toEqual([
+      'set',
+      'bgPrimary',
+      '#fff',
+    ]);
   });
 
   it('preserves quoted segments', () => {
-    expect(parseArgs('say "hello world" foo')).toEqual(['say', 'hello world', 'foo']);
+    expect(parseArgs('say "hello world" foo')).toEqual([
+      'say',
+      'hello world',
+      'foo',
+    ]);
   });
 
   it('handles single quotes', () => {
-    expect(parseArgs("set name 'Bob the Builder'")).toEqual(['set', 'name', 'Bob the Builder']);
+    expect(parseArgs("set name 'Bob the Builder'")).toEqual([
+      'set',
+      'name',
+      'Bob the Builder',
+    ]);
   });
 
   it('returns empty array for empty string', () => {

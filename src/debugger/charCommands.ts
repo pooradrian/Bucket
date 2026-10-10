@@ -1,25 +1,22 @@
-import {ChatMessage} from '../useChat';
-import {
-  buildPrompt,
-  sendToLLM,
-  loadPromptConfig,
-} from '../PromptHandler';
+import { ChatMessage } from '../useChat';
+import { buildPrompt, sendToLLM, loadPromptConfig } from '../PromptHandler';
 import {
   getAllSessionsForCharacter,
   getSessionForCharacter,
   getAllLorebooksFromDB,
 } from '../Database';
-import {findCharacter} from '../debuggerUtils';
-import {getCustomField} from '../CustomFields';
-import {CommandHandler} from './types';
+import { findCharacter } from '../debuggerUtils';
+import { getCustomField } from '../CustomFields';
+import { CommandHandler } from './types';
 
 export const charsCommand: CommandHandler = (rest, env, io) => {
-  const {characters} = env;
+  const { characters } = env;
   if (characters.length === 0) {
     io.log('info', 'No characters found.');
   } else {
     const lines = characters.map(
-      c => `  [${c.id}] ${c.name}${c.description ? ' - ' + c.description.slice(0, 60) : ''}`,
+      c =>
+        `  [${c.id}] ${c.name}${c.description ? ' - ' + c.description.slice(0, 60) : ''}`,
     );
     io.log('output', `Characters (${characters.length}):\n${lines.join('\n')}`);
   }
@@ -38,7 +35,9 @@ export const charCommand: CommandHandler = async (rest, env, io) => {
   }
   const sessions = await getAllSessionsForCharacter(char.id);
   const lorebooks = await getAllLorebooksFromDB();
-  const assignedLorebooks = lorebooks.filter(l => (char.lorebookIds || []).includes(l.id));
+  const assignedLorebooks = lorebooks.filter(l =>
+    (char.lorebookIds || []).includes(l.id),
+  );
   io.log(
     'output',
     [
@@ -74,7 +73,10 @@ export const promptCommand: CommandHandler = async (rest, env, io) => {
   const t0 = performance.now();
   const messages = buildPrompt(char, message, history, config);
   const buildMs = (performance.now() - t0).toFixed(1);
-  io.log('output', `${JSON.stringify(messages, null, 2)}\n\nPrompt built in ${buildMs}ms`);
+  io.log(
+    'output',
+    `${JSON.stringify(messages, null, 2)}\n\nPrompt built in ${buildMs}ms`,
+  );
 };
 
 export const sendCommand: CommandHandler = async (rest, env, io) => {
@@ -102,15 +104,18 @@ export const sendCommand: CommandHandler = async (rest, env, io) => {
   }
   const result = await sendToLLM(char, message, history, config);
   const m = result.metrics;
-  io.log('output', [
-    '\u2500'.repeat(40),
-    result.content,
-    '\u2500'.repeat(40),
-    `  Prompt build:  ${m.promptBuildMs.toFixed(1)}ms`,
-    `  TTFB (ack):    ${m.ttfbMs.toFixed(1)}ms`,
-    `  Body read:     ${m.bodyReadMs.toFixed(1)}ms`,
-    `  Total:         ${m.totalMs.toFixed(1)}ms`,
-  ].join('\n'));
+  io.log(
+    'output',
+    [
+      '\u2500'.repeat(40),
+      result.content,
+      '\u2500'.repeat(40),
+      `  Prompt build:  ${m.promptBuildMs.toFixed(1)}ms`,
+      `  TTFB (ack):    ${m.ttfbMs.toFixed(1)}ms`,
+      `  Body read:     ${m.bodyReadMs.toFixed(1)}ms`,
+      `  Total:         ${m.totalMs.toFixed(1)}ms`,
+    ].join('\n'),
+  );
 };
 
 export const historyCommand: CommandHandler = async (rest, env, io) => {
@@ -130,9 +135,13 @@ export const historyCommand: CommandHandler = async (rest, env, io) => {
       io.log('info', 'No chat history for this character.');
     } else {
       const lines = session.messages.map(
-        (m: {role: string; content: string}) => `[${m.role}] ${m.content.slice(0, 120)}${m.content.length > 120 ? '...' : ''}`,
+        (m: { role: string; content: string }) =>
+          `[${m.role}] ${m.content.slice(0, 120)}${m.content.length > 120 ? '...' : ''}`,
       );
-      io.log('output', `History for ${char.name} (${session.messages.length} messages):\n${lines.join('\n')}`);
+      io.log(
+        'output',
+        `History for ${char.name} (${session.messages.length} messages):\n${lines.join('\n')}`,
+      );
     }
   } catch (e) {
     io.log('error', `Failed to load history: ${e}`);

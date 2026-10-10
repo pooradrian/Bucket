@@ -1,32 +1,42 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, StyleSheet} from 'react-native';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
-import {NavigationContainer} from '@react-navigation/native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
 import pkg from '../package.json';
-import {useAppStore} from './store';
-import {ThemeProvider} from './ThemeContext';
-import {installCrashExport, checkPendingCrashExport} from './CrashExport';
-import {RootNavigator} from './Navigation';
-import {initDB} from './Database';
-import {setIcon} from './IconModule';
+import { useAppStore } from './store';
+import { ThemeProvider } from './ThemeContext';
+import { installCrashExport, checkPendingCrashExport } from './CrashExport';
+import { RootNavigator } from './Navigation';
+import { initDB } from './Database';
+import { setIcon } from './IconModule';
 import SysStatsOverlay from './SysStatsOverlay';
 
 const SPLASH_MIN_MS = 1500;
 const APP_VERSION = pkg.version;
 
-function SplashScreen({bgPrimary, textMuted, textPrimary}: {bgPrimary: string; textMuted: string; textPrimary: string}) {
+function SplashScreen({
+  bgPrimary,
+  textMuted,
+  textPrimary,
+}: {
+  bgPrimary: string;
+  textMuted: string;
+  textPrimary: string;
+}) {
   return (
-    <View style={[styles.splash, {backgroundColor: bgPrimary}]}>
+    <View style={[styles.splash, { backgroundColor: bgPrimary }]}>
       <View style={styles.section}>
-        <Text style={[styles.label, {color: textMuted}]}>Developer</Text>
-        <Text style={[styles.name, {color: textPrimary}]}>Poor Adrian</Text>
+        <Text style={[styles.label, { color: textMuted }]}>Developer</Text>
+        <Text style={[styles.name, { color: textPrimary }]}>Poor Adrian</Text>
       </View>
       <View style={styles.section}>
-        <Text style={[styles.label, {color: textMuted}]}>Special Thanks to</Text>
-        <Text style={[styles.name, {color: textPrimary}]}>Asphodel</Text>
-        <Text style={[styles.name, {color: textPrimary}]}>Sabalan</Text>
+        <Text style={[styles.label, { color: textMuted }]}>
+          Special Thanks to
+        </Text>
+        <Text style={[styles.name, { color: textPrimary }]}>Asphodel</Text>
+        <Text style={[styles.name, { color: textPrimary }]}>Sabalan</Text>
       </View>
-      <Text style={[styles.version, {color: textMuted}]}>v{APP_VERSION}</Text>
+      <Text style={[styles.version, { color: textMuted }]}>v{APP_VERSION}</Text>
     </View>
   );
 }
@@ -81,7 +91,8 @@ export default function App() {
       loadCharacters();
       loadGroupChats();
       loadLorebooks();
-      if (useAppStore.getState().appSettings.dynamicIcon) setIcon(useAppStore.getState().appSettings.themeMode);
+      if (useAppStore.getState().appSettings.dynamicIcon)
+        setIcon(useAppStore.getState().appSettings.themeMode);
     })();
   }, [loadSettings, loadCharacters, loadGroupChats, loadLorebooks]);
 

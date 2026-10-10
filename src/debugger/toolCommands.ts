@@ -1,14 +1,14 @@
-import axios, {AxiosRequestConfig} from 'axios';
-import {loadPromptConfig} from '../PromptHandler';
-import {crashExport} from '../CrashExport';
-import {encrypt, decrypt} from '../Crypto';
+import axios, { AxiosRequestConfig } from 'axios';
+import { loadPromptConfig } from '../PromptHandler';
+import { crashExport } from '../CrashExport';
+import { encrypt, decrypt } from '../Crypto';
 import {
   getEvents,
   loadPersistedEvents,
   clearEvents,
   isLoggingEnabled,
 } from '../EventLogger';
-import {CommandHandler} from './types';
+import { CommandHandler } from './types';
 
 export const testCommand: CommandHandler = async (rest, env, io) => {
   const verboseFlag = rest.includes('--verbose');
@@ -22,33 +22,50 @@ export const testCommand: CommandHandler = async (rest, env, io) => {
   io.log('info', 'Running diagnostics...');
 
   if (!url) {
-    io.log('error', 'FAIL: No API URL configured. Run: config.set apiurl <url>');
+    io.log(
+      'error',
+      'FAIL: No API URL configured. Run: config.set apiurl <url>',
+    );
     return;
   }
   io.log('info', `URL:  ${url}`);
-  io.log('info', `Key:  ${key ? key.slice(0, 8) + '...' + key.slice(-4) : '(none)'}`);
+  io.log(
+    'info',
+    `Key:  ${key ? key.slice(0, 8) + '...' + key.slice(-4) : '(none)'}`,
+  );
   io.log('info', `Model: ${config.model}`);
 
-  const baseUrl = url.replace(/\/chat\/completions\/?$/, '').replace(/\/v1\/?$/, '');
+  const baseUrl = url
+    .replace(/\/chat\/completions\/?$/, '')
+    .replace(/\/v1\/?$/, '');
   io.log('info', `\nTesting connectivity to ${baseUrl} ...`);
   try {
     const t0 = performance.now();
-    const res = await axios.get(baseUrl, {timeout: 8000});
+    const res = await axios.get(baseUrl, { timeout: 8000 });
     const ms = (performance.now() - t0).toFixed(0);
     io.log('output', `Connected in ${ms}ms — status ${res.status}`);
   } catch (e: unknown) {
     const msg = axios.isCancel(e)
       ? 'Timed out after 8s'
-      : e instanceof Error ? e.message : String(e);
+      : e instanceof Error
+        ? e.message
+        : String(e);
     io.log('error', `FAIL: Could not reach server — ${msg}`);
-    io.log('info', 'Check that the URL is correct and reachable from your device.');
+    io.log(
+      'info',
+      'Check that the URL is correct and reachable from your device.',
+    );
     return;
   }
 
   io.log('info', '\nSending minimal test POST (streaming)...');
   try {
-    const headers: Record<string, string> = {'Content-Type': 'application/json'};
-    if (key) { headers.Authorization = `Bearer ${key}`; }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (key) {
+      headers.Authorization = `Bearer ${key}`;
+    }
     const t0 = performance.now();
     let gotFirstToken = false;
     let chunks = 0;
@@ -59,20 +76,24 @@ export const testCommand: CommandHandler = async (rest, env, io) => {
       headers,
       data: {
         model: config.model || 'gpt-4o',
-        messages: [{role: 'user', content: 'hi'}],
+        messages: [{ role: 'user', content: 'hi' }],
         stream: true,
         max_tokens: 5,
       },
-      onDownloadProgress: (progressEvent) => {
-        const fullText = typeof progressEvent.event.target.responseText === 'string'
-          ? progressEvent.event.target.responseText
-          : '';
+      onDownloadProgress: progressEvent => {
+        const fullText =
+          typeof progressEvent.event.target.responseText === 'string'
+            ? progressEvent.event.target.responseText
+            : '';
         if (fullText.length > processedLen) {
           chunks++;
           processedLen = fullText.length;
           if (!gotFirstToken) {
             gotFirstToken = true;
-            io.log('output', `First token in ${(performance.now() - t0).toFixed(0)}ms`);
+            io.log(
+              'output',
+              `First token in ${(performance.now() - t0).toFixed(0)}ms`,
+            );
           }
         }
       },
@@ -82,7 +103,9 @@ export const testCommand: CommandHandler = async (rest, env, io) => {
   } catch (e: unknown) {
     const msg = axios.isCancel(e)
       ? 'Timed out'
-      : e instanceof Error ? e.message : String(e);
+      : e instanceof Error
+        ? e.message
+        : String(e);
     io.log('error', `FAIL: POST failed — ${msg}`);
   }
 };
@@ -100,13 +123,14 @@ export const apiCommand: CommandHandler = async (rest, env, io) => {
     body = rest.slice(bodyIdx + 1).join(' ');
   }
   io.log('info', `${method} ${url}${body ? '\nBody: ' + body : ''}`);
-  const axiosOpts: AxiosRequestConfig = {method, url};
+  const axiosOpts: AxiosRequestConfig = { method, url };
   if (body && method !== 'GET') {
-    axiosOpts.headers = {'Content-Type': 'application/json'};
+    axiosOpts.headers = { 'Content-Type': 'application/json' };
     axiosOpts.data = body;
   }
   const res = await axios(axiosOpts);
-  const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+  const text =
+    typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
   let formatted = `Status: ${res.status} ${res.statusText}`;
   try {
     const json = JSON.parse(text);
@@ -118,14 +142,18 @@ export const apiCommand: CommandHandler = async (rest, env, io) => {
 };
 
 export const tiktokenCommand: CommandHandler = async (rest, env, io) => {
-  const testText = rest.length > 0
-    ? rest.join(' ')
-    : 'The quick brown fox jumps over the lazy dog. Hello world!';
+  const testText =
+    rest.length > 0
+      ? rest.join(' ')
+      : 'The quick brown fox jumps over the lazy dog. Hello world!';
 
-  io.log('info', `Testing tiktoken with text: "${testText.slice(0, 60)}${testText.length > 60 ? '...' : ''}"`);
+  io.log(
+    'info',
+    `Testing tiktoken with text: "${testText.slice(0, 60)}${testText.length > 60 ? '...' : ''}"`,
+  );
 
   try {
-    const {encodingForModel} = await import('js-tiktoken');
+    const { encodingForModel } = await import('js-tiktoken');
     const enc = encodingForModel('gpt-4o');
 
     const t0 = performance.now();
@@ -138,27 +166,38 @@ export const tiktokenCommand: CommandHandler = async (rest, env, io) => {
 
     const fallbackTokens = Math.ceil(testText.length / 4);
 
-    const firstFew = tokens.slice(0, 10).map(id => enc.decode([id]).replace(/\n/g, '\\n'));
+    const firstFew = tokens
+      .slice(0, 10)
+      .map(id => enc.decode([id]).replace(/\n/g, '\\n'));
 
-    io.log('output', [
-      '\u2500'.repeat(40),
-      `Text length:   ${testText.length} chars`,
-      `Token count:   ${tokens.length} tokens`,
-      `Encode time:   ${encodeMs}ms`,
-      `Decode time:   ${decodeMs}ms`,
-      '',
-      `Fallback (\u00f74): ${fallbackTokens} tokens`,
-      `Accuracy:      ${Math.abs(tokens.length - fallbackTokens) <= 2 ? 'CLOSE' : 'DIFFERS'} (tiktoken=${tokens.length}, fallback=${fallbackTokens})`,
-      '',
-      `First 10 tokens (${tokens.slice(0, 10).join(', ')}):`,
-      `  Decoded: ${firstFew.join(' | ')}`,
-      '',
-      `Roundtrip OK:  ${decoded === testText ? 'YES' : 'NO'}`,
-      '\u2500'.repeat(40),
-    ].join('\n'));
+    io.log(
+      'output',
+      [
+        '\u2500'.repeat(40),
+        `Text length:   ${testText.length} chars`,
+        `Token count:   ${tokens.length} tokens`,
+        `Encode time:   ${encodeMs}ms`,
+        `Decode time:   ${decodeMs}ms`,
+        '',
+        `Fallback (\u00f74): ${fallbackTokens} tokens`,
+        `Accuracy:      ${Math.abs(tokens.length - fallbackTokens) <= 2 ? 'CLOSE' : 'DIFFERS'} (tiktoken=${tokens.length}, fallback=${fallbackTokens})`,
+        '',
+        `First 10 tokens (${tokens.slice(0, 10).join(', ')}):`,
+        `  Decoded: ${firstFew.join(' | ')}`,
+        '',
+        `Roundtrip OK:  ${decoded === testText ? 'YES' : 'NO'}`,
+        '\u2500'.repeat(40),
+      ].join('\n'),
+    );
   } catch (e: unknown) {
-    io.log('error', `tiktoken FAILED: ${e instanceof Error ? e.message : String(e)}`);
-    io.log('info', 'The divide-by-4 fallback is being used. tiktoken may not work in this environment.');
+    io.log(
+      'error',
+      `tiktoken FAILED: ${e instanceof Error ? e.message : String(e)}`,
+    );
+    io.log(
+      'info',
+      'The divide-by-4 fallback is being used. tiktoken may not work in this environment.',
+    );
   }
 };
 
@@ -190,7 +229,12 @@ export const activityCommand: CommandHandler = (rest, env, io) => {
     return;
   }
   if (sub === 'status') {
-    io.log('output', isLoggingEnabled() ? 'Activity logging is ON (toggle in Settings > Developer).' : 'Activity logging is OFF (toggle in Settings > Developer).');
+    io.log(
+      'output',
+      isLoggingEnabled()
+        ? 'Activity logging is ON (toggle in Settings > Developer).'
+        : 'Activity logging is OFF (toggle in Settings > Developer).',
+    );
     return;
   }
   const limit = sub ? parseInt(sub, 10) : 20;
@@ -199,7 +243,12 @@ export const activityCommand: CommandHandler = (rest, env, io) => {
   const persisted = loadPersistedEvents();
   const all = events.length > 0 ? events : persisted.slice(-count).reverse();
   if (all.length === 0) {
-    io.log('info', isLoggingEnabled() ? 'No activity yet. Perform some actions and they will appear here.' : 'Activity logging is disabled. Enable it in Settings > Developer first.');
+    io.log(
+      'info',
+      isLoggingEnabled()
+        ? 'No activity yet. Perform some actions and they will appear here.'
+        : 'Activity logging is disabled. Enable it in Settings > Developer first.',
+    );
   } else {
     const lines = all.map(e => {
       const ts = new Date(e.timestamp).toLocaleTimeString();
@@ -212,13 +261,16 @@ export const activityCommand: CommandHandler = (rest, env, io) => {
 export const encryptCommand: CommandHandler = async (rest, env, io) => {
   const sub = rest[0]?.toLowerCase();
   if (sub === 'help' || !sub) {
-    io.log('info', [
-      'Encryption Commands:',
-      '  encrypt <text>                    Encrypt text and show ciphertext',
-      '  decrypt <hex>                     Decrypt hex ciphertext and show plaintext',
-      '  encrypt roundtrip <text>          Encrypt then decrypt, verify roundtrip',
-      '  encrypt test                      Run full encryption test suite',
-    ].join('\n'));
+    io.log(
+      'info',
+      [
+        'Encryption Commands:',
+        '  encrypt <text>                    Encrypt text and show ciphertext',
+        '  decrypt <hex>                     Decrypt hex ciphertext and show plaintext',
+        '  encrypt roundtrip <text>          Encrypt then decrypt, verify roundtrip',
+        '  encrypt test                      Run full encryption test suite',
+      ].join('\n'),
+    );
     return;
   }
   if (sub === 'test') {
@@ -239,17 +291,26 @@ export const encryptCommand: CommandHandler = async (rest, env, io) => {
           passed++;
         } else {
           failed++;
-          io.log('error', `FAIL: roundtrip mismatch for "${tc.slice(0, 50)}..."`);
+          io.log(
+            'error',
+            `FAIL: roundtrip mismatch for "${tc.slice(0, 50)}..."`,
+          );
           io.log('error', `  expected: ${tc}`);
           io.log('error', `  got:      ${dec}`);
         }
       }
       io.log('output', `Encryption test: ${passed} passed, ${failed} failed`);
       if (failed === 0) {
-        io.log('output', 'All roundtrip tests passed. AES-256-GCM encryption is working correctly.');
+        io.log(
+          'output',
+          'All roundtrip tests passed. AES-256-GCM encryption is working correctly.',
+        );
       }
     } catch (e: unknown) {
-      io.log('error', `Encryption test failed: ${e instanceof Error ? e.message : String(e)}`);
+      io.log(
+        'error',
+        `Encryption test failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     return;
   }
@@ -263,16 +324,25 @@ export const encryptCommand: CommandHandler = async (rest, env, io) => {
       const enc = await encrypt(text);
       const dec = await decrypt(enc);
       const match = dec === text;
-      io.log('output', [
-        `Encrypted:  ${enc.slice(0, 80)}${enc.length > 80 ? '...' : ''} (${enc.length} chars)`,
-        `Decrypted:  ${dec}`,
-        `Roundtrip:  ${match ? 'OK' : 'MISMATCH'}`,
-      ].join('\n'));
+      io.log(
+        'output',
+        [
+          `Encrypted:  ${enc.slice(0, 80)}${enc.length > 80 ? '...' : ''} (${enc.length} chars)`,
+          `Decrypted:  ${dec}`,
+          `Roundtrip:  ${match ? 'OK' : 'MISMATCH'}`,
+        ].join('\n'),
+      );
       if (!match) {
-        io.log('error', 'Roundtrip failed! Decrypted output does not match input.');
+        io.log(
+          'error',
+          'Roundtrip failed! Decrypted output does not match input.',
+        );
       }
     } catch (e: unknown) {
-      io.log('error', `Encrypt/decrypt failed: ${e instanceof Error ? e.message : String(e)}`);
+      io.log(
+        'error',
+        `Encrypt/decrypt failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     return;
   }
@@ -286,7 +356,10 @@ export const encryptCommand: CommandHandler = async (rest, env, io) => {
       const dec = await decrypt(hex);
       io.log('output', `Decrypted: ${dec}`);
     } catch (e: unknown) {
-      io.log('error', `Decrypt failed: ${e instanceof Error ? e.message : String(e)}`);
+      io.log(
+        'error',
+        `Decrypt failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     return;
   }
@@ -297,12 +370,15 @@ export const encryptCommand: CommandHandler = async (rest, env, io) => {
   }
   try {
     const enc = await encrypt(text);
-    io.log('output', [
-      `Encrypted: ${enc}`,
-      `Length:    ${enc.length} chars`,
-    ].join('\n'));
+    io.log(
+      'output',
+      [`Encrypted: ${enc}`, `Length:    ${enc.length} chars`].join('\n'),
+    );
   } catch (e: unknown) {
-    io.log('error', `Encrypt failed: ${e instanceof Error ? e.message : String(e)}`);
+    io.log(
+      'error',
+      `Encrypt failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 };
 

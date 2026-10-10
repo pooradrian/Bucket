@@ -1,11 +1,16 @@
-import {useState, useCallback} from 'react';
-import {Alert, Text, TouchableOpacity, View} from 'react-native';
-import {loadLorebook, addLorebook, removeLorebook, LorebookState} from '../RAGHandler';
-import {useAppStore} from '../store';
-import {PromptConfig} from '../PromptHandler';
-import {logEvent} from '../EventLogger';
-import {useTheme} from '../ThemeContext';
-import {SectionHeader, TextField} from './ui';
+import { useState, useCallback } from 'react';
+import { Alert, Text, TouchableOpacity, View } from 'react-native';
+import {
+  loadLorebook,
+  addLorebook,
+  removeLorebook,
+  LorebookState,
+} from '../RAGHandler';
+import { useAppStore } from '../store';
+import { PromptConfig } from '../PromptHandler';
+import { logEvent } from '../EventLogger';
+import { useTheme } from '../ThemeContext';
+import { SectionHeader, TextField } from './ui';
 import LorebookEditor from '../components/LorebookEditor';
 
 interface LorebooksViewProps {
@@ -102,7 +107,8 @@ export default function LorebooksView({
             onPress={() => {
               setEditingBook(lorebook);
               setEditorVisible(true);
-            }}>
+            }}
+          >
             <Text style={st.settingsLorebookItemName}>{lorebook.fileName}</Text>
             <Text style={st.settingsLorebookItemCount}>
               {lorebook.entryCount} entries · tap to edit
@@ -145,7 +151,7 @@ export default function LorebooksView({
         label="Embedding Model (leave blank to use main model)"
         value={promptValues.ragModel}
         onChangeText={text =>
-          setPromptValues(prev => ({...prev, ragModel: text}))
+          setPromptValues(prev => ({ ...prev, ragModel: text }))
         }
         placeholder="e.g. nomic-embed-text"
       />
@@ -154,7 +160,7 @@ export default function LorebooksView({
         label="Max entries to embed per retrieval"
         value={promptValues.ragMaxEntriesToSend}
         onChangeText={text =>
-          setPromptValues(prev => ({...prev, ragMaxEntriesToSend: text}))
+          setPromptValues(prev => ({ ...prev, ragMaxEntriesToSend: text }))
         }
         placeholder="50"
         keyboardType="numeric"
@@ -164,7 +170,7 @@ export default function LorebooksView({
         label="Max relevant facts returned"
         value={promptValues.ragMaxResults}
         onChangeText={text =>
-          setPromptValues(prev => ({...prev, ragMaxResults: text}))
+          setPromptValues(prev => ({ ...prev, ragMaxResults: text }))
         }
         placeholder="5"
         keyboardType="numeric"

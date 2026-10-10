@@ -1,5 +1,9 @@
 import axios from 'axios';
-import {ChatMessageObject, PromptConfig, TimingMetrics} from './PromptHandler';
+import {
+  ChatMessageObject,
+  PromptConfig,
+  TimingMetrics,
+} from './PromptHandler';
 
 export interface RawRequest {
   url: string;
@@ -26,12 +30,14 @@ function countCatSounds(messages: ChatMessageObject[]): number {
 
 function buildCatSounds(count: number): string[] {
   return Array.from(
-    {length: count},
+    { length: count },
     () => CAT_SOUNDS[Math.floor(Math.random() * CAT_SOUNDS.length)],
   );
 }
 
-export function parseThinkCommand(content: string): {think: number; answer: number} | null {
+export function parseThinkCommand(
+  content: string,
+): { think: number; answer: number } | null {
   const match = content.match(/think\s+(\d+)(?:\s+(\d+))?/i);
   if (!match) return null;
   return {
@@ -45,7 +51,12 @@ function buildCatWords(messages: ChatMessageObject[]): string[] {
   const content = userMessages[userMessages.length - 1]?.content ?? '';
   const think = parseThinkCommand(content);
   if (think) {
-    return ['<think>', ...buildCatSounds(think.think), '</think>', ...buildCatSounds(think.answer)];
+    return [
+      '<think>',
+      ...buildCatSounds(think.think),
+      '</think>',
+      ...buildCatSounds(think.answer),
+    ];
   }
   return buildCatSounds(countCatSounds(messages));
 }
@@ -64,10 +75,10 @@ function streamCatSounds(
     const onAbort = () => {
       timers.forEach(t => clearTimeout(t));
       const cancelErr = new Error('Request was cancelled');
-      (cancelErr as Error & {request?: RawRequest}).request = request;
+      (cancelErr as Error & { request?: RawRequest }).request = request;
       reject(cancelErr);
     };
-    controller.signal.addEventListener('abort', onAbort, {once: true});
+    controller.signal.addEventListener('abort', onAbort, { once: true });
 
     const tick = () => {
       if (controller.signal.aborted) return;
@@ -92,7 +103,7 @@ function streamWithXHR(
   body: object,
   onToken: (token: string) => void,
   controller: AbortController,
-): Promise<{content: string; ttfbMs: number}> {
+): Promise<{ content: string; ttfbMs: number }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     let content = '';
@@ -145,7 +156,7 @@ function streamWithXHR(
       xhr.onload = null;
       xhr.onerror = null;
       if (mode === 'resolve') {
-        resolve(value as {content: string; ttfbMs: number});
+        resolve(value as { content: string; ttfbMs: number });
       } else {
         reject(value);
       }
@@ -175,18 +186,19 @@ function streamWithXHR(
         if (data === '[DONE]') {
           // Stream is naturally complete — resolve without aborting.
           // Calling xhr.abort() here risks re-entrant onload/onerror.
-          settle('resolve', {content, ttfbMs});
+          settle('resolve', { content, ttfbMs });
           return;
         }
 
         try {
           const parsed = JSON.parse(data);
           const delta = parsed.choices?.[0]?.delta;
-          const reasoning = typeof delta?.reasoning_content === 'string'
-            ? delta.reasoning_content
-            : typeof delta?.reasoning === 'string'
-              ? delta.reasoning
-              : '';
+          const reasoning =
+            typeof delta?.reasoning_content === 'string'
+              ? delta.reasoning_content
+              : typeof delta?.reasoning === 'string'
+                ? delta.reasoning
+                : '';
           if (reasoning) {
             pushReasoning(reasoning);
           }
@@ -202,7 +214,7 @@ function streamWithXHR(
     xhr.onload = () => {
       if (settled) return;
       if (xhr.status >= 200 && xhr.status < 300) {
-        settle('resolve', {content, ttfbMs});
+        settle('resolve', { content, ttfbMs });
       } else {
         const errorText = xhr.responseText || '';
         settle('reject', new Error(`API error ${xhr.status}: ${errorText}`));
@@ -246,7 +258,8 @@ export function normalizeProviderUrl(raw: string): string {
   return chatCompletionsUrl(trimmed);
 }
 
-export function embeddingsUrl(chatUrl: string): string {  const url = chatUrl.trim().replace(/\/+$/, '');
+export function embeddingsUrl(chatUrl: string): string {
+  const url = chatUrl.trim().replace(/\/+$/, '');
   if (/\/chat\/completions$/i.test(url)) {
     return url.replace(/\/chat\/completions$/i, '/embeddings');
   }
@@ -279,11 +292,12 @@ export async function getEmbeddings(
     try {
       const response = await axios.post(
         url,
-        {model, input: batch},
-        {headers, timeout: 60000},
+        { model, input: batch },
+        { headers, timeout: 60000 },
       );
       const data = [...(response.data?.data ?? [])].sort(
-        (a: {index?: number}, b: {index?: number}) => (a.index ?? 0) - (b.index ?? 0),
+        (a: { index?: number }, b: { index?: number }) =>
+          (a.index ?? 0) - (b.index ?? 0),
       );
       for (const item of data) {
         if (!Array.isArray(item.embedding)) {
@@ -292,11 +306,18 @@ export async function getEmbeddings(
         vectors.push(item.embedding as number[]);
       }
     } catch (e: unknown) {
-      const axiosErr = e as {response?: {status?: number; data?: unknown}; message?: string};
+      const axiosErr = e as {
+        response?: { status?: number; data?: unknown };
+        message?: string;
+      };
       const status = axiosErr.response?.status;
       const errorText = axiosErr.response?.data
-        ? (typeof axiosErr.response.data === 'string' ? axiosErr.response.data : JSON.stringify(axiosErr.response.data))
-        : (e instanceof Error ? e.message : String(e));
+        ? typeof axiosErr.response.data === 'string'
+          ? axiosErr.response.data
+          : JSON.stringify(axiosErr.response.data)
+        : e instanceof Error
+          ? e.message
+          : String(e);
       if (status) {
         throw new Error(`Embeddings API error ${status}: ${errorText}`);
       }
@@ -304,7 +325,9 @@ export async function getEmbeddings(
     }
   }
   if (vectors.length !== inputs.length) {
-    throw new Error(`Embeddings API returned ${vectors.length} vectors for ${inputs.length} inputs`);
+    throw new Error(
+      `Embeddings API returned ${vectors.length} vectors for ${inputs.length} inputs`,
+    );
   }
   return vectors;
 }
@@ -315,7 +338,7 @@ export async function getAIResponse(
   onToken?: (token: string) => void,
   streaming: boolean = true,
   controller?: AbortController,
-): Promise<{content: string; request: RawRequest; metrics: TimingMetrics}> {
+): Promise<{ content: string; request: RawRequest; metrics: TimingMetrics }> {
   const configuredUrl = config.apiUrl?.trim();
   if (!configuredUrl) {
     throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
@@ -355,13 +378,17 @@ export async function getAIResponse(
     } catch {
       throw new Error('Extra body must be valid JSON');
     }
-    if (!parsedExtra || typeof parsedExtra !== 'object' || Array.isArray(parsedExtra)) {
+    if (
+      !parsedExtra ||
+      typeof parsedExtra !== 'object' ||
+      Array.isArray(parsedExtra)
+    ) {
       throw new Error('Extra body must be a valid JSON object');
     }
     Object.assign(body, parsedExtra);
   }
 
-  const request: RawRequest = {url, body};
+  const request: RawRequest = { url, body };
 
   const ctrl = controller || new AbortController();
   const t0 = performance.now();
@@ -390,7 +417,13 @@ export async function getAIResponse(
 
   try {
     if (streaming) {
-      const result = await streamWithXHR(url, headers, body, onToken ?? (() => {}), ctrl);
+      const result = await streamWithXHR(
+        url,
+        headers,
+        body,
+        onToken ?? (() => {}),
+        ctrl,
+      );
       ttfbMs = result.ttfbMs;
       content = result.content;
     } else {
@@ -404,27 +437,40 @@ export async function getAIResponse(
       ttfbMs = performance.now() - t0;
       const message = response.data.choices?.[0]?.message;
       content = message?.content || '';
-      const reasoning = typeof message?.reasoning_content === 'string'
-        ? message.reasoning_content
-        : typeof message?.reasoning === 'string'
-          ? message.reasoning
-          : '';
+      const reasoning =
+        typeof message?.reasoning_content === 'string'
+          ? message.reasoning_content
+          : typeof message?.reasoning === 'string'
+            ? message.reasoning
+            : '';
       if (reasoning) {
         content = `<think>${reasoning}</think>${content}`;
       }
     }
   } catch (e: unknown) {
-    if (e instanceof Error && (e.name === 'AbortError' || e.message === 'Request was cancelled' || axios.isCancel(e))) {
+    if (
+      e instanceof Error &&
+      (e.name === 'AbortError' ||
+        e.message === 'Request was cancelled' ||
+        axios.isCancel(e))
+    ) {
       const cancelErr = new Error('Request was cancelled');
-      (cancelErr as Error & {request?: RawRequest}).request = request;
+      (cancelErr as Error & { request?: RawRequest }).request = request;
       throw cancelErr;
     }
     if (e instanceof Error && e.message.startsWith('API error ')) throw e;
-    const axiosErr = e as {response?: {status?: number; data?: unknown}; message?: string};
+    const axiosErr = e as {
+      response?: { status?: number; data?: unknown };
+      message?: string;
+    };
     const status = axiosErr.response?.status;
     const errorText = axiosErr.response?.data
-      ? (typeof axiosErr.response.data === 'string' ? axiosErr.response.data : JSON.stringify(axiosErr.response.data))
-      : (e instanceof Error ? e.message : String(e));
+      ? typeof axiosErr.response.data === 'string'
+        ? axiosErr.response.data
+        : JSON.stringify(axiosErr.response.data)
+      : e instanceof Error
+        ? e.message
+        : String(e);
     if (status) {
       throw new Error(`API error ${status}: ${errorText}`);
     }

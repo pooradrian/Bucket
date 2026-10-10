@@ -8,9 +8,9 @@ import {
   getSessionById,
   getKV,
 } from './Database';
-import {parseCustomFields} from './CustomFields';
-import {saveToDisk} from './ImportExport';
-import {logEvent} from './EventLogger';
+import { parseCustomFields } from './CustomFields';
+import { saveToDisk } from './ImportExport';
+import { logEvent } from './EventLogger';
 
 const CRASH_EXPORT_DIR = `${RNFS.DocumentDirectoryPath}/crash_recovery`;
 const CRASH_MARKER_PATH = `${CRASH_EXPORT_DIR}/crash_marker.txt`;
@@ -50,7 +50,8 @@ export async function crashExport(): Promise<string | null> {
           tags: [],
           creator: '',
           character_version: '1.0',
-          extensions: customFields.length > 0 ? {bucket: {customFields}} : {},
+          extensions:
+            customFields.length > 0 ? { bucket: { customFields } } : {},
         },
       };
       charFolder?.file(`${char.id}.json`, JSON.stringify(cc, null, 2));
@@ -59,12 +60,10 @@ export async function crashExport(): Promise<string | null> {
     const iconFolder = zip.folder('icons');
     for (const char of characters) {
       if (!char.icon) continue;
-      const base64 = await safeReadFileBase64(
-        char.icon.replace('file://', ''),
-      );
+      const base64 = await safeReadFileBase64(char.icon.replace('file://', ''));
       if (base64) {
         const ext = char.icon.split('.').pop() || 'png';
-        iconFolder?.file(`${char.id}.${ext}`, base64, {base64: true});
+        iconFolder?.file(`${char.id}.${ext}`, base64, { base64: true });
       }
     }
 
@@ -82,7 +81,10 @@ export async function crashExport(): Promise<string | null> {
       for (const summary of sessions) {
         const session = await getSessionById(summary.id);
         if (session) {
-          chatFolder?.file(`${session.id}.json`, JSON.stringify(session, null, 2));
+          chatFolder?.file(
+            `${session.id}.json`,
+            JSON.stringify(session, null, 2),
+          );
         }
       }
     }
@@ -104,11 +106,16 @@ export async function crashExport(): Promise<string | null> {
     const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
     const filename = `CRASH-${dateStr}@${timeStr}.buk`;
 
-    const base64 = await zip.generateAsync({type: 'base64', compression: 'DEFLATE'});
+    const base64 = await zip.generateAsync({
+      type: 'base64',
+      compression: 'DEFLATE',
+    });
     const path = `${CRASH_EXPORT_DIR}/${filename}`;
     await RNFS.writeFile(path, base64, 'base64');
 
-    saveToDisk(path, 'application/octet-stream', filename).catch((e) => console.warn('CrashExport save failed:', e));
+    saveToDisk(path, 'application/octet-stream', filename).catch(e =>
+      console.warn('CrashExport save failed:', e),
+    );
 
     return path;
   } catch {
@@ -132,7 +139,7 @@ function writeCrashMarker(): void {
     const ts = new Date().toISOString();
     RNFS.mkdir(CRASH_EXPORT_DIR)
       .then(() => RNFS.writeFile(CRASH_MARKER_PATH, ts, 'utf8'))
-      .catch((e) => console.warn('CrashExport marker write failed:', e));
+      .catch(e => console.warn('CrashExport marker write failed:', e));
   } catch {
     // never throw
   }

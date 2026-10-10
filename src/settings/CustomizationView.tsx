@@ -1,17 +1,23 @@
-import {useAppStore} from '../store';
-import {setIcon} from '../IconModule';
+import { useAppStore } from '../store';
+import { setIcon } from '../IconModule';
 import {
   encodeThemeURL,
   decodeThemeURL,
   applyThemeToSettings,
 } from '../themeShare';
 import Clipboard from '@react-native-clipboard/clipboard';
-import {Alert, Share, Text, TouchableOpacity, View} from 'react-native';
-import {logEvent} from '../EventLogger';
-import {Settings, LABELS, CUSTOMIZATION_KEYS} from '../settingsDraft';
-import {useCallback} from 'react';
-import {useTheme} from '../ThemeContext';
-import {BoolToggle, OptionRow, SectionHeader, TextField, MutedNote} from './ui';
+import { Alert, Share, Text, TouchableOpacity, View } from 'react-native';
+import { logEvent } from '../EventLogger';
+import { Settings, LABELS, CUSTOMIZATION_KEYS } from '../settingsDraft';
+import { useCallback } from 'react';
+import { useTheme } from '../ThemeContext';
+import {
+  BoolToggle,
+  OptionRow,
+  SectionHeader,
+  TextField,
+  MutedNote,
+} from './ui';
 
 interface CustomizationViewProps {
   values: Settings;
@@ -34,7 +40,7 @@ export default function CustomizationView({
     Clipboard.setString(url);
     logEvent('theme_shared', {});
     try {
-      await Share.share({message: url});
+      await Share.share({ message: url });
     } catch {
       Alert.alert('Theme copied', 'Share URL copied to clipboard.');
     }
@@ -56,7 +62,7 @@ export default function CustomizationView({
       if (updated.dynamicIcon) {
         setIcon(updated.themeMode);
       }
-      logEvent('theme_imported', {themeName: theme.name || ''});
+      logEvent('theme_imported', { themeName: theme.name || '' });
       Alert.alert(
         'Theme imported',
         theme.name ? `Applied "${theme.name}".` : 'Theme applied.',
@@ -76,8 +82,8 @@ export default function CustomizationView({
 
       <OptionRow
         options={[
-          {value: 'dark', label: 'Dark'},
-          {value: 'light', label: 'Light'},
+          { value: 'dark', label: 'Dark' },
+          { value: 'light', label: 'Light' },
         ]}
         value={appSettings.themeMode}
         accent={appSettings.accentColor}
@@ -129,14 +135,14 @@ export default function CustomizationView({
         label={LABELS.showGroupCharNames}
         note="How group members appear in the chat selector bar."
         options={[
-          {value: 'avatar', label: 'Avatar'},
-          {value: 'both', label: 'Both'},
-          {value: 'name', label: 'Name'},
+          { value: 'avatar', label: 'Avatar' },
+          { value: 'both', label: 'Both' },
+          { value: 'name', label: 'Name' },
         ]}
         value={appSettings.showGroupCharNames}
         accent={values.accentColor}
         onChange={showGroupCharNames =>
-          setAppSettings({...appSettings, showGroupCharNames})
+          setAppSettings({ ...appSettings, showGroupCharNames })
         }
       />
 
@@ -153,9 +159,7 @@ export default function CustomizationView({
         note="Skews *italic* text geometrically for fonts without an italic face."
         value={values.forceItalic === 'true'}
         accent={values.accentColor}
-        onChange={next =>
-          handleChange('forceItalic', next ? 'true' : 'false')
-        }
+        onChange={next => handleChange('forceItalic', next ? 'true' : 'false')}
       />
 
       <SectionHeader title="Carousel" />
@@ -181,7 +185,7 @@ export default function CustomizationView({
           <TouchableOpacity
             style={[
               st.settingsToggleButton,
-              {backgroundColor: appSettings.accentColor},
+              { backgroundColor: appSettings.accentColor },
             ]}
             onPress={handleShareTheme}
           >

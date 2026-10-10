@@ -1,4 +1,4 @@
-import {useState, useCallback} from 'react';
+import { useState, useCallback } from 'react';
 import {
   Alert,
   Modal,
@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {pick, types} from '@react-native-documents/picker';
+import { pick, types } from '@react-native-documents/picker';
 import RNFS from 'react-native-fs';
 import JSZip from 'jszip';
-import {useAppStore} from './store';
-import {parseCustomFields} from './CustomFields';
-import {useTheme} from './ThemeContext';
+import { useAppStore } from './store';
+import { parseCustomFields } from './CustomFields';
+import { useTheme } from './ThemeContext';
 import {
   detectImportFormat,
   importCharacter,
@@ -25,29 +25,54 @@ import {
   ExportFormat,
   ExportOptions,
 } from './ImportExport';
-import {getAllCharactersFromDB, getAllGroupChatsFromDB, generateId} from './Database';
-import {addLorebook, buildLorebookState, lorebookDisplayName, parseLorebook} from './RAGHandler';
-import {logEvent} from './EventLogger';
+import {
+  getAllCharactersFromDB,
+  getAllGroupChatsFromDB,
+  generateId,
+} from './Database';
+import {
+  addLorebook,
+  buildLorebookState,
+  lorebookDisplayName,
+  parseLorebook,
+} from './RAGHandler';
+import { logEvent } from './EventLogger';
 
 interface ImportExportHandlerProps {
   bottomInset: number;
 }
 
-export default function ImportExportHandler({bottomInset}: ImportExportHandlerProps) {
+export default function ImportExportHandler({
+  bottomInset,
+}: ImportExportHandlerProps) {
   const st = useTheme();
-  const {loadCharacters, loadGroupChats, loadLorebooks, loadSettings, appSettings, bumpPromptConfigVersion, bumpDataVersion} = useAppStore();
+  const {
+    loadCharacters,
+    loadGroupChats,
+    loadLorebooks,
+    loadSettings,
+    appSettings,
+    bumpPromptConfigVersion,
+    bumpDataVersion,
+  } = useAppStore();
   const setLorebooks = useAppStore(s => s.setLorebooks);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
-  const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat | null>(
+    null,
+  );
   const [selectedChars, setSelectedChars] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [includeSettings, setIncludeSettings] = useState(true);
   const [includeLorebooks, setIncludeLorebooks] = useState(true);
   const [includeChats, setIncludeChats] = useState(true);
-  const [chars, setChars] = useState<Array<{id: string; name: string; hasCustomFields: boolean}>>([]);
-  const [groups, setGroups] = useState<Array<{id: string; name: string; characterIds: string[]}>>([]);
+  const [chars, setChars] = useState<
+    Array<{ id: string; name: string; hasCustomFields: boolean }>
+  >([]);
+  const [groups, setGroups] = useState<
+    Array<{ id: string; name: string; characterIds: string[] }>
+  >([]);
 
   const handleImport = useCallback(async () => {
     try {
@@ -99,10 +124,10 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
             'Download Icons?',
             'This Perchance export references icon URLs. Download icons from the internet?',
             [
-              {text: 'Skip', onPress: () => resolve(false), style: 'cancel'},
-              {text: 'Download', onPress: () => resolve(true)},
+              { text: 'Skip', onPress: () => resolve(false), style: 'cancel' },
+              { text: 'Download', onPress: () => resolve(true) },
             ],
-            {cancelable: false},
+            { cancelable: false },
           );
         });
         const downloadLorebooks = await new Promise<boolean>(resolve => {
@@ -110,13 +135,17 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
             'Download Lorebooks?',
             'This Perchance export references lorebook URLs. Download lorebooks from the internet?',
             [
-              {text: 'Skip', onPress: () => resolve(false), style: 'cancel'},
-              {text: 'Download', onPress: () => resolve(true)},
+              { text: 'Skip', onPress: () => resolve(false), style: 'cancel' },
+              { text: 'Download', onPress: () => resolve(true) },
             ],
-            {cancelable: false},
+            { cancelable: false },
           );
         });
-        const imported = await importPerchance(file.uri, downloadIcons, downloadLorebooks);
+        const imported = await importPerchance(
+          file.uri,
+          downloadIcons,
+          downloadLorebooks,
+        );
         let message = `Imported ${imported.characters.length} characters`;
         if (imported.sessions.length > 0) {
           message += `, ${imported.sessions.length} chat sessions`;
@@ -132,7 +161,10 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         const response = await fetch(file.uri);
         const entries = parseLorebook(await response.text());
         if (entries.length === 0) {
-          Alert.alert('Import lorebook', 'No entries found in this file (one fact per line).');
+          Alert.alert(
+            'Import lorebook',
+            'No entries found in this file (one fact per line).',
+          );
         } else {
           const state = buildLorebookState(
             generateId(),
@@ -144,32 +176,64 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
             entryCount: entries.length,
             fileNameLen: state.fileName.length,
           });
-          Alert.alert('Import Complete', `Imported lorebook "${state.fileName}" with ${entries.length} entries`);
+          Alert.alert(
+            'Import Complete',
+            `Imported lorebook "${state.fileName}" with ${entries.length} entries`,
+          );
         }
       } else {
         const imported = await importCharacter(file.uri);
         await loadCharacters();
 
-        const formatName = format === 'ccv1' ? 'Character Card V1' : 'Character Card V2';
-        Alert.alert('Import Complete', `Imported "${imported.character.name}" as ${formatName}`);
+        const formatName =
+          format === 'ccv1' ? 'Character Card V1' : 'Character Card V2';
+        Alert.alert(
+          'Import Complete',
+          `Imported "${imported.character.name}" as ${formatName}`,
+        );
       }
     } catch (e: unknown) {
-      if (e && typeof e === 'object' && 'code' in e && (e as {code: string}).code === 'OPERATION_CANCELED') return;
-      Alert.alert('Import Failed', e instanceof Error ? e.message : 'Could not import file');
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as { code: string }).code === 'OPERATION_CANCELED'
+      )
+        return;
+      Alert.alert(
+        'Import Failed',
+        e instanceof Error ? e.message : 'Could not import file',
+      );
     } finally {
       setImporting(false);
     }
-  }, [loadCharacters, loadGroupChats, loadLorebooks, loadSettings, bumpPromptConfigVersion, bumpDataVersion, setLorebooks]);
+  }, [
+    loadCharacters,
+    loadGroupChats,
+    loadLorebooks,
+    loadSettings,
+    bumpPromptConfigVersion,
+    bumpDataVersion,
+    setLorebooks,
+  ]);
 
   const handleShowExport = useCallback(async () => {
     const allChars = await getAllCharactersFromDB();
     const allGroups = await getAllGroupChatsFromDB();
-    setChars(allChars.map(c => ({
-      id: c.id,
-      name: c.name,
-      hasCustomFields: parseCustomFields(c.custom_fields).length > 0,
-    })));
-    setGroups(allGroups.map(g => ({id: g.id, name: g.name, characterIds: g.characterIds})));
+    setChars(
+      allChars.map(c => ({
+        id: c.id,
+        name: c.name,
+        hasCustomFields: parseCustomFields(c.custom_fields).length > 0,
+      })),
+    );
+    setGroups(
+      allGroups.map(g => ({
+        id: g.id,
+        name: g.name,
+        characterIds: g.characterIds,
+      })),
+    );
     setSelectedChars(allChars.map(c => c.id));
     setSelectedGroups(allGroups.map(g => g.id));
     setSelectedFormat(null);
@@ -188,12 +252,18 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         const exportedChars = (await getAllCharactersFromDB())
           .filter(c => selectedChars.includes(c.id))
           .map(c => ({
-            id: c.id, name: c.name, description: c.description,
+            id: c.id,
+            name: c.name,
+            description: c.description,
             initialMessage: c.initial_message,
             customFields: parseCustomFields(c.custom_fields),
-            personality: c.personality, scenario: c.scenario,
+            personality: c.personality,
+            scenario: c.scenario,
             exampleMessages: c.example_messages || undefined,
-            lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [], icon: c.icon || undefined,
+            lorebookIds: c.lorebook_id
+              ? c.lorebook_id.split(',').filter(Boolean)
+              : [],
+            icon: c.icon || undefined,
           }));
         const path = await exportCCV1(exportedChars);
         await saveToDisk(path, 'application/json', 'characters.json');
@@ -201,12 +271,18 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         const exportedChars = (await getAllCharactersFromDB())
           .filter(c => selectedChars.includes(c.id))
           .map(c => ({
-            id: c.id, name: c.name, description: c.description,
+            id: c.id,
+            name: c.name,
+            description: c.description,
             initialMessage: c.initial_message,
             customFields: parseCustomFields(c.custom_fields),
-            personality: c.personality, scenario: c.scenario,
+            personality: c.personality,
+            scenario: c.scenario,
             exampleMessages: c.example_messages || undefined,
-            lorebookIds: c.lorebook_id ? c.lorebook_id.split(',').filter(Boolean) : [], icon: c.icon || undefined,
+            lorebookIds: c.lorebook_id
+              ? c.lorebook_id.split(',').filter(Boolean)
+              : [],
+            icon: c.icon || undefined,
           }));
         const paths = await exportCCV2(exportedChars);
         if (paths.length === 1) {
@@ -217,9 +293,12 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
           for (const p of paths) {
             const fileName = p.split('/').pop() || 'character.png';
             const base64 = await RNFS.readFile(p, 'base64');
-            zip.file(fileName, base64, {base64: true});
+            zip.file(fileName, base64, { base64: true });
           }
-          const zipBase64 = await zip.generateAsync({type: 'base64', compression: 'DEFLATE'});
+          const zipBase64 = await zip.generateAsync({
+            type: 'base64',
+            compression: 'DEFLATE',
+          });
           const zipPath = `${RNFS.CachesDirectoryPath}/characters.zip`;
           await RNFS.writeFile(zipPath, zipBase64, 'base64');
           await saveToDisk(zipPath, 'application/zip', 'characters.zip');
@@ -237,7 +316,11 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         const now = new Date();
         const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
-        await saveToDisk(path, 'application/octet-stream', `${dateStr}@${timeStr}.buk`);
+        await saveToDisk(
+          path,
+          'application/octet-stream',
+          `${dateStr}@${timeStr}.buk`,
+        );
       }
 
       setExportModalVisible(false);
@@ -249,62 +332,83 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
     } finally {
       setExporting(false);
     }
-  }, [selectedFormat, selectedChars, selectedGroups, includeSettings, includeLorebooks, includeChats]);
+  }, [
+    selectedFormat,
+    selectedChars,
+    selectedGroups,
+    includeSettings,
+    includeLorebooks,
+    includeChats,
+  ]);
 
   const toggleChar = useCallback((id: string) => {
     setSelectedChars(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id],
     );
   }, []);
 
-  const toggleGroup = useCallback((id: string) => {
-    const isSelected = selectedGroups.includes(id);
-    setSelectedGroups(prev =>
-      prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
-    );
-    if (!isSelected) {
-      const group = groups.find(g => g.id === id);
-      if (group) {
-        setSelectedChars(sel => [...new Set([...sel, ...group.characterIds])]);
+  const toggleGroup = useCallback(
+    (id: string) => {
+      const isSelected = selectedGroups.includes(id);
+      setSelectedGroups(prev =>
+        prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id],
+      );
+      if (!isSelected) {
+        const group = groups.find(g => g.id === id);
+        if (group) {
+          setSelectedChars(sel => [
+            ...new Set([...sel, ...group.characterIds]),
+          ]);
+        }
       }
-    }
-  }, [selectedGroups, groups]);
+    },
+    [selectedGroups, groups],
+  );
 
   const ac = appSettings.accentColor;
   const bg = appSettings.bgPrimary;
 
   const formatBtnStyle = (fmt: ExportFormat) => [
     st.settingsToggleButton,
-    {marginBottom: 8, backgroundColor: selectedFormat === fmt ? ac : 'transparent'},
+    {
+      marginBottom: 8,
+      backgroundColor: selectedFormat === fmt ? ac : 'transparent',
+    },
   ];
 
   const formatTextStyle = (fmt: ExportFormat) => [
     st.settingsToggleText,
-    {color: selectedFormat === fmt ? bg : ac},
+    { color: selectedFormat === fmt ? bg : ac },
   ];
 
   const charBtnStyle = (id: string) => [
     st.settingsToggleButton,
-    {marginBottom: 6, backgroundColor: selectedChars.includes(id) ? ac : 'transparent'},
+    {
+      marginBottom: 6,
+      backgroundColor: selectedChars.includes(id) ? ac : 'transparent',
+    },
   ];
 
   const charTextStyle = (id: string) => [
     st.settingsToggleText,
-    {color: selectedChars.includes(id) ? bg : ac},
+    { color: selectedChars.includes(id) ? bg : ac },
   ];
 
   const groupBtnStyle = (id: string) => [
     st.settingsToggleButton,
-    {marginBottom: 6, backgroundColor: selectedGroups.includes(id) ? ac : 'transparent'},
+    {
+      marginBottom: 6,
+      backgroundColor: selectedGroups.includes(id) ? ac : 'transparent',
+    },
   ];
 
   const groupTextStyle = (id: string) => [
     st.settingsToggleText,
-    {color: selectedGroups.includes(id) ? bg : ac},
+    { color: selectedGroups.includes(id) ? bg : ac },
   ];
 
-  const hasCustomFieldChars = selectedChars.some(id =>
-    chars.find(c => c.id === id)?.hasCustomFields,
+  const hasCustomFieldChars = selectedChars.some(
+    id => chars.find(c => c.id === id)?.hasCustomFields,
   );
 
   return (
@@ -312,19 +416,22 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
       <TouchableOpacity
         style={st.card}
         onPress={handleImport}
-        disabled={importing}>
+        disabled={importing}
+      >
         <Text style={st.cardTitle}>
           {importing ? 'Importing...' : 'Import'}
         </Text>
         <Text style={st.cardDescription}>
-          Supports Character Card V1, V2, .buk, Perchance exports, and .txt lorebooks
+          Supports Character Card V1, V2, .buk, Perchance exports, and .txt
+          lorebooks
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={st.card}
         onPress={handleShowExport}
-        disabled={exporting}>
+        disabled={exporting}
+      >
         <Text style={st.cardTitle}>
           {exporting ? 'Exporting...' : 'Export'}
         </Text>
@@ -333,44 +440,61 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
         </Text>
       </TouchableOpacity>
 
-      <Modal
-        visible={exportModalVisible}
-        animationType="slide"
-        transparent>
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          justifyContent: 'flex-end',
-        }}>
-          <View style={{
-            backgroundColor: bg,
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            maxHeight: '80%',
-            paddingBottom: bottomInset + 20,
-          }}>
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: appSettings.borderPrimary,
-            }}>
-              <Text style={{color: appSettings.textPrimary, fontSize: 17, fontWeight: '600'}}>
+      <Modal visible={exportModalVisible} animationType="slide" transparent>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            justifyContent: 'flex-end',
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: bg,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              maxHeight: '80%',
+              paddingBottom: bottomInset + 20,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: appSettings.borderPrimary,
+              }}
+            >
+              <Text
+                style={{
+                  color: appSettings.textPrimary,
+                  fontSize: 17,
+                  fontWeight: '600',
+                }}
+              >
                 Export
               </Text>
               <TouchableOpacity onPress={() => setExportModalVisible(false)}>
-                <Text style={{color: ac, fontSize: 16}}>Cancel</Text>
+                <Text style={{ color: ac, fontSize: 16 }}>Cancel</Text>
               </TouchableOpacity>
             </View>
 
             <ScrollView
-              style={{padding: 16}}
-              contentContainerStyle={{paddingBottom: 20}}
+              style={{ padding: 16 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
               keyboardShouldPersistTaps="handled"
-              automaticallyAdjustKeyboardInsets>
-              <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginBottom: 10}}>
+              automaticallyAdjustKeyboardInsets
+            >
+              <Text
+                style={{
+                  color: ac,
+                  fontSize: 14,
+                  fontWeight: '600',
+                  marginBottom: 10,
+                }}
+              >
                 Format
               </Text>
 
@@ -378,59 +502,114 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
                 <TouchableOpacity
                   key={fmt}
                   style={formatBtnStyle(fmt)}
-                  onPress={() => setSelectedFormat(fmt)}>
+                  onPress={() => setSelectedFormat(fmt)}
+                >
                   <Text style={formatTextStyle(fmt)}>
-                    {fmt === 'ccv1' ? 'Character Card V1' : fmt === 'ccv2' ? 'Character Card V2' : 'Bucket (.buk)'}
+                    {fmt === 'ccv1'
+                      ? 'Character Card V1'
+                      : fmt === 'ccv2'
+                        ? 'Character Card V2'
+                        : 'Bucket (.buk)'}
                   </Text>
                 </TouchableOpacity>
               ))}
 
               {hasCustomFieldChars && selectedFormat !== 'buk' && (
-                <View style={{
-                  backgroundColor: appSettings.bgSecondary,
-                  borderRadius: 8,
-                  padding: 12,
-                  marginTop: 12,
-                }}>
-                  <Text style={{color: appSettings.textMuted, fontSize: 13, lineHeight: 18}}>
-                    Custom fields (e.g. Writing Style) are not saved in this format and will be lost.
+                <View
+                  style={{
+                    backgroundColor: appSettings.bgSecondary,
+                    borderRadius: 8,
+                    padding: 12,
+                    marginTop: 12,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: appSettings.textMuted,
+                      fontSize: 13,
+                      lineHeight: 18,
+                    }}
+                  >
+                    Custom fields (e.g. Writing Style) are not saved in this
+                    format and will be lost.
                   </Text>
                 </View>
               )}
 
               {selectedFormat === 'buk' && (
                 <>
-                  <View style={{
-                    backgroundColor: appSettings.bgSecondary,
-                    borderRadius: 8,
-                    padding: 12,
-                    marginTop: 12,
-                  }}>
-                    <Text style={{color: appSettings.textMuted, fontSize: 13, lineHeight: 18}}>
-                      Custom fields (e.g. Writing Style) are stored in this .buk file but can only be
-                      read by Bucket. Importing this file into any other app will lose them.
+                  <View
+                    style={{
+                      backgroundColor: appSettings.bgSecondary,
+                      borderRadius: 8,
+                      padding: 12,
+                      marginTop: 12,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: appSettings.textMuted,
+                        fontSize: 13,
+                        lineHeight: 18,
+                      }}
+                    >
+                      Custom fields (e.g. Writing Style) are stored in this .buk
+                      file but can only be read by Bucket. Importing this file
+                      into any other app will lose them.
                     </Text>
                   </View>
 
-                  <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 10}}>
+                  <Text
+                    style={{
+                      color: ac,
+                      fontSize: 14,
+                      fontWeight: '600',
+                      marginTop: 16,
+                      marginBottom: 10,
+                    }}
+                  >
                     Include
                   </Text>
 
                   {[
-                    {key: 'settings', label: 'Settings', value: includeSettings, setter: setIncludeSettings},
-                    {key: 'lorebooks', label: 'Lorebooks', value: includeLorebooks, setter: setIncludeLorebooks},
-                    {key: 'chats', label: 'Chat History', value: includeChats, setter: setIncludeChats},
+                    {
+                      key: 'settings',
+                      label: 'Settings',
+                      value: includeSettings,
+                      setter: setIncludeSettings,
+                    },
+                    {
+                      key: 'lorebooks',
+                      label: 'Lorebooks',
+                      value: includeLorebooks,
+                      setter: setIncludeLorebooks,
+                    },
+                    {
+                      key: 'chats',
+                      label: 'Chat History',
+                      value: includeChats,
+                      setter: setIncludeChats,
+                    },
                   ].map(item => (
                     <TouchableOpacity
                       key={item.key}
-                      style={[st.settingsToggleButton, {
-                        marginBottom: 8,
-                        backgroundColor: item.value ? ac : 'transparent',
-                      }]}
-                      onPress={() => item.setter(!item.value)}>
-                      <Text style={[st.settingsToggleText, {
-                        color: item.value ? bg : ac,
-                      }]}>
+                      style={[
+                        st.settingsToggleButton,
+                        {
+                          marginBottom: 8,
+                          backgroundColor: item.value ? ac : 'transparent',
+                        },
+                      ]}
+                      onPress={() => item.setter(!item.value)}
+                    >
+                      <Text
+                        style={[
+                          st.settingsToggleText,
+                          {
+                            color: item.value ? bg : ac,
+                          },
+                        ]}
+                      >
                         {item.label}
                       </Text>
                     </TouchableOpacity>
@@ -440,29 +619,43 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
 
               {selectedFormat && (
                 <>
-                  <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 10}}>
+                  <Text
+                    style={{
+                      color: ac,
+                      fontSize: 14,
+                      fontWeight: '600',
+                      marginTop: 16,
+                      marginBottom: 10,
+                    }}
+                  >
                     Characters ({selectedChars.length}/{chars.length})
                   </Text>
 
                   <TouchableOpacity
                     style={st.settingsToggleButton}
-                    onPress={() => setSelectedChars(
-                      selectedChars.length === chars.length ? [] : chars.map(c => c.id)
-                    )}>
+                    onPress={() =>
+                      setSelectedChars(
+                        selectedChars.length === chars.length
+                          ? []
+                          : chars.map(c => c.id),
+                      )
+                    }
+                  >
                     <Text style={st.settingsToggleText}>
-                      {selectedChars.length === chars.length ? 'Deselect All' : 'Select All'}
+                      {selectedChars.length === chars.length
+                        ? 'Deselect All'
+                        : 'Select All'}
                     </Text>
                   </TouchableOpacity>
 
-                  <View style={{marginTop: 10}}>
+                  <View style={{ marginTop: 10 }}>
                     {chars.map(char => (
                       <TouchableOpacity
                         key={char.id}
                         style={charBtnStyle(char.id)}
-                        onPress={() => toggleChar(char.id)}>
-                        <Text style={charTextStyle(char.id)}>
-                          {char.name}
-                        </Text>
+                        onPress={() => toggleChar(char.id)}
+                      >
+                        <Text style={charTextStyle(char.id)}>{char.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -471,26 +664,42 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
 
               {selectedFormat === 'buk' && (
                 <>
-                  <Text style={{color: ac, fontSize: 14, fontWeight: '600', marginTop: 16, marginBottom: 10}}>
+                  <Text
+                    style={{
+                      color: ac,
+                      fontSize: 14,
+                      fontWeight: '600',
+                      marginTop: 16,
+                      marginBottom: 10,
+                    }}
+                  >
                     Group Chats ({selectedGroups.length}/{groups.length})
                   </Text>
 
                   <TouchableOpacity
                     style={st.settingsToggleButton}
-                    onPress={() => setSelectedGroups(
-                      selectedGroups.length === groups.length ? [] : groups.map(g => g.id)
-                    )}>
+                    onPress={() =>
+                      setSelectedGroups(
+                        selectedGroups.length === groups.length
+                          ? []
+                          : groups.map(g => g.id),
+                      )
+                    }
+                  >
                     <Text style={st.settingsToggleText}>
-                      {selectedGroups.length === groups.length ? 'Deselect All Groups' : 'Select All Groups'}
+                      {selectedGroups.length === groups.length
+                        ? 'Deselect All Groups'
+                        : 'Select All Groups'}
                     </Text>
                   </TouchableOpacity>
 
-                  <View style={{marginTop: 10}}>
+                  <View style={{ marginTop: 10 }}>
                     {groups.map(group => (
                       <TouchableOpacity
                         key={group.id}
                         style={groupBtnStyle(group.id)}
-                        onPress={() => toggleGroup(group.id)}>
+                        onPress={() => toggleGroup(group.id)}
+                      >
                         <Text style={groupTextStyle(group.id)}>
                           {group.name}
                         </Text>
@@ -499,29 +708,53 @@ export default function ImportExportHandler({bottomInset}: ImportExportHandlerPr
                   </View>
 
                   {groups.length === 0 && (
-                    <Text style={{color: appSettings.textMuted, fontSize: 13, marginTop: 6}}>
+                    <Text
+                      style={{
+                        color: appSettings.textMuted,
+                        fontSize: 13,
+                        marginTop: 6,
+                      }}
+                    >
                       No group chats yet
                     </Text>
                   )}
                 </>
               )}
 
-              {selectedFormat && (selectedChars.length > 0 || selectedGroups.length > 0) && (
-                <TouchableOpacity
-                  style={[st.card, {marginTop: 16, backgroundColor: ac, alignItems: 'center'}]}
-                  onPress={handleExport}
-                  disabled={exporting}>
-                  <Text style={[st.cardTitle, {color: bg}]}>
-                    {exporting ? 'Exporting...' : 'Export Now'}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              {selectedFormat &&
+                (selectedChars.length > 0 || selectedGroups.length > 0) && (
+                  <TouchableOpacity
+                    style={[
+                      st.card,
+                      {
+                        marginTop: 16,
+                        backgroundColor: ac,
+                        alignItems: 'center',
+                      },
+                    ]}
+                    onPress={handleExport}
+                    disabled={exporting}
+                  >
+                    <Text style={[st.cardTitle, { color: bg }]}>
+                      {exporting ? 'Exporting...' : 'Export Now'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
-              {selectedFormat && selectedChars.length === 0 && selectedGroups.length === 0 && (
-                <Text style={{color: appSettings.textMuted, fontSize: 14, textAlign: 'center', marginTop: 20}}>
-                  Select at least one character or group to export
-                </Text>
-              )}
+              {selectedFormat &&
+                selectedChars.length === 0 &&
+                selectedGroups.length === 0 && (
+                  <Text
+                    style={{
+                      color: appSettings.textMuted,
+                      fontSize: 14,
+                      textAlign: 'center',
+                      marginTop: 20,
+                    }}
+                  >
+                    Select at least one character or group to export
+                  </Text>
+                )}
             </ScrollView>
           </View>
         </View>

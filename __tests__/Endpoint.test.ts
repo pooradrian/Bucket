@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({open: jest.fn()}));
+jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
 jest.mock('axios', () =>
   Object.assign(jest.fn(), {
     isCancel: jest.fn(() => false),
@@ -19,10 +19,17 @@ jest.mock('react-native-keychain', () => ({
 }));
 
 import axios from 'axios';
-import {getAIResponse, chatCompletionsUrl, embeddingsUrl, isPlainHttpUrl, normalizeProviderUrl, parseThinkCommand} from '../src/Endpoint';
-import {splitThinking} from '../src/thinking';
-import {DEFAULT_PROMPT_CONFIG} from '../src/PromptHandler';
-import type {ChatMessageObject} from '../src/PromptHandler';
+import {
+  getAIResponse,
+  chatCompletionsUrl,
+  embeddingsUrl,
+  isPlainHttpUrl,
+  normalizeProviderUrl,
+  parseThinkCommand,
+} from '../src/Endpoint';
+import { splitThinking } from '../src/thinking';
+import { DEFAULT_PROMPT_CONFIG } from '../src/PromptHandler';
+import type { ChatMessageObject } from '../src/PromptHandler';
 
 const CAT_SOUNDS = ['meow', 'merp', 'nya', 'purr'];
 
@@ -33,8 +40,8 @@ const catConfig = {
 
 function msg(content: string): ChatMessageObject[] {
   return [
-    {role: 'system' as const, content: 'x'},
-    {role: 'user' as const, content},
+    { role: 'system' as const, content: 'x' },
+    { role: 'user' as const, content },
   ];
 }
 
@@ -50,7 +57,12 @@ describe('built-in cat API', () => {
 
   test('streams each word as a token ending in a space except the last', async () => {
     const tokens: string[] = [];
-    const result = await getAIResponse(msg('4'), catConfig, t => tokens.push(t), true);
+    const result = await getAIResponse(
+      msg('4'),
+      catConfig,
+      t => tokens.push(t),
+      true,
+    );
     expect(tokens).toHaveLength(4);
     expect(tokens[0]).toMatch(/^meow|merp|nya|purr $/);
     expect(tokens[3]).not.toMatch(/ $/);
@@ -58,18 +70,18 @@ describe('built-in cat API', () => {
   });
 
   test('matches the URL case-insensitively', async () => {
-    const result = await getAIResponse(
-      msg('2'),
-      {...catConfig, apiUrl: "CAT'S API"},
-    );
+    const result = await getAIResponse(msg('2'), {
+      ...catConfig,
+      apiUrl: "CAT'S API",
+    });
     expect(result.content.split(' ')).toHaveLength(2);
   });
 
   test('is trimmed of surrounding whitespace', async () => {
-    const result = await getAIResponse(
-      msg('2'),
-      {...catConfig, apiUrl: "  cat's api  "},
-    );
+    const result = await getAIResponse(msg('2'), {
+      ...catConfig,
+      apiUrl: "  cat's api  ",
+    });
     expect(result.content.split(' ')).toHaveLength(2);
   });
 
@@ -79,7 +91,12 @@ describe('built-in cat API', () => {
   });
 
   test('does not cap the word count', async () => {
-    const result = await getAIResponse(msg('10000'), catConfig, undefined, false);
+    const result = await getAIResponse(
+      msg('10000'),
+      catConfig,
+      undefined,
+      false,
+    );
     expect(result.content.split(' ')).toHaveLength(10000);
   });
 
@@ -98,11 +115,15 @@ describe('built-in cat API', () => {
 
 describe('embeddingsUrl', () => {
   test('replaces /chat/completions with /embeddings', () => {
-    expect(embeddingsUrl('http://h:8080/v1/chat/completions')).toBe('http://h:8080/v1/embeddings');
+    expect(embeddingsUrl('http://h:8080/v1/chat/completions')).toBe(
+      'http://h:8080/v1/embeddings',
+    );
   });
 
   test('handles trailing slashes and whitespace', () => {
-    expect(embeddingsUrl('  http://h/v1/chat/completions/  ')).toBe('http://h/v1/embeddings');
+    expect(embeddingsUrl('  http://h/v1/chat/completions/  ')).toBe(
+      'http://h/v1/embeddings',
+    );
   });
 
   test('appends to a bare versioned base', () => {
@@ -116,16 +137,18 @@ describe('embeddingsUrl', () => {
 
 describe('chatCompletionsUrl', () => {
   test('keeps a full completions URL as-is', () => {
-    expect(chatCompletionsUrl('https://api.openai.com/v1/chat/completions')).toBe(
-      'https://api.openai.com/v1/chat/completions',
-    );
+    expect(
+      chatCompletionsUrl('https://api.openai.com/v1/chat/completions'),
+    ).toBe('https://api.openai.com/v1/chat/completions');
   });
 
   test('appends to a versioned or bare base, trimming slashes', () => {
     expect(chatCompletionsUrl('https://api.openai.com/v1')).toBe(
       'https://api.openai.com/v1/chat/completions',
     );
-    expect(chatCompletionsUrl('http://h:8080/')).toBe('http://h:8080/v1/chat/completions');
+    expect(chatCompletionsUrl('http://h:8080/')).toBe(
+      'http://h:8080/v1/chat/completions',
+    );
   });
 });
 
@@ -136,11 +159,15 @@ describe('normalizeProviderUrl', () => {
   });
 
   test('repairs a previously mangled cat API url', () => {
-    expect(normalizeProviderUrl("cat's api/v1/chat/completions")).toBe("cat's api");
+    expect(normalizeProviderUrl("cat's api/v1/chat/completions")).toBe(
+      "cat's api",
+    );
   });
 
   test('normalizes real urls and passes through empties', () => {
-    expect(normalizeProviderUrl('http://h:8080')).toBe('http://h:8080/v1/chat/completions');
+    expect(normalizeProviderUrl('http://h:8080')).toBe(
+      'http://h:8080/v1/chat/completions',
+    );
     expect(normalizeProviderUrl('')).toBe('');
   });
 });
@@ -155,19 +182,30 @@ describe('isPlainHttpUrl', () => {
 
 describe('cat API think command', () => {
   test('parses think N M', () => {
-    expect(parseThinkCommand('think 30 90')).toEqual({think: 30, answer: 90});
-    expect(parseThinkCommand('please THINK 5')).toEqual({think: 5, answer: 3});
+    expect(parseThinkCommand('think 30 90')).toEqual({ think: 30, answer: 90 });
+    expect(parseThinkCommand('please THINK 5')).toEqual({
+      think: 5,
+      answer: 3,
+    });
     expect(parseThinkCommand('meow 6')).toBeNull();
   });
 
   test('think 30 90 outputs 30 thinking sounds and 90 answer sounds', async () => {
-    const result = await getAIResponse(msg('think 30 90'), catConfig, undefined, false);
+    const result = await getAIResponse(
+      msg('think 30 90'),
+      catConfig,
+      undefined,
+      false,
+    );
     const thought = splitThinking(result.content);
     expect(thought.hasThinking).toBe(true);
     expect(thought.open).toBe(false);
     expect(thought.thinking.split(' ')).toHaveLength(30);
     expect(thought.answer.split(' ')).toHaveLength(90);
-    for (const w of [...thought.thinking.split(' '), ...thought.answer.split(' ')]) {
+    for (const w of [
+      ...thought.thinking.split(' '),
+      ...thought.answer.split(' '),
+    ]) {
       expect(CAT_SOUNDS).toContain(w);
     }
   });
@@ -179,7 +217,7 @@ describe('cat API think command', () => {
   });
 });
 
-const realConfig = {...DEFAULT_PROMPT_CONFIG, apiUrl: 'http://h:8080'};
+const realConfig = { ...DEFAULT_PROMPT_CONFIG, apiUrl: 'http://h:8080' };
 
 let sseLines: string[] = [];
 let lastBody = '';
@@ -207,20 +245,25 @@ function sse(payload: object): string {
 
 describe('reasoning capture', () => {
   beforeEach(() => {
-    (global as {XMLHttpRequest?: unknown}).XMLHttpRequest = FakeXHR;
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = FakeXHR;
     sseLines = [];
     lastBody = '';
   });
 
   test('streams reasoning deltas wrapped in thinking tags', async () => {
     sseLines = [
-      sse({choices: [{delta: {reasoning_content: 'hmm '}}]}),
-      sse({choices: [{delta: {reasoning: 'and more'}}]}),
-      sse({choices: [{delta: {content: 'hi there'}}]}),
+      sse({ choices: [{ delta: { reasoning_content: 'hmm ' } }] }),
+      sse({ choices: [{ delta: { reasoning: 'and more' } }] }),
+      sse({ choices: [{ delta: { content: 'hi there' } }] }),
       'data: [DONE]',
     ];
     const tokens: string[] = [];
-    const result = await getAIResponse(msg('x'), realConfig, t => tokens.push(t), true);
+    const result = await getAIResponse(
+      msg('x'),
+      realConfig,
+      t => tokens.push(t),
+      true,
+    );
     const thought = splitThinking(result.content);
     expect(thought.hasThinking).toBe(true);
     expect(thought.open).toBe(false);
@@ -231,7 +274,7 @@ describe('reasoning capture', () => {
 
   test('content-only stream gets no thinking tags', async () => {
     sseLines = [
-      sse({choices: [{delta: {content: 'plain'}}]}),
+      sse({ choices: [{ delta: { content: 'plain' } }] }),
       'data: [DONE]',
     ];
     const result = await getAIResponse(msg('x'), realConfig, undefined, true);
@@ -242,7 +285,13 @@ describe('reasoning capture', () => {
   test('non-streaming wraps message.reasoning_content', async () => {
     const axiosMock = axios as unknown as jest.Mock;
     axiosMock.mockResolvedValueOnce({
-      data: {choices: [{message: {content: 'answer', reasoning_content: 'deep thoughts'}}]},
+      data: {
+        choices: [
+          {
+            message: { content: 'answer', reasoning_content: 'deep thoughts' },
+          },
+        ],
+      },
     });
     const result = await getAIResponse(msg('x'), realConfig, undefined, false);
     const thought = splitThinking(result.content);
@@ -254,16 +303,19 @@ describe('reasoning capture', () => {
 
 describe('extra body', () => {
   beforeEach(() => {
-    (global as {XMLHttpRequest?: unknown}).XMLHttpRequest = FakeXHR;
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = FakeXHR;
     sseLines = [];
     lastBody = '';
   });
 
   test('merges into the sent request body', async () => {
-    sseLines = [sse({choices: [{delta: {content: 'ok'}}]}), 'data: [DONE]'];
+    sseLines = [
+      sse({ choices: [{ delta: { content: 'ok' } }] }),
+      'data: [DONE]',
+    ];
     await getAIResponse(
       msg('x'),
-      {...realConfig, extraBody: '{"reasoning_effort":"high"}'},
+      { ...realConfig, extraBody: '{"reasoning_effort":"high"}' },
       undefined,
       true,
     );
@@ -276,21 +328,34 @@ describe('extra body', () => {
 
   test('rejects invalid JSON', async () => {
     await expect(
-      getAIResponse(msg('x'), {...realConfig, extraBody: 'nope'}, undefined, true),
+      getAIResponse(
+        msg('x'),
+        { ...realConfig, extraBody: 'nope' },
+        undefined,
+        true,
+      ),
     ).rejects.toThrow('Extra body must be valid JSON');
   });
 
   test('rejects non-object JSON', async () => {
     await expect(
-      getAIResponse(msg('x'), {...realConfig, extraBody: '[1]'}, undefined, true),
+      getAIResponse(
+        msg('x'),
+        { ...realConfig, extraBody: '[1]' },
+        undefined,
+        true,
+      ),
     ).rejects.toThrow('Extra body must be a valid JSON object');
   });
 
   test('empty extra body is skipped', async () => {
-    sseLines = [sse({choices: [{delta: {content: 'ok'}}]}), 'data: [DONE]'];
+    sseLines = [
+      sse({ choices: [{ delta: { content: 'ok' } }] }),
+      'data: [DONE]',
+    ];
     const result = await getAIResponse(
       msg('x'),
-      {...realConfig, extraBody: '  '},
+      { ...realConfig, extraBody: '  ' },
       undefined,
       true,
     );

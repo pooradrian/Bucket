@@ -1,12 +1,24 @@
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {FlatList} from 'react-native';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { FlatList } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
-import {Character} from './CharacterEditor';
-import {loadPromptConfig, sendToLLM, sendToGroupLLM, sendToQCLLM, PromptConfig} from './PromptHandler';
-import {RawRequest} from './Endpoint';
-import {LorebookState} from './RAGHandler';
-import {splitThinking} from './thinking';
-import {useAppStore, GroupChat} from './store';
+import { Character } from './CharacterEditor';
+import {
+  loadPromptConfig,
+  sendToLLM,
+  sendToGroupLLM,
+  sendToQCLLM,
+  PromptConfig,
+} from './PromptHandler';
+import { RawRequest } from './Endpoint';
+import { LorebookState } from './RAGHandler';
+import { splitThinking } from './thinking';
+import { useAppStore, GroupChat } from './store';
 import {
   getSessionById,
   createSession,
@@ -19,11 +31,15 @@ import {
   generateId,
   getLorebookEntriesFromDB,
 } from './Database';
-import {checkAndSummarize, getSummarizationConfig} from './Summarizer';
-import {applyDisplacements, DisplacementRule, parseDisplacements} from './displacement';
-import {stripSpeakerNamePrefixes} from './PromptHandler';
-import {logEvent} from './EventLogger';
-import {playNotificationSound, vibrateDevice} from './NotificationModule';
+import { checkAndSummarize, getSummarizationConfig } from './Summarizer';
+import {
+  applyDisplacements,
+  DisplacementRule,
+  parseDisplacements,
+} from './displacement';
+import { stripSpeakerNamePrefixes } from './PromptHandler';
+import { logEvent } from './EventLogger';
+import { playNotificationSound, vibrateDevice } from './NotificationModule';
 
 export interface ReplyVariant {
   id: string;
@@ -35,9 +51,9 @@ export interface ReplyVariant {
 }
 
 function serializeRequest(request: RawRequest): string {
-  const strippedBody = {...request.body};
+  const strippedBody = { ...request.body };
   delete (strippedBody as Record<string, unknown>).stream;
-  return JSON.stringify({url: request.url, body: strippedBody});
+  return JSON.stringify({ url: request.url, body: strippedBody });
 }
 
 export interface ChatMessage {
@@ -79,7 +95,9 @@ function liveDeckIndex(msg: ChatMessage): number {
     content: msg.content,
     timestamp: msg.timestamp,
   };
-  const deck = [...(msg.variants ?? []), liveEntry].sort((a, b) => a.timestamp - b.timestamp);
+  const deck = [...(msg.variants ?? []), liveEntry].sort(
+    (a, b) => a.timestamp - b.timestamp,
+  );
   return deck.findIndex(d => d.id === 'live');
 }
 
@@ -88,9 +106,9 @@ function makeVariantEntry(id: string, msg: ChatMessage): ReplyVariant {
     id,
     content: msg.content,
     timestamp: msg.timestamp,
-    ...(msg.characterId ? {characterId: msg.characterId} : {}),
-    ...(msg.speakerName ? {speakerName: msg.speakerName} : {}),
-    ...(msg.thinkingMs !== undefined ? {thinkingMs: msg.thinkingMs} : {}),
+    ...(msg.characterId ? { characterId: msg.characterId } : {}),
+    ...(msg.speakerName ? { speakerName: msg.speakerName } : {}),
+    ...(msg.thinkingMs !== undefined ? { thinkingMs: msg.thinkingMs } : {}),
   };
 }
 
@@ -113,17 +131,27 @@ export function reconcileSelectedQC(
 }
 
 function notifyCompletion(): void {
-  const {appSettings} = useAppStore.getState();
-  if (appSettings.notificationMode === 'vibrate' || appSettings.notificationMode === 'both') {
+  const { appSettings } = useAppStore.getState();
+  if (
+    appSettings.notificationMode === 'vibrate' ||
+    appSettings.notificationMode === 'both'
+  ) {
     vibrateDevice();
   }
-  if (appSettings.notificationMode === 'sound' || appSettings.notificationMode === 'both') {
+  if (
+    appSettings.notificationMode === 'sound' ||
+    appSettings.notificationMode === 'both'
+  ) {
     playNotificationSound(appSettings.notificationSound);
   }
 }
 
 async function maybeSummarize(
-  opts: {summarize?: boolean; summaryBase?: ChatSession; replaceMessageId?: string},
+  opts: {
+    summarize?: boolean;
+    summaryBase?: ChatSession;
+    replaceMessageId?: string;
+  },
   resultContent: string,
   assistantUpdatedAt: number,
   replyCharId: string | undefined,
@@ -145,7 +173,7 @@ async function maybeSummarize(
     content: resultContent,
     timestamp: assistantUpdatedAt,
     requestInfo,
-    ...(replyCharId ? {characterId: replyCharId} : {}),
+    ...(replyCharId ? { characterId: replyCharId } : {}),
   };
   const withAssistant: ChatSession = {
     ...opts.summaryBase,
@@ -156,7 +184,11 @@ async function maybeSummarize(
       : [...messages, finalAssistantMessage],
     updatedAt: assistantUpdatedAt,
   };
-  const summarized = await checkAndSummarize(withAssistant, sumConfig, promptConfig);
+  const summarized = await checkAndSummarize(
+    withAssistant,
+    sumConfig,
+    promptConfig,
+  );
   if (summarized.messages.length !== withAssistant.messages.length) {
     applyResult(summarized);
   }
@@ -193,11 +225,14 @@ export function useChat({
   setSelectedQC: (qc: QuickCharacter | null) => void;
   groupMembers: Character[];
   flatListRef: React.RefObject<FlatList<ChatMessage> | null>;
-  messagesData: (ChatMessage & {id: string})[];
+  messagesData: (ChatMessage & { id: string })[];
   replacingMessageId: string | null;
   variantIndexMap: Record<string, number>;
   handleSend: (text: string) => Promise<void>;
-  handleContinue: (target?: {character?: Character | null; qc?: QuickCharacter | null}) => Promise<void>;
+  handleContinue: (target?: {
+    character?: Character | null;
+    qc?: QuickCharacter | null;
+  }) => Promise<void>;
   handleEditMessage: (msg: ChatMessage) => void;
   handleEditSave: (msg: ChatMessage, newText: string) => void;
   handleEditCancel: () => void;
@@ -205,9 +240,19 @@ export function useChat({
   handleDeleteMessage: (msg: ChatMessage) => void;
   handleRegenerate: () => Promise<void>;
   handleSwitchVariant: (msgId: string, direction: 1 | -1) => Promise<void>;
-  handleSelectVariant: (msgId: string, targetSlotIndex: number) => Promise<void>;
-  handleStudioEditEntry: (msgId: string, entryKey: string, newText: string) => Promise<void>;
-  handleStudioFork: (msgId: string, sourceKey: string) => Promise<string | null>;
+  handleSelectVariant: (
+    msgId: string,
+    targetSlotIndex: number,
+  ) => Promise<void>;
+  handleStudioEditEntry: (
+    msgId: string,
+    entryKey: string,
+    newText: string,
+  ) => Promise<void>;
+  handleStudioFork: (
+    msgId: string,
+    sourceKey: string,
+  ) => Promise<string | null>;
   handleStudioFresh: (msgId: string) => Promise<string | null>;
   handleStudioDeleteEntry: (msgId: string, entryKey: string) => Promise<void>;
   handleRetryError: () => Promise<void>;
@@ -223,13 +268,18 @@ export function useChat({
   const displacementRulesRef = useRef<DisplacementRule[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [selectedReplyCharacter, setSelectedReplyCharacter] = useState<Character | null>(null);
+  const [selectedReplyCharacter, setSelectedReplyCharacter] =
+    useState<Character | null>(null);
   const [selectedQC, setSelectedQC] = useState<QuickCharacter | null>(null);
-  const [variantIndexMap, setVariantIndexMap] = useState<Record<string, number>>({});
+  const [variantIndexMap, setVariantIndexMap] = useState<
+    Record<string, number>
+  >({});
   const variantIndexMapRef = useRef(variantIndexMap);
   useEffect(() => {
     variantIndexMapRef.current = variantIndexMap;
@@ -242,7 +292,9 @@ export function useChat({
   const thinkStartRef = useRef(0);
   const thinkMsRef = useRef<number | null>(null);
   const replacingMessageIdRef = useRef<string | null>(null);
-  const [replacingMessageId, setReplacingMessageId] = useState<string | null>(null);
+  const [replacingMessageId, setReplacingMessageId] = useState<string | null>(
+    null,
+  );
   // Always tracks the id of the session currently shown in the UI. Used to
   // detect when the active session changes mid-stream so that streamed results
   // are not applied to (or persisted into) the wrong session.
@@ -303,7 +355,9 @@ export function useChat({
       if (sessionIdRef.current !== startSessionId) {
         return;
       }
-      setSession(prev => (prev && prev.id === startSessionId ? updater(prev) : prev));
+      setSession(prev =>
+        prev && prev.id === startSessionId ? updater(prev) : prev,
+      );
     },
     [],
   );
@@ -313,8 +367,15 @@ export function useChat({
     if (!streamingTimerRef.current) {
       streamingTimerRef.current = setTimeout(() => {
         streamingTimerRef.current = null;
-        const displaced = applyDisplacements(rawStreamRef.current, displacementRulesRef.current, displacementSeedRef.current);
-        const cleaned = stripSpeakerNamePrefixes(displaced, speakerNamesRef.current);
+        const displaced = applyDisplacements(
+          rawStreamRef.current,
+          displacementRulesRef.current,
+          displacementSeedRef.current,
+        );
+        const cleaned = stripSpeakerNamePrefixes(
+          displaced,
+          speakerNamesRef.current,
+        );
         streamingContentRef.current = cleaned;
         setStreamingContent(cleaned);
         if (thinkMsRef.current == null) {
@@ -340,9 +401,12 @@ export function useChat({
   const isGroupChat = !!groupChat;
   const groupMembers = useMemo(() => {
     if (!isGroupChat || !groupChat) return [];
-    return groupChat.characterIds.map(id => allCharacters.find(c => c.id === id)).filter(Boolean) as Character[];
+    return groupChat.characterIds
+      .map(id => allCharacters.find(c => c.id === id))
+      .filter(Boolean) as Character[];
   }, [isGroupChat, groupChat, allCharacters]);
-  const activeCharacter = character || (groupMembers.length > 0 ? groupMembers[0] : null);
+  const activeCharacter =
+    character || (groupMembers.length > 0 ? groupMembers[0] : null);
   speakerNamesRef.current = [
     activeCharacter?.name,
     selectedQC?.name,
@@ -351,14 +415,17 @@ export function useChat({
     ...groupMembers.map(c => c.name),
   ];
 
-  const persistMessage = useCallback(async (sessionId: string, message: ChatMessage, updatedAt: number) => {
-    try {
-      await addMessage(sessionId, message);
-      updateSessionTimestamp(sessionId, updatedAt);
-    } catch (e) {
-      console.warn('Failed to persist message:', e);
-    }
-  }, []);
+  const persistMessage = useCallback(
+    async (sessionId: string, message: ChatMessage, updatedAt: number) => {
+      try {
+        await addMessage(sessionId, message);
+        updateSessionTimestamp(sessionId, updatedAt);
+      } catch (e) {
+        console.warn('Failed to persist message:', e);
+      }
+    },
+    [],
+  );
 
   // Lorebook entries are loaded lazily at send time instead of eagerly on
   // every character change — large lorebooks made chat entry sluggish.
@@ -385,7 +452,9 @@ export function useChat({
           unpersistedRef.current.delete(existing.id);
           setSession(existing);
           if (isGroupChat && existing.lastReplyCharacterId) {
-            const lastChar = groupMembers.find(c => c.id === existing.lastReplyCharacterId);
+            const lastChar = groupMembers.find(
+              c => c.id === existing.lastReplyCharacterId,
+            );
             if (lastChar) setSelectedReplyCharacter(lastChar);
           }
           return;
@@ -479,7 +548,10 @@ export function useChat({
         replaceMessageId?: string;
         existingVariants?: ReplyVariant[];
         continueMode?: boolean;
-        continueTarget?: {character?: Character | null; qc?: QuickCharacter | null};
+        continueTarget?: {
+          character?: Character | null;
+          qc?: QuickCharacter | null;
+        };
       } = {},
     ) => {
       setSending(true);
@@ -488,7 +560,9 @@ export function useChat({
       setReplacingMessageId(opts.replaceMessageId ?? null);
       const targetReplyCharacter = opts.continueTarget
         ? (opts.continueTarget.character ?? null)
-        : (isGroupChat ? selectedReplyCharacter : null);
+        : isGroupChat
+          ? selectedReplyCharacter
+          : null;
       const targetQC = opts.continueTarget
         ? (opts.continueTarget.qc ?? null)
         : selectedQC;
@@ -497,7 +571,9 @@ export function useChat({
         // without remounting them.
         const promptConfig = await loadPromptConfig();
         displacementSeedRef.current = Math.floor(Math.random() * 0x7fffffff);
-        displacementRulesRef.current = parseDisplacements(promptConfig.wordDisplacements);
+        displacementRulesRef.current = parseDisplacements(
+          promptConfig.wordDisplacements,
+        );
         rawStreamRef.current = '';
         streamingContentRef.current = '';
         thinkStartRef.current = Date.now();
@@ -546,16 +622,25 @@ export function useChat({
           return;
         }
 
-        const content = applyDisplacements(result.content, displacementRulesRef.current, displacementSeedRef.current);
+        const content = applyDisplacements(
+          result.content,
+          displacementRulesRef.current,
+          displacementSeedRef.current,
+        );
         if (!content.trim()) {
-          throw new Error('The model returned an empty response. Try again, or use Continue.');
+          throw new Error(
+            'The model returned an empty response. Try again, or use Continue.',
+          );
         }
 
-        const replyCharId = (isGroupChat && targetReplyCharacter)
-          ? targetReplyCharacter.id
-          : targetQC
-            ? targetQC.id
-            : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
+        const replyCharId =
+          isGroupChat && targetReplyCharacter
+            ? targetReplyCharacter.id
+            : targetQC
+              ? targetQC.id
+              : quickCharacters.length > 0 && activeCharacter
+                ? activeCharacter.id
+                : undefined;
         const assistantUpdatedAt = Date.now();
         const requestInfo = serializeRequest(result.request);
         let thinkingMs: number | null = thinkMsRef.current;
@@ -602,8 +687,10 @@ export function useChat({
             content,
             timestamp: assistantUpdatedAt,
             requestInfo,
-            ...(replyCharId ? {characterId: replyCharId} : {}),
-            ...(thinkingMsValue !== undefined ? {thinkingMs: thinkingMsValue} : {}),
+            ...(replyCharId ? { characterId: replyCharId } : {}),
+            ...(thinkingMsValue !== undefined
+              ? { thinkingMs: thinkingMsValue }
+              : {}),
           };
           updateSessionIfCurrent(startSessionId, prev => ({
             ...prev,
@@ -632,18 +719,25 @@ export function useChat({
           messages,
           promptConfig,
           requestInfo,
-          summarized => updateSessionIfCurrent(startSessionId, () => summarized),
+          summarized =>
+            updateSessionIfCurrent(startSessionId, () => summarized),
         );
       } catch (e: unknown) {
         setIsStreaming(false);
-        const isCancelled = e instanceof Error && e.message === 'Request was cancelled';
+        const isCancelled =
+          e instanceof Error && e.message === 'Request was cancelled';
         if (isCancelled) {
           const partial = streamingContentRef.current;
-          const cancelledRequest = (e as Error & {request?: RawRequest}).request;
-          const cancelRequestInfo = cancelledRequest ? serializeRequest(cancelledRequest) : undefined;
+          const cancelledRequest = (e as Error & { request?: RawRequest })
+            .request;
+          const cancelRequestInfo = cancelledRequest
+            ? serializeRequest(cancelledRequest)
+            : undefined;
           const partialSplit = splitThinking(partial);
           const cancelledThinkingMs =
-            partialSplit.hasThinking && !partialSplit.open ? thinkMsRef.current ?? undefined : undefined;
+            partialSplit.hasThinking && !partialSplit.open
+              ? (thinkMsRef.current ?? undefined)
+              : undefined;
           if (opts.replaceMessageId) {
             const replaceId = opts.replaceMessageId;
             const existingVariants = opts.existingVariants ?? [];
@@ -653,28 +747,47 @@ export function useChat({
                 ...prev,
                 messages: prev.messages.map(m =>
                   m.id === replaceId
-                    ? {...m, content: partial, timestamp: cancelUpdatedAt, variants: existingVariants, requestInfo: cancelRequestInfo, thinkingMs: cancelledThinkingMs}
+                    ? {
+                        ...m,
+                        content: partial,
+                        timestamp: cancelUpdatedAt,
+                        variants: existingVariants,
+                        requestInfo: cancelRequestInfo,
+                        thinkingMs: cancelledThinkingMs,
+                      }
                     : m,
                 ),
                 updatedAt: cancelUpdatedAt,
               }));
-              updateMessageWithVariants(replaceId, partial, cancelUpdatedAt, existingVariants, cancelRequestInfo, cancelledThinkingMs);
+              updateMessageWithVariants(
+                replaceId,
+                partial,
+                cancelUpdatedAt,
+                existingVariants,
+                cancelRequestInfo,
+                cancelledThinkingMs,
+              );
               updateSessionTimestamp(startSessionId, cancelUpdatedAt);
             }
           } else if (partial.length > 0) {
-            const cancelReplyCharId = (isGroupChat && targetReplyCharacter)
-              ? targetReplyCharacter.id
-              : targetQC
-                ? targetQC.id
-                : (quickCharacters.length > 0 && activeCharacter ? activeCharacter.id : undefined);
+            const cancelReplyCharId =
+              isGroupChat && targetReplyCharacter
+                ? targetReplyCharacter.id
+                : targetQC
+                  ? targetQC.id
+                  : quickCharacters.length > 0 && activeCharacter
+                    ? activeCharacter.id
+                    : undefined;
             const assistantMessage: ChatMessage = {
               id: generateId(),
               role: 'assistant',
               content: partial,
               timestamp: Date.now(),
               requestInfo: cancelRequestInfo,
-              ...(cancelReplyCharId ? {characterId: cancelReplyCharId} : {}),
-              ...(cancelledThinkingMs !== undefined ? {thinkingMs: cancelledThinkingMs} : {}),
+              ...(cancelReplyCharId ? { characterId: cancelReplyCharId } : {}),
+              ...(cancelledThinkingMs !== undefined
+                ? { thinkingMs: cancelledThinkingMs }
+                : {}),
             };
             const cancelUpdatedAt = Date.now();
             updateSessionIfCurrent(startSessionId, prev => ({
@@ -686,7 +799,11 @@ export function useChat({
           }
           resetStreamingContent();
         } else {
-          setError(e instanceof Error ? e.message : 'Something went wrong. Tap to retry.');
+          setError(
+            e instanceof Error
+              ? e.message
+              : 'Something went wrong. Tap to retry.',
+          );
           resetStreamingContent();
         }
       } finally {
@@ -696,7 +813,19 @@ export function useChat({
         setSending(false);
       }
     },
-    [isGroupChat, selectedReplyCharacter, selectedQC, quickCharacters, groupMembers, activeCharacter, loadChatLorebooks, persistMessage, flushStreamingContent, resetStreamingContent, updateSessionIfCurrent],
+    [
+      isGroupChat,
+      selectedReplyCharacter,
+      selectedQC,
+      quickCharacters,
+      groupMembers,
+      activeCharacter,
+      loadChatLorebooks,
+      persistMessage,
+      flushStreamingContent,
+      resetStreamingContent,
+      updateSessionIfCurrent,
+    ],
   );
 
   const handleSend = useCallback(
@@ -736,7 +865,11 @@ export function useChat({
         isGroupChat,
         isQC: !!selectedQC,
       });
-      scrollTimeoutRef.current = setTimeout(() => flatListRef.current?.scrollToOffset({offset: 0, animated: true}), 50);
+      scrollTimeoutRef.current = setTimeout(
+        () =>
+          flatListRef.current?.scrollToOffset({ offset: 0, animated: true }),
+        50,
+      );
 
       await runLLMRequest(startSessionId, withUser.messages, trimmed, {
         setLastReplyCharacter: true,
@@ -744,11 +877,23 @@ export function useChat({
         summaryBase: withUser,
       });
     },
-    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, ensureSessionPersisted, persistMessage, runLLMRequest],
+    [
+      session,
+      sending,
+      isGroupChat,
+      selectedReplyCharacter,
+      selectedQC,
+      ensureSessionPersisted,
+      persistMessage,
+      runLLMRequest,
+    ],
   );
 
   const handleContinue = useCallback(
-    async (target?: {character?: Character | null; qc?: QuickCharacter | null}) => {
+    async (target?: {
+      character?: Character | null;
+      qc?: QuickCharacter | null;
+    }) => {
       if (!session || sending) {
         return;
       }
@@ -779,7 +924,15 @@ export function useChat({
         continueTarget,
       });
     },
-    [session, sending, isGroupChat, selectedReplyCharacter, selectedQC, ensureSessionPersisted, runLLMRequest],
+    [
+      session,
+      sending,
+      isGroupChat,
+      selectedReplyCharacter,
+      selectedQC,
+      ensureSessionPersisted,
+      runLLMRequest,
+    ],
   );
 
   const handleEditMessage = useCallback((msg: ChatMessage) => {
@@ -788,24 +941,34 @@ export function useChat({
     setEditingText(msg.content);
   }, []);
 
-  const handleEditSave = useCallback(async (msg: ChatMessage, newText: string) => {
-    if (!session) {return;}
-    const trimmed = newText.trim();
-    if (!trimmed) {return;}
-    const updated = session.messages.map(m =>
-      m.id === msg.id ? {...m, content: trimmed} : m,
-    );
-    setSession({...session, messages: updated, updatedAt: Date.now()});
-    try {
-      await updateMessage(msg.id, trimmed);
-      updateSessionTimestamp(session.id, Date.now());
-      logEvent('message_edited', {oldCharCount: msg.content.length, newCharCount: trimmed.length});
-    } catch (e) {
-      console.warn('Failed to save message edit:', e);
-    }
-    setEditingMessageId(null);
-    setEditingText('');
-  }, [session]);
+  const handleEditSave = useCallback(
+    async (msg: ChatMessage, newText: string) => {
+      if (!session) {
+        return;
+      }
+      const trimmed = newText.trim();
+      if (!trimmed) {
+        return;
+      }
+      const updated = session.messages.map(m =>
+        m.id === msg.id ? { ...m, content: trimmed } : m,
+      );
+      setSession({ ...session, messages: updated, updatedAt: Date.now() });
+      try {
+        await updateMessage(msg.id, trimmed);
+        updateSessionTimestamp(session.id, Date.now());
+        logEvent('message_edited', {
+          oldCharCount: msg.content.length,
+          newCharCount: trimmed.length,
+        });
+      } catch (e) {
+        console.warn('Failed to save message edit:', e);
+      }
+      setEditingMessageId(null);
+      setEditingText('');
+    },
+    [session],
+  );
 
   const handleEditCancel = useCallback(() => {
     setEditingMessageId(null);
@@ -817,15 +980,20 @@ export function useChat({
     setSelectedMessageId(null);
   }, []);
 
-  const handleDeleteMessage = useCallback((msg: ChatMessage) => {
-    if (!session) {return;}
-    const updated = session.messages.filter(m => m.id !== msg.id);
-    setSession({...session, messages: updated, updatedAt: Date.now()});
-    deleteMessage(msg.id);
-    updateSessionTimestamp(session.id, Date.now());
-    logEvent('message_deleted', {charCount: msg.content.length});
-    setSelectedMessageId(null);
-  }, [session]);
+  const handleDeleteMessage = useCallback(
+    (msg: ChatMessage) => {
+      if (!session) {
+        return;
+      }
+      const updated = session.messages.filter(m => m.id !== msg.id);
+      setSession({ ...session, messages: updated, updatedAt: Date.now() });
+      deleteMessage(msg.id);
+      updateSessionTimestamp(session.id, Date.now());
+      logEvent('message_deleted', { charCount: msg.content.length });
+      setSelectedMessageId(null);
+    },
+    [session],
+  );
 
   const handleRegenerate = useCallback(async () => {
     if (!session || sending) {
@@ -838,7 +1006,9 @@ export function useChat({
 
     const startSessionId = session.id;
     const baseMessages = session.messages.slice(0, -1);
-    const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = [...baseMessages]
+      .reverse()
+      .find(m => m.role === 'user');
     if (!lastUserMsg) {
       return;
     }
@@ -847,28 +1017,33 @@ export function useChat({
       id: generateId(),
       content: lastMsg.content,
       timestamp: lastMsg.timestamp,
-      ...(lastMsg.characterId ? {characterId: lastMsg.characterId} : {}),
-      ...(lastMsg.speakerName ? {speakerName: lastMsg.speakerName} : {}),
-      ...(lastMsg.thinkingMs !== undefined ? {thinkingMs: lastMsg.thinkingMs} : {}),
+      ...(lastMsg.characterId ? { characterId: lastMsg.characterId } : {}),
+      ...(lastMsg.speakerName ? { speakerName: lastMsg.speakerName } : {}),
+      ...(lastMsg.thinkingMs !== undefined
+        ? { thinkingMs: lastMsg.thinkingMs }
+        : {}),
     };
     const existingVariants = [...(lastMsg.variants ?? []), archivedVariant];
 
     updateSessionIfCurrent(startSessionId, prev => ({
       ...prev,
       messages: prev.messages.map(m =>
-        m.id === lastMsg.id ? {...m, variants: existingVariants} : m,
+        m.id === lastMsg.id ? { ...m, variants: existingVariants } : m,
       ),
       updatedAt: Date.now(),
     }));
     updateSessionTimestamp(startSessionId, Date.now());
     setSelectedMessageId(null);
-    setVariantIndexMap(prev => ({...prev, [lastMsg.id]: existingVariants.length}));
+    setVariantIndexMap(prev => ({
+      ...prev,
+      [lastMsg.id]: existingVariants.length,
+    }));
 
     await runLLMRequest(startSessionId, baseMessages, lastUserMsg.content, {
       replaceMessageId: lastMsg.id,
       existingVariants,
     });
-    logEvent('message_regenerated', {sessionMsgCount: baseMessages.length});
+    logEvent('message_regenerated', { sessionMsgCount: baseMessages.length });
   }, [session, sending, updateSessionIfCurrent, runLLMRequest]);
 
   const commitVariantUpdate = useCallback(
@@ -879,10 +1054,16 @@ export function useChat({
       deckIndex?: number,
       logName?: string,
     ) => {
-      const updatedMessages = baseSession.messages.map(m => (m.id === msgId ? updatedMsg : m));
-      setSession({...baseSession, messages: updatedMessages, updatedAt: Date.now()});
+      const updatedMessages = baseSession.messages.map(m =>
+        m.id === msgId ? updatedMsg : m,
+      );
+      setSession({
+        ...baseSession,
+        messages: updatedMessages,
+        updatedAt: Date.now(),
+      });
       const idx = deckIndex ?? liveDeckIndex(updatedMsg);
-      setVariantIndexMap(prev => ({...prev, [msgId]: idx}));
+      setVariantIndexMap(prev => ({ ...prev, [msgId]: idx }));
       try {
         await updateMessageWithVariants(
           msgId,
@@ -899,213 +1080,285 @@ export function useChat({
       }
       updateSessionTimestamp(baseSession.id, Date.now());
       if (logName) {
-        logEvent(logName, {role: updatedMsg.role});
+        logEvent(logName, { role: updatedMsg.role });
       }
     },
     [],
   );
 
-  const handleSwitchVariant = useCallback(async (msgId: string, direction: 1 | -1) => {
-    if (!session) {
-      return;
-    }
-    const msg = session.messages.find(m => m.id === msgId);
-    if (!msg || !msg.variants || msg.variants.length === 0) {
-      return;
-    }
-    const n = msg.variants.length;
-    const currentIdx = variantIndexMapRef.current[msgId] ?? n;
-    const newIdx = currentIdx + direction;
-    if (newIdx < 0 || newIdx > n) {
-      return;
-    }
+  const handleSwitchVariant = useCallback(
+    async (msgId: string, direction: 1 | -1) => {
+      if (!session) {
+        return;
+      }
+      const msg = session.messages.find(m => m.id === msgId);
+      if (!msg || !msg.variants || msg.variants.length === 0) {
+        return;
+      }
+      const n = msg.variants.length;
+      const currentIdx = variantIndexMapRef.current[msgId] ?? n;
+      const newIdx = currentIdx + direction;
+      if (newIdx < 0 || newIdx > n) {
+        return;
+      }
 
-    const oldEntry = makeVariantEntry(generateId(), msg);
+      const oldEntry = makeVariantEntry(generateId(), msg);
 
-    let newContent: ReplyVariant;
-    let newVariants: ReplyVariant[];
-    if (newIdx < currentIdx) {
-      newContent = msg.variants[newIdx];
-      newVariants = [...msg.variants];
-      newVariants.splice(newIdx, 1, oldEntry);
-    } else {
-      newContent = msg.variants[newIdx - 1];
-      newVariants = [...msg.variants];
-      newVariants.splice(newIdx - 1, 1, oldEntry);
-    }
+      let newContent: ReplyVariant;
+      let newVariants: ReplyVariant[];
+      if (newIdx < currentIdx) {
+        newContent = msg.variants[newIdx];
+        newVariants = [...msg.variants];
+        newVariants.splice(newIdx, 1, oldEntry);
+      } else {
+        newContent = msg.variants[newIdx - 1];
+        newVariants = [...msg.variants];
+        newVariants.splice(newIdx - 1, 1, oldEntry);
+      }
 
-    const updatedMsg: ChatMessage = {
-      ...msg,
-      content: newContent.content,
-      timestamp: newContent.timestamp,
-      characterId: newContent.characterId ?? msg.characterId,
-      variants: newVariants,
-      thinkingMs: newContent.thinkingMs,
-    };
-    await commitVariantUpdate(session, msgId, updatedMsg, newIdx);
-  }, [session, commitVariantUpdate]);
-
-  const handleSelectVariant = useCallback(async (msgId: string, targetDeckIndex: number) => {
-    if (!session) {
-      return;
-    }
-    const msg = session.messages.find(m => m.id === msgId);
-    if (!msg || !msg.variants || msg.variants.length === 0) {
-      return;
-    }
-
-    const deck = [...msg.variants, makeVariantEntry('live', msg)].sort((a, b) => a.timestamp - b.timestamp);
-    const livePos = deck.findIndex(d => d.id === 'live');
-    const clamped = Math.min(Math.max(targetDeckIndex, 0), deck.length - 1);
-    if (clamped === livePos || clamped < 0 || deck[clamped].id === 'live') {
-      return;
-    }
-
-    const chosen = deck[clamped];
-    const variantIdx = msg.variants.findIndex(v => v.id === chosen.id);
-    if (variantIdx < 0) {
-      return;
-    }
-
-    const oldEntry = makeVariantEntry(generateId(), msg);
-
-    const newContent = msg.variants[variantIdx];
-    const newVariants = [...msg.variants];
-    newVariants.splice(variantIdx, 1, oldEntry);
-
-    const updatedMsg: ChatMessage = {
-      ...msg,
-      content: newContent.content,
-      timestamp: newContent.timestamp,
-      characterId: newContent.characterId ?? msg.characterId,
-      variants: newVariants,
-      thinkingMs: newContent.thinkingMs,
-    };
-    await commitVariantUpdate(session, msgId, updatedMsg, clamped);
-  }, [session, commitVariantUpdate]);
-
-  const handleStudioEditEntry = useCallback(async (msgId: string, entryKey: string, newText: string) => {
-    if (!session) {
-      return;
-    }
-    const msg = session.messages.find(m => m.id === msgId);
-    if (!msg) {
-      return;
-    }
-    const trimmed = newText.trim();
-    if (!trimmed) {
-      return;
-    }
-    let updatedMsg: ChatMessage;
-    if (entryKey === 'live') {
-      updatedMsg = {...msg, content: trimmed, timestamp: Date.now(), thinkingMs: undefined};
-    } else {
-      updatedMsg = {
+      const updatedMsg: ChatMessage = {
         ...msg,
-        variants: (msg.variants ?? []).map(v =>
-          v.id === entryKey ? {...v, content: trimmed, timestamp: Date.now(), thinkingMs: undefined} : v,
-        ),
+        content: newContent.content,
+        timestamp: newContent.timestamp,
+        characterId: newContent.characterId ?? msg.characterId,
+        variants: newVariants,
+        thinkingMs: newContent.thinkingMs,
       };
-    }
-    await commitVariantUpdate(session, msgId, updatedMsg, undefined, 'variant_edited');
-  }, [session, commitVariantUpdate]);
+      await commitVariantUpdate(session, msgId, updatedMsg, newIdx);
+    },
+    [session, commitVariantUpdate],
+  );
 
-  const handleStudioFork = useCallback(async (msgId: string, sourceKey: string): Promise<string | null> => {
-    if (!session) {
-      return null;
-    }
-    const msg = session.messages.find(m => m.id === msgId);
-    if (!msg) {
-      return null;
-    }
-    const sourceVariant = sourceKey === 'live' ? null : (msg.variants ?? []).find(v => v.id === sourceKey);
-    const sourceContent = sourceKey === 'live' ? msg.content : (sourceVariant?.content ?? msg.content);
-    const sourceCharId = sourceKey === 'live' ? msg.characterId : (sourceVariant?.characterId ?? msg.characterId);
-    const sourceThinkingMs = sourceKey === 'live' ? msg.thinkingMs : (sourceVariant?.thinkingMs ?? msg.thinkingMs);
-    const newVariant: ReplyVariant = {
-      id: generateId(),
-      content: sourceContent,
-      timestamp: Date.now(),
-      ...(sourceCharId ? {characterId: sourceCharId} : {}),
-      ...(sourceThinkingMs !== undefined ? {thinkingMs: sourceThinkingMs} : {}),
-    };
-    const oldEntry = makeVariantEntry(generateId(), msg);
-    const newVariants = [...(msg.variants ?? []), oldEntry];
-    const updatedMsg: ChatMessage = {
-      ...msg,
-      content: newVariant.content,
-      timestamp: newVariant.timestamp,
-      characterId: newVariant.characterId ?? msg.characterId,
-      variants: newVariants,
-      thinkingMs: newVariant.thinkingMs,
-    };
-    await commitVariantUpdate(session, msgId, updatedMsg, undefined, 'variant_forked');
-    return 'live';
-  }, [session, commitVariantUpdate]);
+  const handleSelectVariant = useCallback(
+    async (msgId: string, targetDeckIndex: number) => {
+      if (!session) {
+        return;
+      }
+      const msg = session.messages.find(m => m.id === msgId);
+      if (!msg || !msg.variants || msg.variants.length === 0) {
+        return;
+      }
 
-  const handleStudioFresh = useCallback(async (msgId: string): Promise<string | null> => {
-    if (!session) {
-      return null;
-    }
-    const msg = session.messages.find(m => m.id === msgId);
-    if (!msg) {
-      return null;
-    }
-    const oldEntry = makeVariantEntry(generateId(), msg);
-    const newVariants = [...(msg.variants ?? []), oldEntry];
-    const updatedMsg: ChatMessage = {
-      ...msg,
-      content: '',
-      timestamp: Date.now(),
-      characterId: msg.characterId,
-      variants: newVariants,
-      thinkingMs: undefined,
-    };
-    await commitVariantUpdate(session, msgId, updatedMsg, undefined, 'variant_fresh');
-    return 'live';
-  }, [session, commitVariantUpdate]);
-
-  const handleStudioDeleteEntry = useCallback(async (msgId: string, entryKey: string) => {
-    if (!session) {
-      return;
-    }
-    const msg = session.messages.find(m => m.id === msgId);
-    if (!msg) {
-      return;
-    }
-    const deckCount = (msg.variants?.length ?? 0) + 1;
-    if (deckCount <= 1) {
-      handleDeleteMessage(msg);
-      return;
-    }
-    let updatedMsg: ChatMessage;
-    if (entryKey === 'live') {
-      const liveEntry: ReplyVariant = {
-        id: 'live',
-        content: msg.content,
-        timestamp: msg.timestamp,
-      };
-      const deck = [...(msg.variants ?? []), liveEntry].sort((a, b) => a.timestamp - b.timestamp);
+      const deck = [...msg.variants, makeVariantEntry('live', msg)].sort(
+        (a, b) => a.timestamp - b.timestamp,
+      );
       const livePos = deck.findIndex(d => d.id === 'live');
-      const remaining = deck.filter(d => d.id !== 'live');
-      const promoteIdx = Math.min(livePos, remaining.length - 1);
-      const promoted = remaining[promoteIdx];
-      updatedMsg = {
+      const clamped = Math.min(Math.max(targetDeckIndex, 0), deck.length - 1);
+      if (clamped === livePos || clamped < 0 || deck[clamped].id === 'live') {
+        return;
+      }
+
+      const chosen = deck[clamped];
+      const variantIdx = msg.variants.findIndex(v => v.id === chosen.id);
+      if (variantIdx < 0) {
+        return;
+      }
+
+      const oldEntry = makeVariantEntry(generateId(), msg);
+
+      const newContent = msg.variants[variantIdx];
+      const newVariants = [...msg.variants];
+      newVariants.splice(variantIdx, 1, oldEntry);
+
+      const updatedMsg: ChatMessage = {
         ...msg,
-        content: promoted.content,
-        timestamp: promoted.timestamp,
-        characterId: promoted.characterId ?? msg.characterId,
-        variants: remaining.filter(v => v.id !== promoted.id),
-        thinkingMs: promoted.thinkingMs,
+        content: newContent.content,
+        timestamp: newContent.timestamp,
+        characterId: newContent.characterId ?? msg.characterId,
+        variants: newVariants,
+        thinkingMs: newContent.thinkingMs,
       };
-    } else {
-      updatedMsg = {
+      await commitVariantUpdate(session, msgId, updatedMsg, clamped);
+    },
+    [session, commitVariantUpdate],
+  );
+
+  const handleStudioEditEntry = useCallback(
+    async (msgId: string, entryKey: string, newText: string) => {
+      if (!session) {
+        return;
+      }
+      const msg = session.messages.find(m => m.id === msgId);
+      if (!msg) {
+        return;
+      }
+      const trimmed = newText.trim();
+      if (!trimmed) {
+        return;
+      }
+      let updatedMsg: ChatMessage;
+      if (entryKey === 'live') {
+        updatedMsg = {
+          ...msg,
+          content: trimmed,
+          timestamp: Date.now(),
+          thinkingMs: undefined,
+        };
+      } else {
+        updatedMsg = {
+          ...msg,
+          variants: (msg.variants ?? []).map(v =>
+            v.id === entryKey
+              ? {
+                  ...v,
+                  content: trimmed,
+                  timestamp: Date.now(),
+                  thinkingMs: undefined,
+                }
+              : v,
+          ),
+        };
+      }
+      await commitVariantUpdate(
+        session,
+        msgId,
+        updatedMsg,
+        undefined,
+        'variant_edited',
+      );
+    },
+    [session, commitVariantUpdate],
+  );
+
+  const handleStudioFork = useCallback(
+    async (msgId: string, sourceKey: string): Promise<string | null> => {
+      if (!session) {
+        return null;
+      }
+      const msg = session.messages.find(m => m.id === msgId);
+      if (!msg) {
+        return null;
+      }
+      const sourceVariant =
+        sourceKey === 'live'
+          ? null
+          : (msg.variants ?? []).find(v => v.id === sourceKey);
+      const sourceContent =
+        sourceKey === 'live'
+          ? msg.content
+          : (sourceVariant?.content ?? msg.content);
+      const sourceCharId =
+        sourceKey === 'live'
+          ? msg.characterId
+          : (sourceVariant?.characterId ?? msg.characterId);
+      const sourceThinkingMs =
+        sourceKey === 'live'
+          ? msg.thinkingMs
+          : (sourceVariant?.thinkingMs ?? msg.thinkingMs);
+      const newVariant: ReplyVariant = {
+        id: generateId(),
+        content: sourceContent,
+        timestamp: Date.now(),
+        ...(sourceCharId ? { characterId: sourceCharId } : {}),
+        ...(sourceThinkingMs !== undefined
+          ? { thinkingMs: sourceThinkingMs }
+          : {}),
+      };
+      const oldEntry = makeVariantEntry(generateId(), msg);
+      const newVariants = [...(msg.variants ?? []), oldEntry];
+      const updatedMsg: ChatMessage = {
         ...msg,
-        variants: (msg.variants ?? []).filter(v => v.id !== entryKey),
+        content: newVariant.content,
+        timestamp: newVariant.timestamp,
+        characterId: newVariant.characterId ?? msg.characterId,
+        variants: newVariants,
+        thinkingMs: newVariant.thinkingMs,
       };
-    }
-    await commitVariantUpdate(session, msgId, updatedMsg, undefined, 'variant_deleted');
-  }, [session, handleDeleteMessage, commitVariantUpdate]);
+      await commitVariantUpdate(
+        session,
+        msgId,
+        updatedMsg,
+        undefined,
+        'variant_forked',
+      );
+      return 'live';
+    },
+    [session, commitVariantUpdate],
+  );
+
+  const handleStudioFresh = useCallback(
+    async (msgId: string): Promise<string | null> => {
+      if (!session) {
+        return null;
+      }
+      const msg = session.messages.find(m => m.id === msgId);
+      if (!msg) {
+        return null;
+      }
+      const oldEntry = makeVariantEntry(generateId(), msg);
+      const newVariants = [...(msg.variants ?? []), oldEntry];
+      const updatedMsg: ChatMessage = {
+        ...msg,
+        content: '',
+        timestamp: Date.now(),
+        characterId: msg.characterId,
+        variants: newVariants,
+        thinkingMs: undefined,
+      };
+      await commitVariantUpdate(
+        session,
+        msgId,
+        updatedMsg,
+        undefined,
+        'variant_fresh',
+      );
+      return 'live';
+    },
+    [session, commitVariantUpdate],
+  );
+
+  const handleStudioDeleteEntry = useCallback(
+    async (msgId: string, entryKey: string) => {
+      if (!session) {
+        return;
+      }
+      const msg = session.messages.find(m => m.id === msgId);
+      if (!msg) {
+        return;
+      }
+      const deckCount = (msg.variants?.length ?? 0) + 1;
+      if (deckCount <= 1) {
+        handleDeleteMessage(msg);
+        return;
+      }
+      let updatedMsg: ChatMessage;
+      if (entryKey === 'live') {
+        const liveEntry: ReplyVariant = {
+          id: 'live',
+          content: msg.content,
+          timestamp: msg.timestamp,
+        };
+        const deck = [...(msg.variants ?? []), liveEntry].sort(
+          (a, b) => a.timestamp - b.timestamp,
+        );
+        const livePos = deck.findIndex(d => d.id === 'live');
+        const remaining = deck.filter(d => d.id !== 'live');
+        const promoteIdx = Math.min(livePos, remaining.length - 1);
+        const promoted = remaining[promoteIdx];
+        updatedMsg = {
+          ...msg,
+          content: promoted.content,
+          timestamp: promoted.timestamp,
+          characterId: promoted.characterId ?? msg.characterId,
+          variants: remaining.filter(v => v.id !== promoted.id),
+          thinkingMs: promoted.thinkingMs,
+        };
+      } else {
+        updatedMsg = {
+          ...msg,
+          variants: (msg.variants ?? []).filter(v => v.id !== entryKey),
+        };
+      }
+      await commitVariantUpdate(
+        session,
+        msgId,
+        updatedMsg,
+        undefined,
+        'variant_deleted',
+      );
+    },
+    [session, handleDeleteMessage, commitVariantUpdate],
+  );
 
   const handleStop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -1115,7 +1368,9 @@ export function useChat({
     if (!session || sending) {
       return;
     }
-    const lastUserMsg = [...session.messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = [...session.messages]
+      .reverse()
+      .find(m => m.role === 'user');
     if (!lastUserMsg) {
       return;
     }
@@ -1127,13 +1382,15 @@ export function useChat({
   const messagesData = useMemo(() => {
     const base = [...(session?.messages ?? [])].reverse();
     const replaceId = replacingMessageId;
-    const showInlineStream = isStreaming && replaceId && streamingContent.length > 0;
-    const showInlineTyping = sending && streamingContent.length === 0 && !error && replaceId;
+    const showInlineStream =
+      isStreaming && replaceId && streamingContent.length > 0;
+    const showInlineTyping =
+      sending && streamingContent.length === 0 && !error && replaceId;
     if (showInlineStream || showInlineTyping) {
       const streamContent = showInlineStream ? streamingContent : '';
       return base.map(m =>
         m.id === replaceId
-          ? {...m, content: streamContent, timestamp: Date.now()}
+          ? { ...m, content: streamContent, timestamp: Date.now() }
           : m,
       );
     }
@@ -1160,7 +1417,14 @@ export function useChat({
       });
     }
     return base;
-  }, [session?.messages, isStreaming, streamingContent, sending, error, replacingMessageId]);
+  }, [
+    session?.messages,
+    isStreaming,
+    streamingContent,
+    sending,
+    error,
+    replacingMessageId,
+  ]);
 
   return {
     session,

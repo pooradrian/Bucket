@@ -13,7 +13,12 @@ function crc32(data: Uint8Array): number {
 }
 
 function readUint32BE(bytes: Uint8Array, offset: number): number {
-  return (bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3];
+  return (
+    (bytes[offset] << 24) |
+    (bytes[offset + 1] << 16) |
+    (bytes[offset + 2] << 8) |
+    bytes[offset + 3]
+  );
 }
 
 function writeUint32BE(value: number): Uint8Array {
@@ -46,12 +51,17 @@ function parseChunks(bytes: Uint8Array): PngChunk[] {
     if (offset + 8 > bytes.length) break;
 
     const length = readUint32BE(bytes, offset);
-    const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+    const type = String.fromCharCode(
+      bytes[offset + 4],
+      bytes[offset + 5],
+      bytes[offset + 6],
+      bytes[offset + 7],
+    );
 
     if (offset + 12 + length > bytes.length) break;
 
     const data = bytes.slice(offset + 8, offset + 8 + length);
-    chunks.push({type, data});
+    chunks.push({ type, data });
 
     offset += 12 + length; // 4 length + 4 type + data + 4 crc
 
@@ -92,7 +102,10 @@ export function readPngCharaMetadata(pngBase64: string): string | null {
   }
 }
 
-export function writePngWithCharaMetadata(avatarBase64: string, charaJson: string): string {
+export function writePngWithCharaMetadata(
+  avatarBase64: string,
+  charaJson: string,
+): string {
   const binary = atob(avatarBase64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -133,7 +146,12 @@ export function writePngWithCharaMetadata(avatarBase64: string, charaJson: strin
   let offset = 8; // skip signature
   while (offset + 8 <= bytes.length) {
     const length = readUint32BE(bytes, offset);
-    const type = String.fromCharCode(bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]);
+    const type = String.fromCharCode(
+      bytes[offset + 4],
+      bytes[offset + 5],
+      bytes[offset + 6],
+      bytes[offset + 7],
+    );
     const chunkEnd = offset + 12 + length; // length + type + data + crc
     if (chunkEnd > bytes.length) break;
 
@@ -164,7 +182,9 @@ export function writePngWithCharaMetadata(avatarBase64: string, charaJson: strin
   if (cursor < iendOffset) segments.push(bytes.slice(cursor, iendOffset));
   const prefix = concatUint8(segments);
 
-  const result = new Uint8Array(prefix.length + newChunk.length + (bytes.length - iendOffset));
+  const result = new Uint8Array(
+    prefix.length + newChunk.length + (bytes.length - iendOffset),
+  );
   result.set(prefix, 0);
   result.set(newChunk, prefix.length);
   result.set(bytes.slice(iendOffset), prefix.length + newChunk.length);

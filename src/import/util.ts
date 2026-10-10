@@ -11,7 +11,7 @@ export async function readIconFile(uri: string): Promise<string | null> {
   try {
     const response = await fetch(uri);
     const blob = await response.blob();
-    const dataUrl = await new Promise<string | null>((resolve) => {
+    const dataUrl = await new Promise<string | null>(resolve => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
@@ -23,8 +23,7 @@ export async function readIconFile(uri: string): Promise<string | null> {
     if (dataUrl) {
       return dataUrl;
     }
-  } catch {
-  }
+  } catch {}
   try {
     const base64 = await RNFS.readFile(uri, 'base64');
     return base64 || null;

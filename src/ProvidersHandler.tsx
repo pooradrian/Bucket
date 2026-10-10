@@ -1,4 +1,4 @@
-import {useEffect, useState, useCallback} from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Alert,
   FlatList,
@@ -26,15 +26,18 @@ import {
   deleteProvider,
   maskKey,
 } from './SecureStore';
-import {useTheme} from './ThemeContext';
-import {normalizeProviderUrl, isPlainHttpUrl} from './Endpoint';
+import { useTheme } from './ThemeContext';
+import { normalizeProviderUrl, isPlainHttpUrl } from './Endpoint';
 
 interface ProvidersHandlerProps {
   activeProviderId: string;
   onSelect: (providerId: string) => void;
 }
 
-export default function ProvidersHandler({activeProviderId, onSelect}: ProvidersHandlerProps) {
+export default function ProvidersHandler({
+  activeProviderId,
+  onSelect,
+}: ProvidersHandlerProps) {
   const st = useTheme();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -48,7 +51,9 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
     const keys: Record<string, string> = {};
     for (const p of list) {
       const key = await getProviderKey(p.id);
-      if (key) {keys[p.id] = maskKey(key);}
+      if (key) {
+        keys[p.id] = maskKey(key);
+      }
     }
     setProviderKeys(keys);
   }, []);
@@ -57,51 +62,64 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
     refreshProviders();
   }, [refreshProviders]);
 
-  const handleSelect = useCallback(async (id: string) => {
-    setActiveProviderId(id);
-    onSelect(id);
-  }, [onSelect]);
+  const handleSelect = useCallback(
+    async (id: string) => {
+      setActiveProviderId(id);
+      onSelect(id);
+    },
+    [onSelect],
+  );
 
-  const handleRemove = useCallback((provider: Provider) => {
-    Alert.alert(
-      'Remove Provider',
-      `Remove "${provider.name}"? This cannot be undone.`,
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteProvider(provider.id);
-            refreshProviders();
+  const handleRemove = useCallback(
+    (provider: Provider) => {
+      Alert.alert(
+        'Remove Provider',
+        `Remove "${provider.name}"? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: async () => {
+              await deleteProvider(provider.id);
+              refreshProviders();
+            },
           },
-        },
-      ],
-    );
-  }, [refreshProviders]);
+        ],
+      );
+    },
+    [refreshProviders],
+  );
 
-  const handleSaveUrl = useCallback(async (id: string) => {
-    if (!editUrlText.trim()) {return;}
-    const trimmed = normalizeProviderUrl(editUrlText);
-    const list = getProviders();
-    const updated = list.map(p => p.id === id ? {...p, url: trimmed} : p);
-    saveProviders(updated);
-    setEditingUrlId(null);
-    refreshProviders();
-  }, [editUrlText, refreshProviders]);
+  const handleSaveUrl = useCallback(
+    async (id: string) => {
+      if (!editUrlText.trim()) {
+        return;
+      }
+      const trimmed = normalizeProviderUrl(editUrlText);
+      const list = getProviders();
+      const updated = list.map(p => (p.id === id ? { ...p, url: trimmed } : p));
+      saveProviders(updated);
+      setEditingUrlId(null);
+      refreshProviders();
+    },
+    [editUrlText, refreshProviders],
+  );
 
-  const renderProvider = ({item}: {item: Provider}) => {
+  const renderProvider = ({ item }: { item: Provider }) => {
     const isActive = item.id === activeProviderId;
     const isEditing = editingUrlId === item.id;
     return (
       <TouchableOpacity
         onPress={() => handleSelect(item.id)}
         activeOpacity={0.7}
-        style={[st.settingsLorebookItem, isActive && {backgroundColor: st.bgSecondary.backgroundColor}]}>
+        style={[
+          st.settingsLorebookItem,
+          isActive && { backgroundColor: st.bgSecondary.backgroundColor },
+        ]}
+      >
         <View style={st.settingsLorebookItemInfo}>
-          <Text style={st.settingsLorebookItemName}>
-            {item.name}
-          </Text>
+          <Text style={st.settingsLorebookItemName}>{item.name}</Text>
           {isEditing ? (
             <View style={st.providerUrlRow}>
               <TextInput
@@ -115,24 +133,28 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
               />
               <TouchableOpacity
                 onPress={() => handleSaveUrl(item.id)}
-                style={[st.cardButton, st.providerUrlOkBtn]}>
+                style={[st.cardButton, st.providerUrlOkBtn]}
+              >
                 <Text style={st.cardButtonText}>OK</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <Text
-              style={st.settingsLorebookItemCount}
-              numberOfLines={1}>
+            <Text style={st.settingsLorebookItemCount} numberOfLines={1}>
               {item.url}
             </Text>
           )}
           {isPlainHttpUrl(isEditing ? editUrlText : item.url) && (
-            <Text style={{color: st.dangerText.color, fontSize: 12, marginTop: 4}}>
-              Unencrypted HTTP — keys and prompts can be read on the network. Only use for local servers.
+            <Text
+              style={{ color: st.dangerText.color, fontSize: 12, marginTop: 4 }}
+            >
+              Unencrypted HTTP — keys and prompts can be read on the network.
+              Only use for local servers.
             </Text>
           )}
           <Text style={st.settingsLorebookItemCount}>
-            {providerKeys[item.id] ? `Key: ${providerKeys[item.id]}` : 'No API key (local)'}
+            {providerKeys[item.id]
+              ? `Key: ${providerKeys[item.id]}`
+              : 'No API key (local)'}
           </Text>
         </View>
         <View style={st.providerActionsRow}>
@@ -142,13 +164,15 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
                 setEditingUrlId(item.id);
                 setEditUrlText(item.url);
               }}
-              style={[st.cardActionBtn, st.providerActionBtn]}>
+              style={[st.cardActionBtn, st.providerActionBtn]}
+            >
               <Text style={st.cardActionBtnText}>URL</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
             onPress={() => handleRemove(item)}
-            style={st.settingsLorebookRemoveBtn}>
+            style={st.settingsLorebookRemoveBtn}
+          >
             <Text style={st.settingsLorebookRemoveBtnText}>×</Text>
           </TouchableOpacity>
         </View>
@@ -171,7 +195,8 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
       />
       <TouchableOpacity
         onPress={() => setShowAddModal(true)}
-        style={[st.card, st.providerAddCard]}>
+        style={[st.card, st.providerAddCard]}
+      >
         <Text style={st.cardTitle}>+ Add Provider</Text>
         <Text style={st.cardDescription}>
           Add an API endpoint (key optional for local servers)
@@ -181,7 +206,7 @@ export default function ProvidersHandler({activeProviderId, onSelect}: Providers
       <AddProviderModal
         visible={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onAdded={async (id) => {
+        onAdded={async id => {
           setShowAddModal(false);
           await refreshProviders();
           handleSelect(id);
@@ -197,7 +222,11 @@ interface AddProviderModalProps {
   onAdded: (id: string) => void;
 }
 
-function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
+function AddProviderModal({
+  visible,
+  onClose,
+  onAdded,
+}: AddProviderModalProps) {
   const st = useTheme();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -205,12 +234,12 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
 
   const slide = useSharedValue(300);
   const contentStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: slide.value}],
+    transform: [{ translateY: slide.value }],
   }));
 
   useEffect(() => {
     if (visible) {
-      slide.value = withTiming(0, {duration: 250});
+      slide.value = withTiming(0, { duration: 250 });
     } else {
       slide.value = 300;
     }
@@ -224,9 +253,10 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
     }
     const trimmedUrl = normalizeProviderUrl(url);
     const trimmedKey = apiKey.trim();
-    const id = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
+    const id =
+      Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8);
     const providers = getProviders();
-    providers.push({id, name: trimmedName, url: trimmedUrl});
+    providers.push({ id, name: trimmedName, url: trimmedUrl });
     saveProviders(providers);
     if (trimmedKey) {
       await setProviderKey(id, trimmedKey);
@@ -238,81 +268,104 @@ function AddProviderModal({visible, onClose, onAdded}: AddProviderModalProps) {
   }, [name, url, apiKey, onAdded]);
 
   return (
-    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="none"
+      transparent
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
-        style={{flex: 1}}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}>
-      <View style={st.groupEditorOverlay}>
-        <Animated.View style={[st.groupEditorContent, contentStyle]}>
-          <View style={st.groupEditorHeader}>
-            <Text style={st.groupEditorTitle}>Add Provider</Text>
-            <TouchableOpacity onPress={onClose} style={st.groupEditorCloseBtn}>
-              <Text style={st.groupEditorCloseBtnText}>×</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView
-            style={st.groupEditorBody}
-            contentContainerStyle={{paddingBottom: 24}}
-            keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets>
-            <View style={st.settingsField}>
-              <Text style={st.settingsLabel}>Name</Text>
-              <TextInput
-                style={st.settingsInput}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. OpenAI, Claude, Local"
-                placeholderTextColor={st.textMuted.color}
-                autoCapitalize="words"
-                autoCorrect={false}
-              />
+        keyboardVerticalOffset={0}
+      >
+        <View style={st.groupEditorOverlay}>
+          <Animated.View style={[st.groupEditorContent, contentStyle]}>
+            <View style={st.groupEditorHeader}>
+              <Text style={st.groupEditorTitle}>Add Provider</Text>
+              <TouchableOpacity
+                onPress={onClose}
+                style={st.groupEditorCloseBtn}
+              >
+                <Text style={st.groupEditorCloseBtnText}>×</Text>
+              </TouchableOpacity>
             </View>
-            <View style={st.settingsField}>
-              <Text style={st.settingsLabel}>Base URL</Text>
-              <TextInput
-                style={st.settingsInput}
-                value={url}
-                onChangeText={setUrl}
-                placeholder="https://api.openai.com/v1"
-                placeholderTextColor={st.textMuted.color}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <Text style={st.settingsDefaultText}>
-                /v1/chat/completions is added automatically if missing
-              </Text>
-              {isPlainHttpUrl(url) && (
-                <Text style={{color: st.dangerText.color, fontSize: 12, marginTop: 4}}>
-                  Unencrypted HTTP — keys and prompts can be read on the network. Only use for local servers.
+            <ScrollView
+              style={st.groupEditorBody}
+              contentContainerStyle={{ paddingBottom: 24 }}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+            >
+              <View style={st.settingsField}>
+                <Text style={st.settingsLabel}>Name</Text>
+                <TextInput
+                  style={st.settingsInput}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. OpenAI, Claude, Local"
+                  placeholderTextColor={st.textMuted.color}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+              </View>
+              <View style={st.settingsField}>
+                <Text style={st.settingsLabel}>Base URL</Text>
+                <TextInput
+                  style={st.settingsInput}
+                  value={url}
+                  onChangeText={setUrl}
+                  placeholder="https://api.openai.com/v1"
+                  placeholderTextColor={st.textMuted.color}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={st.settingsDefaultText}>
+                  /v1/chat/completions is added automatically if missing
                 </Text>
-              )}
-            </View>
-            <View style={st.settingsField}>
-              <Text style={st.settingsLabel}>API Key (optional for local servers)</Text>
-              <TextInput
-                style={st.settingsInput}
-                value={apiKey}
-                onChangeText={setApiKey}
-                placeholder="sk-... (leave empty for local)"
-                placeholderTextColor={st.textMuted.color}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-              />
-              <Text style={st.settingsDefaultText}>
-                Stored securely in device keychain
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleAdd}
-              disabled={!name.trim() || !url.trim()}
-              style={[st.groupEditorSaveBtn, (!name.trim() || !url.trim()) && {opacity: 0.4}]}>
-              <Text style={st.groupEditorSaveBtnText}>Add Provider</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </Animated.View>
-      </View>
+                {isPlainHttpUrl(url) && (
+                  <Text
+                    style={{
+                      color: st.dangerText.color,
+                      fontSize: 12,
+                      marginTop: 4,
+                    }}
+                  >
+                    Unencrypted HTTP — keys and prompts can be read on the
+                    network. Only use for local servers.
+                  </Text>
+                )}
+              </View>
+              <View style={st.settingsField}>
+                <Text style={st.settingsLabel}>
+                  API Key (optional for local servers)
+                </Text>
+                <TextInput
+                  style={st.settingsInput}
+                  value={apiKey}
+                  onChangeText={setApiKey}
+                  placeholder="sk-... (leave empty for local)"
+                  placeholderTextColor={st.textMuted.color}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
+                <Text style={st.settingsDefaultText}>
+                  Stored securely in device keychain
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={handleAdd}
+                disabled={!name.trim() || !url.trim()}
+                style={[
+                  st.groupEditorSaveBtn,
+                  (!name.trim() || !url.trim()) && { opacity: 0.4 },
+                ]}
+              >
+                <Text style={st.groupEditorSaveBtnText}>Add Provider</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </Animated.View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
