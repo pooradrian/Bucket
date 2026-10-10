@@ -1,10 +1,5 @@
 import {useState} from 'react';
-import {
-  NativeSyntheticEvent,
-  TextInput,
-  TextInputContentSizeChangeEventData,
-  TextInputProps,
-} from 'react-native';
+import {TextInput, TextInputContentSizeChangeEvent, TextInputProps} from 'react-native';
 
 export default function AutoGrowTextInput({
   style,
@@ -18,9 +13,8 @@ export default function AutoGrowTextInput({
       multiline
       textAlignVertical="top"
       style={[style, {height}]}
-      onContentSizeChange={(
-        e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>,
-      ) => setHeight(Math.max(minHeight, e.nativeEvent.contentSize.height))}
+      onContentSizeChange={(e: TextInputContentSizeChangeEvent) =>
+        setHeight(Math.max(minHeight, e.nativeEvent.contentSize.height))}
     />
   );
 }

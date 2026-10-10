@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ViewInstance,
 } from 'react-native';
 import {BlurView} from '@react-native-community/blur';
 import Animated, {
@@ -191,7 +192,7 @@ export default function Carousel({
   const kbHeight = useSharedValue(0);
   const pullY = useSharedValue(0);
   const dragging = useSharedValue(false);
-  const overlayRef = useRef<View>(null);
+  const overlayRef = useRef<ViewInstance | null>(null);
   const [centered, setCentered] = useState(liveIndex);
   const [targetCenter, setTargetCenter] = useState<{x: number; y: number} | null>(null);
   const [overlayH, setOverlayH] = useState(SCREEN_H);
