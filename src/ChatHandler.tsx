@@ -13,7 +13,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableOpacityInstance,
   View,
+  ViewInstance,
 } from 'react-native';
 import {Character} from './CharacterEditor';
 import {useAppStore, GroupChat} from './store';
@@ -47,7 +49,7 @@ interface MessageBubbleProps {
   speaker?: {name: string; icon?: string} | null;
   onSelect: (id: string | null) => void;
   onOpenCarousel: (id: string) => void;
-  registerBubble: (id: string, ref: View | null) => void;
+  registerBubble: (id: string, ref: TouchableOpacityInstance | null) => void;
   onBubbleLayout: (id: string, width: number, height: number) => void;
   onEdit: (msg: ChatMessage) => void;
   onEditSave: (msg: ChatMessage, newText: string) => void;
@@ -357,9 +359,9 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
   const [carouselMessageId, setCarouselMessageIdInner] = useState<string | null>(null);
   const [carouselOrigin, setCarouselOrigin] = useState<{x: number; y: number; width: number; height: number; viewport?: {y: number; height: number}} | null | undefined>(undefined);
   const [carouselReady, setCarouselReady] = useState(false);
-  const bubbleRefs = useRef<Record<string, View | null>>({}).current;
+  const bubbleRefs = useRef<Record<string, TouchableOpacityInstance | null>>({}).current;
   const bubbleLayouts = useRef<Record<string, {width: number; height: number}>>({}).current;
-  const listAreaRef = useRef<View>(null);
+  const listAreaRef = useRef<ViewInstance | null>(null);
 
   const lastSendTapRef = useRef(0);
   const sendTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -433,7 +435,7 @@ export default function ChatHandler({character, groupChat, activeSessionId, quic
     return () => sub.remove();
   }, [carouselMessageId, handleCloseCarousel, setSelectedMessageId]);
 
-  const registerBubble = useCallback((id: string, ref: View | null) => {
+  const registerBubble = useCallback((id: string, ref: TouchableOpacityInstance | null) => {
     if (ref) {
       bubbleRefs[id] = ref;
     } else {
