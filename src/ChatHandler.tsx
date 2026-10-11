@@ -110,7 +110,7 @@ function TypingIndicator({ st }: { st: ReturnType<typeof useTheme> }) {
   );
 }
 
-const MessageBubble = React.memo(function MessageBubble({
+const MessageBubble = React.memo(function MessageBubbleInner({
   item,
   hidden,
   isSelected,
