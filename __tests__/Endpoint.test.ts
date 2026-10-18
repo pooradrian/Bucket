@@ -363,3 +363,48 @@ describe('extra body', () => {
     expect(JSON.parse(lastBody).reasoning_effort).toBeUndefined();
   });
 });
+
+describe('top_p', () => {
+  beforeEach(() => {
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = FakeXHR;
+    sseLines = [];
+    lastBody = '';
+  });
+
+  test('is sent when set within range', async () => {
+    sseLines = [
+      sse({ choices: [{ delta: { content: 'ok' } }] }),
+      'data: [DONE]',
+    ];
+    await getAIResponse(
+      msg('x'),
+      { ...realConfig, topP: '0.5' },
+      undefined,
+      true,
+    );
+    expect(JSON.parse(lastBody).top_p).toBe(0.5);
+  });
+
+  test('is omitted when unset', async () => {
+    sseLines = [
+      sse({ choices: [{ delta: { content: 'ok' } }] }),
+      'data: [DONE]',
+    ];
+    await getAIResponse(msg('x'), realConfig, undefined, true);
+    expect(JSON.parse(lastBody).top_p).toBeUndefined();
+  });
+
+  test('is ignored when out of range', async () => {
+    sseLines = [
+      sse({ choices: [{ delta: { content: 'ok' } }] }),
+      'data: [DONE]',
+    ];
+    await getAIResponse(
+      msg('x'),
+      { ...realConfig, topP: '1.5' },
+      undefined,
+      true,
+    );
+    expect(JSON.parse(lastBody).top_p).toBeUndefined();
+  });
+});

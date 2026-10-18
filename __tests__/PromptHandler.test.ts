@@ -450,6 +450,25 @@ describe('stored prompt migration after the placeholder split', () => {
     );
     expect(setKV).not.toHaveBeenCalledWith('promptConfig', expect.anything());
   });
+
+  test('a stored preset without top_p loads it as unset', async () => {
+    mockStore({
+      promptConfig: JSON.stringify({
+        ...DEFAULT_PROMPT_CONFIG,
+        modelPresets: [
+          {
+            id: 'p1',
+            model: 'gpt-4o',
+            prefix: '',
+            suffix: '',
+            temperature: '1',
+          },
+        ],
+      }),
+    });
+    const loaded = await loadPromptConfig();
+    expect(loaded.modelPresets[0].topP).toBe('');
+  });
 });
 
 describe('nothing is inserted that a prompt did not ask for', () => {
@@ -792,6 +811,7 @@ describe('model preset helpers', () => {
     prefix: 'pre',
     suffix: 'suf',
     temperature: '0.7',
+    topP: '0.9',
   };
   const base: PromptConfig = {
     ...DEFAULT_PROMPT_CONFIG,
@@ -805,6 +825,7 @@ describe('model preset helpers', () => {
     expect(next.prefix).toBe('pre');
     expect(next.suffix).toBe('suf');
     expect(next.temperature).toBe('0.7');
+    expect(next.topP).toBe('0.9');
     expect(next.activeModelPresetId).toBe('p1');
   });
 
@@ -820,21 +841,28 @@ describe('model preset helpers', () => {
     const next = applyModelPreset(base, 0);
     expect(next.model).toBe('gpt-4o');
     expect(next.prefix).toBe('pre');
+    expect(next.topP).toBe('0.9');
     expect(next.activeModelPresetId).toBe('p1');
   });
 
   test('detachModelPreset clears the active preset on manual edits', () => {
     const attached = { ...base, activeModelPresetId: 'p1' };
-    const next = detachModelPreset(attached, { temperature: '0.9' });
+    const next = detachModelPreset(attached, { temperature: '0.9', topP: '0.4' });
     expect(next.temperature).toBe('0.9');
+    expect(next.topP).toBe('0.4');
     expect(next.activeModelPresetId).toBeNull();
   });
 
   test('updateModelPreset pushes edits to live fields when active', () => {
     const attached = { ...base, activeModelPresetId: 'p1' };
-    const next = updateModelPreset(attached, 0, { temperature: '0.2' });
+    const next = updateModelPreset(attached, 0, {
+      temperature: '0.2',
+      topP: '0.8',
+    });
     expect(next.modelPresets[0].temperature).toBe('0.2');
+    expect(next.modelPresets[0].topP).toBe('0.8');
     expect(next.temperature).toBe('0.2');
+    expect(next.topP).toBe('0.8');
     expect(next.activeModelPresetId).toBe('p1');
   });
 
@@ -858,6 +886,7 @@ describe('model preset helpers', () => {
       prefix: '',
       suffix: '',
       temperature: '1',
+      topP: '',
     };
     const next = addModelPreset(base, p2);
     expect(next.modelPresets.map(p => p.id)).toEqual(['p1', 'p2']);

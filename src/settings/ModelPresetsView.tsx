@@ -31,9 +31,9 @@ export default function ModelPresetsView({
     <View style={st.settingsField}>
       <Text style={st.settingsLabel}>Model Presets</Text>
       <Text style={[st.settingsDefaultText, { marginBottom: 10 }]}>
-        Each preset stores system instructions and temperature for one exact
-        model name. Matching presets apply automatically when you change the
-        model; tap one to switch manually.
+        Each preset stores system instructions and sampling settings for one
+        exact model name. Matching presets apply automatically when you change
+        the model; tap one to switch manually.
       </Text>
 
       {presets.map((preset, idx) => {
@@ -137,6 +137,21 @@ export default function ModelPresetsView({
                   autoCapitalize="none"
                   autoCorrect={false}
                 />
+                <Text style={st.settingsLabel}>Top P</Text>
+                <TextInput
+                  style={[st.settingsInput, { marginBottom: 8 }]}
+                  value={preset.topP}
+                  onChangeText={text => {
+                    setPromptValues(prev =>
+                      updateModelPreset(prev, idx, { topP: text }),
+                    );
+                  }}
+                  placeholder="1"
+                  placeholderTextColor={st.textMuted.color}
+                  keyboardType="decimal-pad"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
                 <View
                   style={{
                     flexDirection: 'row',
@@ -198,6 +213,7 @@ export default function ModelPresetsView({
             prefix: promptValues.prefix,
             suffix: promptValues.suffix,
             temperature: promptValues.temperature,
+            topP: promptValues.topP,
           };
           setPromptValues(prev => addModelPreset(prev, preset));
           setEditingIdx(presets.length);
