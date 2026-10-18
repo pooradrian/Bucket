@@ -59,6 +59,16 @@ export default function ProvidersView({
       />
 
       <TextField
+        label="Top P"
+        value={promptValues.topP}
+        onChangeText={text =>
+          setPromptValues(prev => detachModelPreset(prev, { topP: text }))
+        }
+        placeholder="1"
+        keyboardType="decimal-pad"
+      />
+
+      <TextField
         label="Extra body"
         note={
           'Merged into every request body (your keys win). JSON object only, e.g. {"reasoning_effort": "high"}'

@@ -42,6 +42,7 @@ export interface ModelPreset {
   prefix: string;
   suffix: string;
   temperature: string;
+  topP: string;
 }
 
 export interface PromptConfig {
@@ -60,6 +61,7 @@ export interface PromptConfig {
   apiKey: string;
   model: string;
   temperature: string;
+  topP: string;
   ragModel: string;
   ragEnabled: boolean;
   ragMaxEntriesToSend: string;
@@ -108,6 +110,7 @@ $LOREBOOK$`,
   apiKey: '',
   model: 'gpt-4o',
   temperature: '1',
+  topP: '',
   ragModel: '',
   ragEnabled: false,
   ragMaxEntriesToSend: '50',
@@ -336,6 +339,10 @@ export async function loadPromptConfig(): Promise<PromptConfig> {
         ...DEFAULT_PROMPT_CONFIG,
         ...JSON.parse(stored),
       };
+      config.modelPresets = (config.modelPresets ?? []).map(p => ({
+        ...p,
+        topP: p.topP ?? '',
+      }));
       const migrated = migratePromptConfig(config);
       const withProvider = await resolveProvider(config);
       if (migrated) await savePromptConfig(withProvider);
@@ -424,7 +431,7 @@ export function updateModelPreset(
   config: PromptConfig,
   idx: number,
   patch: Partial<
-    Pick<ModelPreset, 'model' | 'prefix' | 'suffix' | 'temperature'>
+    Pick<ModelPreset, 'model' | 'prefix' | 'suffix' | 'temperature' | 'topP'>
   >,
 ): PromptConfig {
   const modelPresets = [...(config.modelPresets ?? [])];
@@ -436,6 +443,7 @@ export function updateModelPreset(
     next.prefix = modelPresets[idx].prefix;
     next.suffix = modelPresets[idx].suffix;
     next.temperature = modelPresets[idx].temperature;
+    next.topP = modelPresets[idx].topP;
   }
   return next;
 }
@@ -468,6 +476,7 @@ export function applyModelPreset(
     prefix: preset.prefix,
     suffix: preset.suffix,
     temperature: preset.temperature,
+    topP: preset.topP,
     activeModelPresetId: preset.id,
   };
 }
@@ -484,13 +493,16 @@ export function applyModelField(
     prefix: preset.prefix,
     suffix: preset.suffix,
     temperature: preset.temperature,
+    topP: preset.topP,
     activeModelPresetId: preset.id,
   };
 }
 
 export function detachModelPreset(
   config: PromptConfig,
-  patch: Partial<Pick<PromptConfig, 'prefix' | 'suffix' | 'temperature'>>,
+  patch: Partial<
+    Pick<PromptConfig, 'prefix' | 'suffix' | 'temperature' | 'topP'>
+  >,
 ): PromptConfig {
   return { ...config, ...patch, activeModelPresetId: null };
 }

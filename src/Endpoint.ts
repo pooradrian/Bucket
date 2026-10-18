@@ -361,6 +361,13 @@ export async function getAIResponse(
     tempNum >= 0 &&
     tempNum <= 2;
 
+  const topPNum = Number(config.topP);
+  const hasTopP =
+    config.topP !== '' &&
+    !Number.isNaN(topPNum) &&
+    topPNum >= 0 &&
+    topPNum <= 1;
+
   const body: Record<string, unknown> = {
     model: config.model || 'gpt-4o',
     messages,
@@ -368,6 +375,9 @@ export async function getAIResponse(
   };
   if (hasTemp) {
     body.temperature = tempNum;
+  }
+  if (hasTopP) {
+    body.top_p = topPNum;
   }
 
   const extraBody = config.extraBody?.trim();
