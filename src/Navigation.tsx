@@ -339,7 +339,7 @@ function HomeScreen() {
   }, []);
 
   const toggleFolder = useCallback((id: string) => {
-    setExpandedFolders(prev => ({ ...prev, [id]: !(prev[id] ?? true) }));
+    setExpandedFolders(prev => ({ ...prev, [id]: !(prev[id] ?? false) }));
   }, []);
 
   const handleFolderRenameSave = useCallback(() => {
@@ -544,7 +544,7 @@ function HomeScreen() {
     const folderIds = new Set(folders.map(f => f.id));
     for (const folder of folders) {
       const members = characters.filter(c => c.folderId === folder.id);
-      const expanded = expandedFolders[folder.id] ?? true;
+      const expanded = expandedFolders[folder.id] ?? false;
       items.push({
         type: 'folder',
         data: folder,
