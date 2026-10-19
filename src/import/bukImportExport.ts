@@ -597,6 +597,12 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     }
   }
 
+  if (options.extraFiles) {
+    for (const [name, content] of Object.entries(options.extraFiles)) {
+      zip.file(name, content);
+    }
+  }
+
   const charFolder = zip.folder('characters');
   for (const char of characters) {
     const cc: Character = {

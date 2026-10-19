@@ -42,7 +42,11 @@ jest.mock('react-native-image-picker', () => ({
 }));
 jest.mock('../src/CrashExport', () => ({
   installCrashExport: jest.fn(),
-  checkPendingCrashExport: jest.fn().mockResolvedValue(undefined),
+  readPendingCrash: jest.fn().mockResolvedValue(null),
+  clearPendingCrash: jest.fn(),
+  reportRoadblock: jest.fn(),
+  crashExport: jest.fn().mockResolvedValue(null),
+  getCrashLogText: jest.fn().mockResolvedValue(''),
 }));
 jest.mock('../src/Database', () => ({
   initDB: jest.fn(),

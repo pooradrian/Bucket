@@ -1650,5 +1650,87 @@ export function createStyles(s: AppSettings) {
       fontSize: 13,
       fontWeight: '500' as const,
     },
+
+    // =========================================================================
+    // CrashPrompt
+    // =========================================================================
+    crashPromptOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+      justifyContent: 'center' as const,
+      padding: 24,
+    },
+    crashPromptCard: {
+      backgroundColor: s.bgPrimary,
+      borderRadius: s.cardRadius,
+      borderWidth: 1,
+      borderColor: s.borderPrimary,
+      padding: 18,
+      maxHeight: '85%' as DimensionValue,
+    },
+    crashPromptTitle: {
+      color: s.textPrimary,
+      fontSize: 18,
+      fontWeight: '600' as const,
+      marginBottom: 8,
+    },
+    crashPromptMessage: {
+      color: s.textSecondary,
+      fontSize: 13,
+      lineHeight: 18,
+      marginBottom: 12,
+    },
+    crashPromptWarning: {
+      color: s.dangerColor,
+      fontSize: 12,
+      lineHeight: 17,
+      marginBottom: 12,
+    },
+    crashPromptLog: {
+      backgroundColor: s.bgSecondary,
+      borderRadius: s.inputRadius,
+      padding: 10,
+      maxHeight: 220,
+      marginBottom: 14,
+    },
+    crashPromptLogText: {
+      color: s.textMuted,
+      fontSize: 11,
+      fontFamily: monospace,
+      lineHeight: 16,
+    },
+    crashPromptPrimaryBtn: {
+      backgroundColor: s.accentColor,
+      borderRadius: s.inputRadius,
+      paddingVertical: 12,
+      alignItems: 'center' as const,
+      marginBottom: 8,
+    },
+    crashPromptPrimaryBtnText: {
+      color: s.bgPrimary,
+      fontSize: 14,
+      fontWeight: '600' as const,
+    },
+    crashPromptSecondaryBtn: {
+      borderWidth: 1,
+      borderColor: s.accentColor,
+      borderRadius: s.inputRadius,
+      paddingVertical: 12,
+      alignItems: 'center' as const,
+      marginBottom: 8,
+    },
+    crashPromptSecondaryBtnText: {
+      color: s.accentColor,
+      fontSize: 14,
+      fontWeight: '500' as const,
+    },
+    crashPromptDismiss: {
+      paddingVertical: 8,
+      alignItems: 'center' as const,
+    },
+    crashPromptDismissText: {
+      color: s.textMuted,
+      fontSize: 13,
+    },
   });
 }
