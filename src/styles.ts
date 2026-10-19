@@ -161,6 +161,29 @@ export function createStyles(s: AppSettings) {
       fontSize: 16,
       textAlign: 'center',
     },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: s.borderPrimary,
+      borderRadius: s.inputRadius,
+      paddingHorizontal: 12,
+      marginHorizontal: 16,
+      marginTop: 12,
+      backgroundColor: s.bgSecondary,
+    },
+    searchInput: {
+      flex: 1,
+      paddingVertical: 10,
+      fontSize: s.fontSizeBody,
+      color: s.textPrimary,
+    },
+    searchClear: {
+      color: s.textMuted,
+      fontSize: 18,
+      paddingLeft: 8,
+      paddingVertical: 4,
+    },
 
     // =========================================================================
     // App.tsx — bottom bar

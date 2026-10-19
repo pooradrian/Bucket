@@ -108,6 +108,7 @@ function HomeScreen() {
   const moveCharacterToFolder = useAppStore(s => s.moveCharacterToFolder);
 
   const [activeTab, setActiveTab] = useState<ContentTab>('menu');
+  const [searchQuery, setSearchQuery] = useState('');
   const [activeChatCharacter, setActiveChatCharacter] =
     useState<Character | null>(null);
   const [activeGroupChat, setActiveGroupChat] = useState<GroupChat | null>(
@@ -538,6 +539,26 @@ function HomeScreen() {
 
   const menuData = useMemo(() => {
     const items: MenuItem[] = [];
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      for (const char of characters) {
+        if (
+          char.name.toLowerCase().includes(query) ||
+          char.description.toLowerCase().includes(query)
+        ) {
+          items.push({ type: 'character', data: char });
+        }
+      }
+      for (const group of groupChats) {
+        if (
+          group.name.toLowerCase().includes(query) ||
+          group.description.toLowerCase().includes(query)
+        ) {
+          items.push({ type: 'group', data: group });
+        }
+      }
+      return items;
+    }
     if (showWelcomeCard) {
       items.push({ type: 'character', data: WELCOME_CHARACTER });
     }
@@ -566,7 +587,14 @@ function HomeScreen() {
       items.push({ type: 'group', data: group });
     }
     return items;
-  }, [characters, groupChats, folders, showWelcomeCard, expandedFolders]);
+  }, [
+    characters,
+    groupChats,
+    folders,
+    showWelcomeCard,
+    expandedFolders,
+    searchQuery,
+  ]);
 
   const renderMenuItem = ({ item }: { item: MenuItem }) => {
     if (item.type === 'folder') {
@@ -632,6 +660,47 @@ function HomeScreen() {
     );
   };
 
+  const menuList = (
+    <View style={st.flatListContainer}>
+      <View style={st.searchBar}>
+        <TextInput
+          style={st.searchInput}
+          placeholder="Search characters and groups..."
+          placeholderTextColor={st.textMuted.color}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Text style={st.searchClear}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      <FlatList
+        data={menuData}
+        keyExtractor={menuItemKey}
+        renderItem={renderMenuItem}
+        contentContainerStyle={st.flatListContent}
+        style={st.flatListContainer}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator
+              size="small"
+              color={st.textMuted.color}
+              style={{ marginTop: 40 }}
+            />
+          ) : (
+            <Text style={[st.emptyText, st.textMuted]}>
+              {searchQuery.trim() ? 'No matches' : 'No characters yet'}
+            </Text>
+          )
+        }
+      />
+    </View>
+  );
+
   return (
     <View style={st.screen}>
       <View style={[st.safeArea, { paddingTop: insets.top }]}>
@@ -655,50 +724,10 @@ function HomeScreen() {
                 />
               )}
             </View>
-            {activeTab !== 'chat' && (
-              <View style={st.flatListContainer}>
-                <FlatList
-                  data={menuData}
-                  keyExtractor={menuItemKey}
-                  renderItem={renderMenuItem}
-                  contentContainerStyle={st.flatListContent}
-                  style={st.flatListContainer}
-                  ListEmptyComponent={
-                    loading ? (
-                      <ActivityIndicator
-                        size="small"
-                        color={st.textMuted.color}
-                        style={{ marginTop: 40 }}
-                      />
-                    ) : (
-                      <Text style={st.emptyText}>No characters yet</Text>
-                    )
-                  }
-                />
-              </View>
-            )}
+            {activeTab !== 'chat' && menuList}
           </>
         ) : (
-          <View style={st.flatListContainer}>
-            <FlatList
-              data={menuData}
-              keyExtractor={menuItemKey}
-              renderItem={renderMenuItem}
-              contentContainerStyle={st.flatListContent}
-              style={st.flatListContainer}
-              ListEmptyComponent={
-                loading ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={st.textMuted.color}
-                    style={{ marginTop: 40 }}
-                  />
-                ) : (
-                  <Text style={st.emptyText}>No characters yet</Text>
-                )
-              }
-            />
-          </View>
+          menuList
         )}
 
         <View style={[st.bottomBar, { paddingBottom: insets.bottom }]}>
