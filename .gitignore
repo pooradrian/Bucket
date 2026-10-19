@@ -66,6 +66,7 @@ yarn-error.log
 
 # Project
 TODO.md
+AGENTS.md
 .vscode/
 
 # Release signing (never commit)
