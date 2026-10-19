@@ -15,13 +15,22 @@ import {
 } from './ui';
 import ModelPresetsView from './ModelPresetsView';
 
+export type PromptSection =
+  | 'presets'
+  | 'system'
+  | 'placeholders'
+  | 'history'
+  | 'displacement';
+
 interface PromptViewProps {
+  section: PromptSection;
   promptValues: PromptConfig;
   setPromptValues: React.Dispatch<React.SetStateAction<PromptConfig>>;
   accent: string;
 }
 
 export default function PromptView({
+  section,
   promptValues,
   setPromptValues,
   accent,
@@ -31,120 +40,131 @@ export default function PromptView({
     promptValues.modelPresets?.find(
       p => p.id === promptValues.activeModelPresetId,
     ) ?? null;
-  return (
-    <>
-      <SectionHeader title="Model Presets" />
+
+  if (section === 'presets') {
+    return (
       <ModelPresetsView
         promptValues={promptValues}
         setPromptValues={setPromptValues}
         accent={accent}
       />
+    );
+  }
 
-      <SectionHeader title="System Prompt" />
-      {activePreset ? (
+  if (section === 'system') {
+    return (
+      <>
+        {activePreset ? (
+          <View style={st.settingsField}>
+            <MutedNote>
+              {`Controlled by the "${activePreset.model}" preset. Edit it in Model Presets to change these instructions.`}
+            </MutedNote>
+          </View>
+        ) : (
+          <>
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>
+                Prefix (start of system message)
+              </Text>
+              <MutedNote>
+                {
+                  'Nothing is added to this unless you ask for it. No character block, no persona, no lorebook unless the placeholders pull them in.'
+                }
+              </MutedNote>
+              <AutoGrowTextInput
+                style={st.settingsInput}
+                value={promptValues.prefix}
+                onChangeText={text =>
+                  setPromptValues(prev =>
+                    detachModelPreset(prev, { prefix: text }),
+                  )
+                }
+                placeholder={DEFAULT_PROMPT_CONFIG.prefix}
+                placeholderTextColor={st.textMuted.color}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setPromptValues(prev => ({
+                    ...prev,
+                    prefix: DEFAULT_PROMPT_CONFIG.prefix,
+                  }))
+                }
+              >
+                <Text style={st.settingsDefaultText}>reset to default</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={st.settingsField}>
+              <Text style={st.settingsLabel}>
+                Suffix (end of system message)
+              </Text>
+              <MutedNote>
+                {'Always appended after the prefix. Placeholders work here too.'}
+              </MutedNote>
+              <AutoGrowTextInput
+                style={st.settingsInput}
+                value={promptValues.suffix}
+                onChangeText={text =>
+                  setPromptValues(prev =>
+                    detachModelPreset(prev, { suffix: text }),
+                  )
+                }
+                placeholder={DEFAULT_PROMPT_CONFIG.suffix}
+                placeholderTextColor={st.textMuted.color}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() =>
+                  setPromptValues(prev => ({
+                    ...prev,
+                    suffix: DEFAULT_PROMPT_CONFIG.suffix,
+                  }))
+                }
+              >
+                <Text style={st.settingsDefaultText}>reset to default</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
         <View style={st.settingsField}>
+          <Text style={st.settingsLabel}>Quick Character System Prompt</Text>
           <MutedNote>
-            {`Controlled by the "${activePreset.model}" preset. Edit it above to change these instructions.`}
+            {
+              'Used instead of the prefix when you send a message as a quick character. Nothing is added unless you ask for it: $CHAR… placeholders describe the base character, $QUICKCHAR… placeholders describe the quick character you picked, so the two are never glued together. With no quick character selected the $QUICKCHAR… fields fall back to the character you are chatting with, and $QUICKCHARBLOCK$ is empty.'
+            }
           </MutedNote>
+          <AutoGrowTextInput
+            style={st.settingsInput}
+            value={promptValues.quickCharacterPrompt}
+            onChangeText={text =>
+              setPromptValues(prev => ({ ...prev, quickCharacterPrompt: text }))
+            }
+            placeholder={DEFAULT_PROMPT_CONFIG.quickCharacterPrompt}
+            placeholderTextColor={st.textMuted.color}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity
+            onPress={() =>
+              setPromptValues(prev => ({
+                ...prev,
+                quickCharacterPrompt: DEFAULT_PROMPT_CONFIG.quickCharacterPrompt,
+              }))
+            }
+          >
+            <Text style={st.settingsDefaultText}>reset to default</Text>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <>
-          <View style={st.settingsField}>
-            <Text style={st.settingsLabel}>
-              Prefix (start of system message)
-            </Text>
-            <MutedNote>
-              {
-                'Nothing is added to this unless you ask for it. No character block, no persona, no lorebook unless the placeholders below pull them in.'
-              }
-            </MutedNote>
-            <AutoGrowTextInput
-              style={st.settingsInput}
-              value={promptValues.prefix}
-              onChangeText={text =>
-                setPromptValues(prev =>
-                  detachModelPreset(prev, { prefix: text }),
-                )
-              }
-              placeholder={DEFAULT_PROMPT_CONFIG.prefix}
-              placeholderTextColor={st.textMuted.color}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              onPress={() =>
-                setPromptValues(prev => ({
-                  ...prev,
-                  prefix: DEFAULT_PROMPT_CONFIG.prefix,
-                }))
-              }
-            >
-              <Text style={st.settingsDefaultText}>reset to default</Text>
-            </TouchableOpacity>
-          </View>
+      </>
+    );
+  }
 
-          <View style={st.settingsField}>
-            <Text style={st.settingsLabel}>Suffix (end of system message)</Text>
-            <MutedNote>
-              {'Always appended after the prefix. Placeholders work here too.'}
-            </MutedNote>
-            <AutoGrowTextInput
-              style={st.settingsInput}
-              value={promptValues.suffix}
-              onChangeText={text =>
-                setPromptValues(prev =>
-                  detachModelPreset(prev, { suffix: text }),
-                )
-              }
-              placeholder={DEFAULT_PROMPT_CONFIG.suffix}
-              placeholderTextColor={st.textMuted.color}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              onPress={() =>
-                setPromptValues(prev => ({
-                  ...prev,
-                  suffix: DEFAULT_PROMPT_CONFIG.suffix,
-                }))
-              }
-            >
-              <Text style={st.settingsDefaultText}>reset to default</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
-
-      <View style={st.settingsField}>
-        <Text style={st.settingsLabel}>Quick Character System Prompt</Text>
-        <MutedNote>
-          {
-            'Used instead of the prefix when you send a message as a quick character. Nothing is added unless you ask for it: $CHAR… placeholders describe the base character, $QUICKCHAR… placeholders describe the quick character you picked, so the two are never glued together. With no quick character selected the $QUICKCHAR… fields fall back to the character you are chatting with, and $QUICKCHARBLOCK$ is empty.'
-          }
-        </MutedNote>
-        <AutoGrowTextInput
-          style={st.settingsInput}
-          value={promptValues.quickCharacterPrompt}
-          onChangeText={text =>
-            setPromptValues(prev => ({ ...prev, quickCharacterPrompt: text }))
-          }
-          placeholder={DEFAULT_PROMPT_CONFIG.quickCharacterPrompt}
-          placeholderTextColor={st.textMuted.color}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <TouchableOpacity
-          onPress={() =>
-            setPromptValues(prev => ({
-              ...prev,
-              quickCharacterPrompt: DEFAULT_PROMPT_CONFIG.quickCharacterPrompt,
-            }))
-          }
-        >
-          <Text style={st.settingsDefaultText}>reset to default</Text>
-        </TouchableOpacity>
-      </View>
-
+  if (section === 'placeholders') {
+    return (
       <View style={st.settingsField}>
         <Text style={st.settingsLabel}>Available Placeholders</Text>
         <View style={st.settingsPlaceholderList}>
@@ -161,119 +181,127 @@ export default function PromptView({
           ))}
         </View>
       </View>
+    );
+  }
 
-      <SectionHeader title="History Cutoff" />
+  if (section === 'history') {
+    return (
+      <>
+        <SectionHeader title="History Cutoff" />
 
-      <OptionRow
-        label="Cutoff Mode"
-        options={[
-          { value: 'messages', label: 'Messages' },
-          { value: 'tokens', label: 'Tokens' },
-        ]}
-        value={promptValues.historyCutoffMode}
-        accent={accent}
-        onChange={historyCutoffMode =>
-          setPromptValues(prev => ({ ...prev, historyCutoffMode }))
-        }
-      />
-
-      <TextField
-        label={
-          promptValues.historyCutoffMode === 'messages'
-            ? 'Max Messages'
-            : 'Max Estimated Tokens'
-        }
-        value={promptValues.historyCutoffAmount}
-        onChangeText={text =>
-          setPromptValues(prev => ({ ...prev, historyCutoffAmount: text }))
-        }
-        placeholder={DEFAULT_PROMPT_CONFIG.historyCutoffAmount}
-        keyboardType="numeric"
-      />
-
-      <SectionHeader title="Chat Summarization" />
-
-      <OptionRow
-        label="Enable Summarization"
-        options={[
-          { value: 'on', label: 'On' },
-          { value: 'off', label: 'Off' },
-        ]}
-        value={promptValues.summarizationEnabled ? 'on' : 'off'}
-        accent={accent}
-        onChange={v =>
-          setPromptValues(prev => ({
-            ...prev,
-            summarizationEnabled: v === 'on',
-          }))
-        }
-      />
-
-      {promptValues.summarizationEnabled && (
-        <>
-          <TextField
-            label="Token Threshold"
-            value={promptValues.summarizationTokenThreshold}
-            onChangeText={text =>
-              setPromptValues(prev => ({
-                ...prev,
-                summarizationTokenThreshold: text,
-              }))
-            }
-            placeholder={DEFAULT_PROMPT_CONFIG.summarizationTokenThreshold}
-            keyboardType="numeric"
-          />
-
-          <TextField
-            label="Max Summaries"
-            value={promptValues.summarizationMaxSummaries}
-            onChangeText={text =>
-              setPromptValues(prev => ({
-                ...prev,
-                summarizationMaxSummaries: text,
-              }))
-            }
-            placeholder={DEFAULT_PROMPT_CONFIG.summarizationMaxSummaries}
-            keyboardType="numeric"
-          />
-
-          <TextField
-            label="Summarization Model"
-            value={promptValues.summarizationModel}
-            onChangeText={text =>
-              setPromptValues(prev => ({
-                ...prev,
-                summarizationModel: text,
-              }))
-            }
-            placeholder={
-              DEFAULT_PROMPT_CONFIG.summarizationModel || 'Uses main model'
-            }
-          />
-        </>
-      )}
-
-      <SectionHeader title="Word Displacement" />
-      <View style={st.settingsField}>
-        <MutedNote>
-          {
-            'Rewrites replies as they generate, one rule per line: a bare word is deleted · "w =>" becomes a space · "w => new" replaces · "w => a ~ b" picks randomly · "a <=> b" swaps. // starts a comment.'
+        <OptionRow
+          label="Cutoff Mode"
+          options={[
+            { value: 'messages', label: 'Messages' },
+            { value: 'tokens', label: 'Tokens' },
+          ]}
+          value={promptValues.historyCutoffMode}
+          accent={accent}
+          onChange={historyCutoffMode =>
+            setPromptValues(prev => ({ ...prev, historyCutoffMode }))
           }
-        </MutedNote>
-        <AutoGrowTextInput
-          style={st.settingsInput}
-          value={promptValues.wordDisplacements}
-          onChangeText={text =>
-            setPromptValues(prev => ({ ...prev, wordDisplacements: text }))
-          }
-          placeholder={
-            'word1\nword2 =>\nword3 => word4\nword5 => word6 ~ word7\nword8 <=> word9'
-          }
-          placeholderTextColor={st.textMuted.color}
-          autoCapitalize="none"
-          autoCorrect={false}
         />
-      </View>
-    </>
+
+        <TextField
+          label={
+            promptValues.historyCutoffMode === 'messages'
+              ? 'Max Messages'
+              : 'Max Estimated Tokens'
+          }
+          value={promptValues.historyCutoffAmount}
+          onChangeText={text =>
+            setPromptValues(prev => ({ ...prev, historyCutoffAmount: text }))
+          }
+          placeholder={DEFAULT_PROMPT_CONFIG.historyCutoffAmount}
+          keyboardType="numeric"
+        />
+
+        <SectionHeader title="Chat Summarization" />
+
+        <OptionRow
+          label="Enable Summarization"
+          options={[
+            { value: 'on', label: 'On' },
+            { value: 'off', label: 'Off' },
+          ]}
+          value={promptValues.summarizationEnabled ? 'on' : 'off'}
+          accent={accent}
+          onChange={v =>
+            setPromptValues(prev => ({
+              ...prev,
+              summarizationEnabled: v === 'on',
+            }))
+          }
+        />
+
+        {promptValues.summarizationEnabled && (
+          <>
+            <TextField
+              label="Token Threshold"
+              value={promptValues.summarizationTokenThreshold}
+              onChangeText={text =>
+                setPromptValues(prev => ({
+                  ...prev,
+                  summarizationTokenThreshold: text,
+                }))
+              }
+              placeholder={DEFAULT_PROMPT_CONFIG.summarizationTokenThreshold}
+              keyboardType="numeric"
+            />
+
+            <TextField
+              label="Max Summaries"
+              value={promptValues.summarizationMaxSummaries}
+              onChangeText={text =>
+                setPromptValues(prev => ({
+                  ...prev,
+                  summarizationMaxSummaries: text,
+                }))
+              }
+              placeholder={DEFAULT_PROMPT_CONFIG.summarizationMaxSummaries}
+              keyboardType="numeric"
+            />
+
+            <TextField
+              label="Summarization Model"
+              value={promptValues.summarizationModel}
+              onChangeText={text =>
+                setPromptValues(prev => ({
+                  ...prev,
+                  summarizationModel: text,
+                }))
+              }
+              placeholder={
+                DEFAULT_PROMPT_CONFIG.summarizationModel || 'Uses main model'
+              }
+            />
+          </>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <View style={st.settingsField}>
+      <Text style={st.settingsLabel}>Word Displacement</Text>
+      <MutedNote>
+        {
+          'Rewrites replies as they generate, one rule per line: a bare word is deleted · "w =>" becomes a space · "w => new" replaces · "w => a ~ b" picks randomly · "a <=> b" swaps. // starts a comment.'
+        }
+      </MutedNote>
+      <AutoGrowTextInput
+        style={st.settingsInput}
+        value={promptValues.wordDisplacements}
+        onChangeText={text =>
+          setPromptValues(prev => ({ ...prev, wordDisplacements: text }))
+        }
+        placeholder={
+          'word1\nword2 =>\nword3 => word4\nword5 => word6 ~ word7\nword8 <=> word9'
+        }
+        placeholderTextColor={st.textMuted.color}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+    </View>
   );
 }

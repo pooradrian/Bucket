@@ -15,7 +15,9 @@ jest.mock('react-native-keychain', () => ({
 import {
   toDraft,
   SETTINGS_KEYS,
-  CUSTOMIZATION_KEYS,
+  COLOR_KEYS,
+  SIZE_KEYS,
+  FONT_KEYS,
   NUMERIC_KEYS,
 } from '../src/settingsDraft';
 import { AppSettings, DEFAULT_APP_SETTINGS } from '../src/store';
@@ -46,10 +48,12 @@ describe('toDraft', () => {
 });
 
 describe('key sets', () => {
-  it('CUSTOMIZATION_KEYS excludes toggles', () => {
-    expect(CUSTOMIZATION_KEYS).not.toContain('showCharacterIcons');
-    expect(CUSTOMIZATION_KEYS).not.toContain('showThinking');
-    expect(CUSTOMIZATION_KEYS).not.toContain('dynamicIcon');
+  it('customization key sets exclude toggles', () => {
+    for (const keys of [COLOR_KEYS, SIZE_KEYS, FONT_KEYS]) {
+      expect(keys).not.toContain('showCharacterIcons');
+      expect(keys).not.toContain('showThinking');
+      expect(keys).not.toContain('dynamicIcon');
+    }
   });
 
   it('carries showThinking through the draft', () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   AppState,
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -23,82 +24,223 @@ import {
 } from './store';
 import { Settings, toDraft, NUMERIC_KEYS } from './settingsDraft';
 import { useTheme } from './ThemeContext';
-import CustomizationView from './settings/CustomizationView';
-import PromptView from './settings/PromptView';
+import CustomizationView, {
+  CustomizationSection,
+} from './settings/CustomizationView';
+import PromptView, { PromptSection } from './settings/PromptView';
 import PersonasView from './settings/PersonasView';
-import LorebooksView from './settings/LorebooksView';
-import ProvidersView from './settings/ProvidersView';
+import LorebooksView, { LorebooksSection } from './settings/LorebooksView';
+import ProvidersView, { ProvidersSection } from './settings/ProvidersView';
 import NotificationsView from './settings/NotificationsView';
 import DeveloperView from './settings/DeveloperView';
 
 type SettingsView =
   | 'main'
   | 'customization'
-  | 'systemPrompt'
+  | 'customizationTheme'
+  | 'customizationColors'
+  | 'customizationSizes'
+  | 'customizationFonts'
+  | 'customizationDisplay'
+  | 'prompt'
+  | 'promptPresets'
+  | 'promptSystem'
+  | 'promptPlaceholders'
+  | 'promptHistory'
+  | 'promptDisplacement'
   | 'personas'
   | 'lorebooks'
+  | 'lorebooksList'
+  | 'lorebooksRag'
   | 'providers'
+  | 'providersList'
+  | 'providersModel'
   | 'importExport'
   | 'notifications'
   | 'developer';
 
-const VIEW_TITLES: Record<Exclude<SettingsView, 'main'>, string> = {
+const VIEW_TITLES: Record<SettingsView, string> = {
+  main: 'Settings',
   customization: 'Customization',
-  systemPrompt: 'Prompt & Context',
+  customizationTheme: 'Theme',
+  customizationColors: 'Colors',
+  customizationSizes: 'Sizes & Spacing',
+  customizationFonts: 'Fonts',
+  customizationDisplay: 'Display',
+  prompt: 'Prompt & Context',
+  promptPresets: 'Model Presets',
+  promptSystem: 'System Prompt',
+  promptPlaceholders: 'Placeholders',
+  promptHistory: 'History & Summarization',
+  promptDisplacement: 'Word Displacement',
   personas: 'Personas',
   lorebooks: 'Lorebooks & RAG',
+  lorebooksList: 'Lorebooks',
+  lorebooksRag: 'RAG Settings',
   providers: 'Providers',
+  providersList: 'API Providers',
+  providersModel: 'Model & Sampling',
   importExport: 'Import / Export',
   notifications: 'Notifications',
   developer: 'Developer',
 };
 
-const MENU_ITEMS: {
-  view: Exclude<SettingsView, 'main'>;
+interface MenuItem {
+  view: SettingsView;
   title: string;
   description: string;
-}[] = [
-  {
-    view: 'customization',
-    title: 'Customization',
-    description: 'Colors, fonts, sizes, and display options',
-  },
-  {
-    view: 'systemPrompt',
-    title: 'Prompt & Context',
-    description: 'System prompt, history cutoff, and summarization',
-  },
-  {
-    view: 'personas',
-    title: 'Personas',
-    description: 'User persona profiles for the AI',
-  },
-  {
-    view: 'lorebooks',
-    title: 'Lorebooks & RAG',
-    description: 'Import lorebooks and configure retrieval',
-  },
-  {
-    view: 'providers',
-    title: 'Providers',
-    description: 'API providers, model, and temperature',
-  },
-  {
-    view: 'importExport',
-    title: 'Import / Export',
-    description: 'Backup and transfer characters',
-  },
-  {
-    view: 'notifications',
-    title: 'Notifications',
-    description: 'Chat completion alerts',
-  },
-  {
-    view: 'developer',
-    title: 'Developer',
-    description: 'Activity logging and debugger',
-  },
-];
+}
+
+const MENU_ITEMS: Partial<Record<SettingsView, MenuItem[]>> = {
+  main: [
+    {
+      view: 'customization',
+      title: 'Customization',
+      description: 'Theme, colors, sizes, and display',
+    },
+    {
+      view: 'prompt',
+      title: 'Prompt & Context',
+      description: 'System prompt, history, and summarization',
+    },
+    {
+      view: 'personas',
+      title: 'Personas',
+      description: 'User persona profiles for the AI',
+    },
+    {
+      view: 'lorebooks',
+      title: 'Lorebooks & RAG',
+      description: 'Lorebooks and retrieval settings',
+    },
+    {
+      view: 'providers',
+      title: 'Providers',
+      description: 'API providers, model, and sampling',
+    },
+    {
+      view: 'importExport',
+      title: 'Import / Export',
+      description: 'Backup and transfer characters',
+    },
+    {
+      view: 'notifications',
+      title: 'Notifications',
+      description: 'Chat completion alerts',
+    },
+    {
+      view: 'developer',
+      title: 'Developer',
+      description: 'Activity logging and debugger',
+    },
+  ],
+  customization: [
+    {
+      view: 'customizationTheme',
+      title: 'Theme',
+      description: 'Dark/light mode, app icon, and sharing',
+    },
+    {
+      view: 'customizationColors',
+      title: 'Colors',
+      description: 'Backgrounds, text, accents, and bubbles',
+    },
+    {
+      view: 'customizationSizes',
+      title: 'Sizes & Spacing',
+      description: 'Corner radii, buttons, and widths',
+    },
+    {
+      view: 'customizationFonts',
+      title: 'Fonts',
+      description: 'Body, header, and tab text sizes',
+    },
+    {
+      view: 'customizationDisplay',
+      title: 'Display',
+      description: 'Icons, thinking, italics, and carousel',
+    },
+  ],
+  prompt: [
+    {
+      view: 'promptPresets',
+      title: 'Model Presets',
+      description: 'Per-model instructions and sampling',
+    },
+    {
+      view: 'promptSystem',
+      title: 'System Prompt',
+      description: 'Prefix, suffix, and quick characters',
+    },
+    {
+      view: 'promptPlaceholders',
+      title: 'Placeholders',
+      description: 'Every value you can insert',
+    },
+    {
+      view: 'promptHistory',
+      title: 'History & Summarization',
+      description: 'Context cutoff and summary limits',
+    },
+    {
+      view: 'promptDisplacement',
+      title: 'Word Displacement',
+      description: 'Rewrite rules applied to replies',
+    },
+  ],
+  lorebooks: [
+    {
+      view: 'lorebooksList',
+      title: 'Lorebooks',
+      description: 'Create, import, and edit lorebooks',
+    },
+    {
+      view: 'lorebooksRag',
+      title: 'RAG Settings',
+      description: 'Embedding model and retrieval limits',
+    },
+  ],
+  providers: [
+    {
+      view: 'providersList',
+      title: 'API Providers',
+      description: 'Endpoints and API keys',
+    },
+    {
+      view: 'providersModel',
+      title: 'Model & Sampling',
+      description: 'Model, temperature, and request body',
+    },
+  ],
+};
+
+const CUSTOMIZATION_SECTIONS: Partial<
+  Record<SettingsView, CustomizationSection>
+> = {
+  customizationTheme: 'theme',
+  customizationColors: 'colors',
+  customizationSizes: 'sizes',
+  customizationFonts: 'fonts',
+  customizationDisplay: 'display',
+};
+
+const PROMPT_SECTIONS: Partial<Record<SettingsView, PromptSection>> = {
+  promptPresets: 'presets',
+  promptSystem: 'system',
+  promptPlaceholders: 'placeholders',
+  promptHistory: 'history',
+  promptDisplacement: 'displacement',
+};
+
+const LOREBOOK_SECTIONS: Partial<Record<SettingsView, LorebooksSection>> = {
+  lorebooksList: 'lorebooks',
+  lorebooksRag: 'rag',
+};
+
+const PROVIDER_SECTIONS: Partial<Record<SettingsView, ProvidersSection>> = {
+  providersList: 'providers',
+  providersModel: 'model',
+};
 
 interface SettingsHandlerProps {
   onApply?: (settings: AppSettings) => void;
@@ -114,7 +256,8 @@ export default function SettingsHandler({
   const st = useTheme();
   const appSettings = useAppStore(sto => sto.appSettings);
   const promptConfigVersion = useAppStore(sto => sto.promptConfigVersion);
-  const [settingsView, setSettingsView] = useState<SettingsView>('main');
+  const [viewStack, setViewStack] = useState<SettingsView[]>(['main']);
+  const settingsView = viewStack[viewStack.length - 1];
 
   const [values, setValues] = useState<Settings>(() => toDraft(appSettings));
   const [promptValues, setPromptValues] = useState<PromptConfig>(
@@ -205,6 +348,15 @@ export default function SettingsHandler({
     return () => sub.remove();
   }, []);
 
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (viewStack.length <= 1) return false;
+      setViewStack(prev => prev.slice(0, -1));
+      return true;
+    });
+    return () => sub.remove();
+  }, [viewStack.length]);
+
   const applyThemeSettings = useCallback(
     (draft: Settings) => {
       const converted: Record<string, unknown> = { ...draft };
@@ -236,20 +388,98 @@ export default function SettingsHandler({
     [applyThemeSettings],
   );
 
+  const navigateTo = useCallback((view: SettingsView) => {
+    setViewStack(prev => [...prev, view]);
+  }, []);
+
+  const goBack = useCallback(() => {
+    setViewStack(prev => (prev.length > 1 ? prev.slice(0, -1) : prev));
+  }, []);
+
+  const renderView = () => {
+    const customizationSection = CUSTOMIZATION_SECTIONS[settingsView];
+    if (customizationSection) {
+      return (
+        <CustomizationView
+          section={customizationSection}
+          values={values}
+          defaults={defaults}
+          handleChange={handleChange}
+        />
+      );
+    }
+
+    const promptSection = PROMPT_SECTIONS[settingsView];
+    if (promptSection) {
+      return (
+        <PromptView
+          section={promptSection}
+          promptValues={promptValues}
+          setPromptValues={setPromptValues}
+          accent={values.accentColor}
+        />
+      );
+    }
+
+    const lorebooksSection = LOREBOOK_SECTIONS[settingsView];
+    if (lorebooksSection) {
+      return (
+        <LorebooksView
+          section={lorebooksSection}
+          promptValues={promptValues}
+          setPromptValues={setPromptValues}
+        />
+      );
+    }
+
+    const providersSection = PROVIDER_SECTIONS[settingsView];
+    if (providersSection) {
+      return (
+        <ProvidersView
+          section={providersSection}
+          promptValues={promptValues}
+          setPromptValues={setPromptValues}
+        />
+      );
+    }
+
+    switch (settingsView) {
+      case 'personas':
+        return (
+          <PersonasView
+            values={values}
+            promptValues={promptValues}
+            setPromptValues={setPromptValues}
+            promptLoaded={promptLoaded}
+          />
+        );
+      case 'importExport':
+        return <ImportExportHandler bottomInset={bottomInset} />;
+      case 'notifications':
+        return <NotificationsView accent={values.accentColor} />;
+      case 'developer':
+        return (
+          <DeveloperView
+            accent={values.accentColor}
+            onOpenDebugger={onOpenDebugger}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  const menuItems = MENU_ITEMS[settingsView];
+
   return (
     <View style={st.settingsContainer}>
       <View style={st.settingsHeader}>
         {settingsView !== 'main' && (
-          <TouchableOpacity
-            onPress={() => setSettingsView('main')}
-            style={st.settingsBackBtn}
-          >
+          <TouchableOpacity onPress={goBack} style={st.settingsBackBtn}>
             <Text style={st.settingsBackBtnText}>{'‹ Back'}</Text>
           </TouchableOpacity>
         )}
-        <Text style={st.settingsHeaderName}>
-          {settingsView === 'main' ? 'Settings' : VIEW_TITLES[settingsView]}
-        </Text>
+        <Text style={st.settingsHeaderName}>{VIEW_TITLES[settingsView]}</Text>
       </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -264,58 +494,18 @@ export default function SettingsHandler({
             { paddingBottom: bottomInset + 60 },
           ]}
         >
-          {settingsView === 'main' ? (
-            <>
-              {MENU_ITEMS.map(item => (
+          {menuItems
+            ? menuItems.map(item => (
                 <TouchableOpacity
                   key={item.view}
                   style={[st.card, { marginBottom: 10 }]}
-                  onPress={() => setSettingsView(item.view)}
+                  onPress={() => navigateTo(item.view)}
                 >
                   <Text style={st.cardTitle}>{item.title}</Text>
                   <Text style={st.cardDescription}>{item.description}</Text>
                 </TouchableOpacity>
-              ))}
-            </>
-          ) : settingsView === 'customization' ? (
-            <CustomizationView
-              values={values}
-              defaults={defaults}
-              handleChange={handleChange}
-            />
-          ) : settingsView === 'systemPrompt' ? (
-            <PromptView
-              promptValues={promptValues}
-              setPromptValues={setPromptValues}
-              accent={values.accentColor}
-            />
-          ) : settingsView === 'personas' ? (
-            <PersonasView
-              values={values}
-              promptValues={promptValues}
-              setPromptValues={setPromptValues}
-              promptLoaded={promptLoaded}
-            />
-          ) : settingsView === 'lorebooks' ? (
-            <LorebooksView
-              promptValues={promptValues}
-              setPromptValues={setPromptValues}
-            />
-          ) : settingsView === 'providers' ? (
-            <ProvidersView
-              promptValues={promptValues}
-              setPromptValues={setPromptValues}
-            />
-          ) : settingsView === 'importExport' ? (
-            <ImportExportHandler bottomInset={bottomInset} />
-          ) : settingsView === 'notifications' ? (
-            <NotificationsView accent={values.accentColor} />
-          ) : (
-            <DeveloperView
-              accent={values.accentColor}
-              onOpenDebugger={onOpenDebugger}
-            />
-          )}
+              ))
+            : renderView()}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

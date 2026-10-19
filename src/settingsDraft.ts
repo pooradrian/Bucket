@@ -79,7 +79,7 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   carouselAnimMs: 'Carousel animation (ms)',
 };
 
-export const CUSTOMIZATION_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
+export const COLOR_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'bgPrimary',
   'bgSecondary',
   'bgPill',
@@ -87,19 +87,26 @@ export const CUSTOMIZATION_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'textPrimary',
   'textSecondary',
   'textMuted',
+  'accentColor',
+  'userBubbleBg',
+  'dangerColor',
+];
+
+export const SIZE_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'cardRadius',
   'pillRadius',
   'bubbleRadius',
   'inputRadius',
   'chatMaxWidth',
-  'fontSizeBody',
-  'fontSizeHeader',
-  'fontSizeTab',
   'bottomBarPad',
   'sideBtnSize',
   'sendBtnSize',
-  'accentColor',
-  'userBubbleBg',
+];
+
+export const FONT_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
+  'fontSizeBody',
+  'fontSizeHeader',
+  'fontSizeTab',
 ];
 
 export const NUMERIC_KEYS: Exclude<

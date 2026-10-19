@@ -11,12 +11,16 @@ import { getActiveProviderId } from '../SecureStore';
 import { useAppStore } from '../store';
 import { TextField } from './ui';
 
+export type ProvidersSection = 'providers' | 'model';
+
 interface ProvidersViewProps {
+  section: ProvidersSection;
   promptValues: PromptConfig;
   setPromptValues: React.Dispatch<React.SetStateAction<PromptConfig>>;
 }
 
 export default function ProvidersView({
+  section,
   promptValues,
   setPromptValues,
 }: ProvidersViewProps) {
@@ -27,8 +31,8 @@ export default function ProvidersView({
     setActiveProviderId(getActiveProviderId() || '');
   }, [promptConfigVersion]);
 
-  return (
-    <>
+  if (section === 'providers') {
+    return (
       <ProvidersHandler
         activeProviderId={activeProviderId}
         onSelect={id => {
@@ -36,7 +40,11 @@ export default function ProvidersView({
           setPromptValues(prev => ({ ...prev, providerId: id }));
         }}
       />
+    );
+  }
 
+  return (
+    <>
       <TextField
         label="Model"
         value={promptValues.model}
