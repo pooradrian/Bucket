@@ -4,7 +4,7 @@ import { encrypt, decrypt } from './Crypto';
 import { LorebookEntry, LorebookState } from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 15;
+const CURRENT_VERSION = 16;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -297,6 +297,16 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
           'speaker_name',
           'TEXT DEFAULT ""',
         );
+      }
+
+      if (v === 16) {
+        conn.execute(`
+          CREATE TABLE IF NOT EXISTS folders (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL
+          )
+        `);
+        addColumnIfMissing(conn, 'characters', 'folder_id', 'TEXT DEFAULT ""');
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -1002,6 +1012,7 @@ interface DBCharacter {
   lorebook_id: string;
   custom_fields: string;
   persona_id: string;
+  folder_id: string;
 }
 
 export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
@@ -1017,8 +1028,8 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
   };
   d.execute(
     `INSERT OR REPLACE INTO characters
-      (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id, folder_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       char.id,
       char.name,
@@ -1032,6 +1043,7 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
       char.lorebook_id,
       encrypted.custom_fields,
       char.persona_id,
+      char.folder_id,
     ],
   );
 }
@@ -1045,7 +1057,7 @@ export function deleteCharacterFromDB(id: string): void {
 export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
   const d = initDB();
   const result = d.execute(
-    'SELECT id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id FROM characters ORDER BY name',
+    'SELECT id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id, folder_id FROM characters ORDER BY name',
   );
   if (!result.results) {
     return [];
@@ -1064,8 +1076,60 @@ export async function getAllCharactersFromDB(): Promise<DBCharacter[]> {
       lorebook_id: (row.lorebook_id as string) || '',
       custom_fields: await decrypt((row.custom_fields as string) || ''),
       persona_id: (row.persona_id as string) || '',
+      folder_id: (row.folder_id as string) || '',
     })),
   );
+}
+
+// =========================================================================
+// Folders
+// =========================================================================
+
+export interface DBFolder {
+  id: string;
+  name: string;
+}
+
+export function getAllFoldersFromDB(): DBFolder[] {
+  const result = initDB().execute('SELECT id, name FROM folders ORDER BY name');
+  if (!result.results) {
+    return [];
+  }
+  return result.results.map(row => ({
+    id: row.id as string,
+    name: row.name as string,
+  }));
+}
+
+export function saveFolderToDB(folder: DBFolder): void {
+  initDB().execute('INSERT OR REPLACE INTO folders (id, name) VALUES (?, ?)', [
+    folder.id,
+    folder.name,
+  ]);
+}
+
+export function deleteFolderFromDB(id: string): void {
+  const d = initDB();
+  d.execute('BEGIN');
+  try {
+    d.execute("UPDATE characters SET folder_id = '' WHERE folder_id = ?", [id]);
+    d.execute('DELETE FROM folders WHERE id = ?', [id]);
+    d.execute('COMMIT');
+  } catch (e) {
+    d.execute('ROLLBACK');
+    throw e;
+  }
+  checkpointWAL();
+}
+
+export function setCharacterFolder(
+  characterId: string,
+  folderId: string,
+): void {
+  initDB().execute('UPDATE characters SET folder_id = ? WHERE id = ?', [
+    folderId,
+    characterId,
+  ]);
 }
 
 // =========================================================================

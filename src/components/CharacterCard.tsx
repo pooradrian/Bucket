@@ -9,6 +9,7 @@ interface CharacterCardProps {
   hideEdit?: boolean;
   onOpenChat: (char: Character) => void;
   onEdit: (char: Character) => void;
+  onMove?: (char: Character) => void;
   onTriggerDelete: (id: string) => void;
   onConfirmDelete: (id: string) => void;
   onCancelDelete: () => void;
@@ -21,6 +22,7 @@ export default function CharacterCard({
   hideEdit,
   onOpenChat,
   onEdit,
+  onMove,
   onTriggerDelete,
   onConfirmDelete,
   onCancelDelete,
@@ -60,6 +62,14 @@ export default function CharacterCard({
             </>
           ) : (
             <>
+              {!hideEdit && onMove && (
+                <TouchableOpacity
+                  onPress={() => onMove(item)}
+                  style={st.cardActionBtn}
+                >
+                  <Text style={st.cardActionBtnText}>Move</Text>
+                </TouchableOpacity>
+              )}
               {!hideEdit && (
                 <TouchableOpacity
                   onPress={() => onEdit(item)}

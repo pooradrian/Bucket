@@ -27,6 +27,7 @@ import {
 } from './ImportExport';
 import {
   getAllCharactersFromDB,
+  getAllFoldersFromDB,
   getAllGroupChatsFromDB,
   generateId,
 } from './Database';
@@ -49,6 +50,7 @@ export default function ImportExportHandler({
   const {
     loadCharacters,
     loadGroupChats,
+    loadFolders,
     loadLorebooks,
     loadSettings,
     appSettings,
@@ -64,6 +66,7 @@ export default function ImportExportHandler({
   );
   const [selectedChars, setSelectedChars] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [includeSettings, setIncludeSettings] = useState(true);
   const [includeLorebooks, setIncludeLorebooks] = useState(true);
   const [includeChats, setIncludeChats] = useState(true);
@@ -71,6 +74,9 @@ export default function ImportExportHandler({
     Array<{ id: string; name: string; hasCustomFields: boolean }>
   >([]);
   const [groups, setGroups] = useState<
+    Array<{ id: string; name: string; characterIds: string[] }>
+  >([]);
+  const [folders, setFolders] = useState<
     Array<{ id: string; name: string; characterIds: string[] }>
   >([]);
 
@@ -101,6 +107,9 @@ export default function ImportExportHandler({
         if (imported.quickCharacters.length > 0) {
           message += `, ${imported.quickCharacters.length} quick characters`;
         }
+        if (imported.folders.length > 0) {
+          message += `, ${imported.folders.length} folders`;
+        }
         if (imported.settings) {
           message += ', and settings';
         }
@@ -110,6 +119,7 @@ export default function ImportExportHandler({
 
         await loadCharacters();
         await loadGroupChats();
+        await loadFolders();
         await loadLorebooks();
         await loadSettings();
         if (imported.settings || imported.promptConfig) {
@@ -210,6 +220,7 @@ export default function ImportExportHandler({
   }, [
     loadCharacters,
     loadGroupChats,
+    loadFolders,
     loadLorebooks,
     loadSettings,
     bumpPromptConfigVersion,
@@ -220,6 +231,7 @@ export default function ImportExportHandler({
   const handleShowExport = useCallback(async () => {
     const allChars = await getAllCharactersFromDB();
     const allGroups = await getAllGroupChatsFromDB();
+    const allFolders = getAllFoldersFromDB();
     setChars(
       allChars.map(c => ({
         id: c.id,
@@ -234,8 +246,16 @@ export default function ImportExportHandler({
         characterIds: g.characterIds,
       })),
     );
+    setFolders(
+      allFolders.map(f => ({
+        id: f.id,
+        name: f.name,
+        characterIds: allChars.filter(c => c.folder_id === f.id).map(c => c.id),
+      })),
+    );
     setSelectedChars(allChars.map(c => c.id));
     setSelectedGroups(allGroups.map(g => g.id));
+    setSelectedFolders(allFolders.map(f => f.id));
     setSelectedFormat(null);
     setIncludeSettings(true);
     setIncludeLorebooks(true);
@@ -308,6 +328,7 @@ export default function ImportExportHandler({
           format: 'buk',
           characterIds: selectedChars,
           groupIds: selectedGroups,
+          folderIds: selectedFolders,
           includeSettings,
           includeLorebooks,
           includeChats,
@@ -336,6 +357,7 @@ export default function ImportExportHandler({
     selectedFormat,
     selectedChars,
     selectedGroups,
+    selectedFolders,
     includeSettings,
     includeLorebooks,
     includeChats,
@@ -363,6 +385,24 @@ export default function ImportExportHandler({
       }
     },
     [selectedGroups, groups],
+  );
+
+  const toggleFolder = useCallback(
+    (id: string) => {
+      const isSelected = selectedFolders.includes(id);
+      setSelectedFolders(prev =>
+        prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id],
+      );
+      if (!isSelected) {
+        const folder = folders.find(f => f.id === id);
+        if (folder) {
+          setSelectedChars(sel => [
+            ...new Set([...sel, ...folder.characterIds]),
+          ]);
+        }
+      }
+    },
+    [selectedFolders, folders],
   );
 
   const ac = appSettings.accentColor;
@@ -405,6 +445,19 @@ export default function ImportExportHandler({
   const groupTextStyle = (id: string) => [
     st.settingsToggleText,
     { color: selectedGroups.includes(id) ? bg : ac },
+  ];
+
+  const folderBtnStyle = (id: string) => [
+    st.settingsToggleButton,
+    {
+      marginBottom: 6,
+      backgroundColor: selectedFolders.includes(id) ? ac : 'transparent',
+    },
+  ];
+
+  const folderTextStyle = (id: string) => [
+    st.settingsToggleText,
+    { color: selectedFolders.includes(id) ? bg : ac },
   ];
 
   const hasCustomFieldChars = selectedChars.some(
@@ -716,6 +769,65 @@ export default function ImportExportHandler({
                       }}
                     >
                       No group chats yet
+                    </Text>
+                  )}
+                </>
+              )}
+
+              {selectedFormat === 'buk' && (
+                <>
+                  <Text
+                    style={{
+                      color: ac,
+                      fontSize: 14,
+                      fontWeight: '600',
+                      marginTop: 16,
+                      marginBottom: 10,
+                    }}
+                  >
+                    Folders ({selectedFolders.length}/{folders.length})
+                  </Text>
+
+                  <TouchableOpacity
+                    style={st.settingsToggleButton}
+                    onPress={() =>
+                      setSelectedFolders(
+                        selectedFolders.length === folders.length
+                          ? []
+                          : folders.map(f => f.id),
+                      )
+                    }
+                  >
+                    <Text style={st.settingsToggleText}>
+                      {selectedFolders.length === folders.length
+                        ? 'Deselect All Folders'
+                        : 'Select All Folders'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={{ marginTop: 10 }}>
+                    {folders.map(folder => (
+                      <TouchableOpacity
+                        key={folder.id}
+                        style={folderBtnStyle(folder.id)}
+                        onPress={() => toggleFolder(folder.id)}
+                      >
+                        <Text style={folderTextStyle(folder.id)}>
+                          {folder.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {folders.length === 0 && (
+                    <Text
+                      style={{
+                        color: appSettings.textMuted,
+                        fontSize: 13,
+                        marginTop: 6,
+                      }}
+                    >
+                      No folders yet
                     </Text>
                   )}
                 </>

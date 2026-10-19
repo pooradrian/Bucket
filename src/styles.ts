@@ -153,6 +153,9 @@ export function createStyles(s: AppSettings) {
       padding: 16,
       flexGrow: 1,
     },
+    folderNested: {
+      marginLeft: 16,
+    },
     emptyText: {
       color: '#333333',
       fontSize: 16,

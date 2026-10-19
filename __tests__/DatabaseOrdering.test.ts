@@ -89,6 +89,22 @@ beforeAll(async () => {
       starred INTEGER DEFAULT 0
     )
   `);
+  db.execute(`
+    CREATE TABLE characters (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      initial_message TEXT DEFAULT '',
+      writing_style TEXT DEFAULT '',
+      personality TEXT DEFAULT '',
+      scenario TEXT DEFAULT '',
+      example_messages TEXT DEFAULT '',
+      icon TEXT DEFAULT '',
+      lorebook_id TEXT DEFAULT '',
+      custom_fields TEXT DEFAULT '',
+      persona_id TEXT DEFAULT ''
+    )
+  `);
   db.execute('CREATE INDEX idx_messages_session ON chat_messages(session_id)');
   db.execute('PRAGMA user_version = 11');
 
@@ -111,11 +127,11 @@ beforeAll(async () => {
   }
 });
 
-test('upgrade runs migrations through v15', () => {
+test('upgrade runs migrations through v16', () => {
   const result = db.execute('PRAGMA user_version');
   expect(result.results?.[0]?.user_version).toBe(11);
   initDB();
-  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(15);
+  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(16);
 });
 
 test('backfill restores insertion order for threads whose timestamps were rewritten', async () => {

@@ -219,6 +219,10 @@ function buildSummary(
     }
     case 'group_deleted':
       return `Deleted group chat [name(${stats.nameLen}c), ${stats.memberCount} members]`;
+    case 'folder_saved':
+      return `${stats.isNew ? 'Created' : 'Renamed'} folder [name(${stats.nameLen}c)]`;
+    case 'folder_deleted':
+      return `Deleted folder [name(${stats.nameLen}c)]`;
     case 'chat_converted_to_group':
       return `Converted chat to group [${stats.memberCount} members]`;
     case 'lorebook_imported':
