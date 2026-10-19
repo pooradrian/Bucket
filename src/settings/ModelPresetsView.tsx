@@ -29,7 +29,6 @@ export default function ModelPresetsView({
 
   return (
     <View style={st.settingsField}>
-      <Text style={st.settingsLabel}>Model Presets</Text>
       <Text style={[st.settingsDefaultText, { marginBottom: 10 }]}>
         Each preset stores system instructions and sampling settings for one
         exact model name. Matching presets apply automatically when you change

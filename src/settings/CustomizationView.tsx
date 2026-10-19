@@ -8,7 +8,13 @@ import {
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Alert, Share, Text, TouchableOpacity, View } from 'react-native';
 import { logEvent } from '../EventLogger';
-import { Settings, LABELS, CUSTOMIZATION_KEYS } from '../settingsDraft';
+import {
+  Settings,
+  LABELS,
+  COLOR_KEYS,
+  SIZE_KEYS,
+  FONT_KEYS,
+} from '../settingsDraft';
 import { useCallback } from 'react';
 import { useTheme } from '../ThemeContext';
 import {
@@ -19,13 +25,22 @@ import {
   MutedNote,
 } from './ui';
 
+export type CustomizationSection =
+  | 'theme'
+  | 'colors'
+  | 'sizes'
+  | 'fonts'
+  | 'display';
+
 interface CustomizationViewProps {
+  section: CustomizationSection;
   values: Settings;
   defaults: Settings;
   handleChange: (key: keyof Settings, text: string) => void;
 }
 
 export default function CustomizationView({
+  section,
   values,
   defaults,
   handleChange,
@@ -76,52 +91,122 @@ export default function CustomizationView({
     }
   }, [appSettings, setAppSettings]);
 
+  if (section === 'theme') {
+    return (
+      <>
+        <OptionRow
+          options={[
+            { value: 'dark', label: 'Dark' },
+            { value: 'light', label: 'Light' },
+          ]}
+          value={appSettings.themeMode}
+          accent={appSettings.accentColor}
+          onChange={mode => {
+            applyThemeMode(mode);
+            if (appSettings.dynamicIcon) {
+              setIcon(mode);
+            }
+          }}
+        />
+
+        <BoolToggle
+          label="Match icon to theme"
+          value={values.dynamicIcon === 'true'}
+          accent={values.accentColor}
+          onChange={next => {
+            handleChange('dynamicIcon', next ? 'true' : 'false');
+            if (next) {
+              setIcon(values.themeMode);
+            }
+          }}
+        />
+
+        <SectionHeader title="Share" />
+
+        <View style={st.settingsField}>
+          <Text style={st.settingsLabel}>Shareable theme</Text>
+          <MutedNote>
+            Encode the current colors into a URL you can send to someone else.
+          </MutedNote>
+          <View style={st.settingsToggleRow}>
+            <TouchableOpacity
+              style={[
+                st.settingsToggleButton,
+                { backgroundColor: appSettings.accentColor },
+              ]}
+              onPress={handleShareTheme}
+            >
+              <Text style={[st.settingsToggleText, st.settingsToggleTextActive]}>
+                Share
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={st.settingsToggleButton}
+              onPress={handleImportTheme}
+            >
+              <Text style={st.settingsToggleText}>Import from clipboard</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </>
+    );
+  }
+
+  if (section === 'colors') {
+    return (
+      <>
+        {COLOR_KEYS.map(key => (
+          <TextField
+            key={key}
+            label={LABELS[key]}
+            value={values[key]}
+            onChangeText={text => handleChange(key, text)}
+            placeholder={defaults[key]}
+            resetTo={defaults[key]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (section === 'sizes') {
+    return (
+      <>
+        {SIZE_KEYS.map(key => (
+          <TextField
+            key={key}
+            label={LABELS[key]}
+            value={values[key]}
+            onChangeText={text => handleChange(key, text)}
+            placeholder={defaults[key]}
+            keyboardType="numeric"
+            resetTo={defaults[key]}
+          />
+        ))}
+      </>
+    );
+  }
+
+  if (section === 'fonts') {
+    return (
+      <>
+        {FONT_KEYS.map(key => (
+          <TextField
+            key={key}
+            label={LABELS[key]}
+            value={values[key]}
+            onChangeText={text => handleChange(key, text)}
+            placeholder={defaults[key]}
+            keyboardType="numeric"
+            resetTo={defaults[key]}
+          />
+        ))}
+      </>
+    );
+  }
+
   return (
     <>
-      <SectionHeader title="Theme" />
-
-      <OptionRow
-        options={[
-          { value: 'dark', label: 'Dark' },
-          { value: 'light', label: 'Light' },
-        ]}
-        value={appSettings.themeMode}
-        accent={appSettings.accentColor}
-        onChange={mode => {
-          applyThemeMode(mode);
-          if (appSettings.dynamicIcon) {
-            setIcon(mode);
-          }
-        }}
-      />
-
-      <BoolToggle
-        label="Match icon to theme"
-        value={values.dynamicIcon === 'true'}
-        accent={values.accentColor}
-        onChange={next => {
-          handleChange('dynamicIcon', next ? 'true' : 'false');
-          if (next) {
-            setIcon(values.themeMode);
-          }
-        }}
-      />
-
-      <SectionHeader title="Colors" />
-
-      {CUSTOMIZATION_KEYS.map(key => (
-        <TextField
-          key={key}
-          label={LABELS[key]}
-          value={values[key]}
-          onChangeText={text => handleChange(key, text)}
-          placeholder={defaults[key]}
-          resetTo={defaults[key]}
-        />
-      ))}
-
-      <SectionHeader title="Display" />
-
       <BoolToggle
         label="Show character icons"
         value={values.showCharacterIcons === 'true'}
@@ -162,8 +247,6 @@ export default function CustomizationView({
         onChange={next => handleChange('forceItalic', next ? 'true' : 'false')}
       />
 
-      <SectionHeader title="Carousel" />
-
       <TextField
         label={LABELS.carouselAnimMs}
         note="How long the message studio carousel takes to appear."
@@ -173,34 +256,6 @@ export default function CustomizationView({
         keyboardType="numeric"
         resetTo={defaults.carouselAnimMs}
       />
-
-      <SectionHeader title="Share" />
-
-      <View style={st.settingsField}>
-        <Text style={st.settingsLabel}>Shareable theme</Text>
-        <MutedNote>
-          Encode the current colors into a URL you can send to someone else.
-        </MutedNote>
-        <View style={st.settingsToggleRow}>
-          <TouchableOpacity
-            style={[
-              st.settingsToggleButton,
-              { backgroundColor: appSettings.accentColor },
-            ]}
-            onPress={handleShareTheme}
-          >
-            <Text style={[st.settingsToggleText, st.settingsToggleTextActive]}>
-              Share
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={st.settingsToggleButton}
-            onPress={handleImportTheme}
-          >
-            <Text style={st.settingsToggleText}>Import from clipboard</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
     </>
   );
 }

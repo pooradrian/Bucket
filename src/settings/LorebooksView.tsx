@@ -10,15 +10,19 @@ import { useAppStore } from '../store';
 import { PromptConfig } from '../PromptHandler';
 import { logEvent } from '../EventLogger';
 import { useTheme } from '../ThemeContext';
-import { SectionHeader, TextField } from './ui';
+import { TextField } from './ui';
 import LorebookEditor from '../components/LorebookEditor';
 
+export type LorebooksSection = 'lorebooks' | 'rag';
+
 interface LorebooksViewProps {
+  section: LorebooksSection;
   promptValues: PromptConfig;
   setPromptValues: React.Dispatch<React.SetStateAction<PromptConfig>>;
 }
 
 export default function LorebooksView({
+  section,
   promptValues,
   setPromptValues,
 }: LorebooksViewProps) {
@@ -71,6 +75,41 @@ export default function LorebooksView({
     },
     [setLorebooks, lorebooks],
   );
+
+  if (section === 'rag') {
+    return (
+      <>
+        <TextField
+          label="Embedding Model (leave blank to use main model)"
+          value={promptValues.ragModel}
+          onChangeText={text =>
+            setPromptValues(prev => ({ ...prev, ragModel: text }))
+          }
+          placeholder="e.g. nomic-embed-text"
+        />
+
+        <TextField
+          label="Max entries to embed per retrieval"
+          value={promptValues.ragMaxEntriesToSend}
+          onChangeText={text =>
+            setPromptValues(prev => ({ ...prev, ragMaxEntriesToSend: text }))
+          }
+          placeholder="50"
+          keyboardType="numeric"
+        />
+
+        <TextField
+          label="Max relevant facts returned"
+          value={promptValues.ragMaxResults}
+          onChangeText={text =>
+            setPromptValues(prev => ({ ...prev, ragMaxResults: text }))
+          }
+          placeholder="5"
+          keyboardType="numeric"
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -143,37 +182,6 @@ export default function LorebooksView({
           });
           setEditorVisible(false);
         }}
-      />
-
-      <SectionHeader title="RAG Settings" />
-
-      <TextField
-        label="Embedding Model (leave blank to use main model)"
-        value={promptValues.ragModel}
-        onChangeText={text =>
-          setPromptValues(prev => ({ ...prev, ragModel: text }))
-        }
-        placeholder="e.g. nomic-embed-text"
-      />
-
-      <TextField
-        label="Max entries to embed per retrieval"
-        value={promptValues.ragMaxEntriesToSend}
-        onChangeText={text =>
-          setPromptValues(prev => ({ ...prev, ragMaxEntriesToSend: text }))
-        }
-        placeholder="50"
-        keyboardType="numeric"
-      />
-
-      <TextField
-        label="Max relevant facts returned"
-        value={promptValues.ragMaxResults}
-        onChangeText={text =>
-          setPromptValues(prev => ({ ...prev, ragMaxResults: text }))
-        }
-        placeholder="5"
-        keyboardType="numeric"
       />
     </>
   );
