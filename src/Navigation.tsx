@@ -4,9 +4,12 @@ import {
   BackHandler,
   FlatList,
   Keyboard,
+  KeyboardAvoidingView,
   Platform,
   Text,
+  TextInput,
   ToastAndroid,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import {
@@ -21,7 +24,7 @@ import {
 } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Character } from './CharacterEditor';
-import { GroupChat, AppSettings, useAppStore } from './store';
+import { Folder, GroupChat, AppSettings, useAppStore } from './store';
 import { useTheme } from './ThemeContext';
 import {
   getAllSessionsForCharacter,
@@ -49,6 +52,8 @@ import Debugger from './Debugger';
 import CharacterCard from './components/CharacterCard';
 import GroupCard from './components/GroupCard';
 import GroupEditor from './components/GroupEditor';
+import FolderCard from './components/FolderCard';
+import FolderPicker from './components/FolderPicker';
 import HistoryModal from './components/HistoryModal';
 import TabBar from './components/TabBar';
 import WelcomeGuide from './WelcomeGuide';
@@ -63,6 +68,15 @@ type RootStackParamList = {
 export type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 type ContentTab = 'menu' | 'chat';
+
+type MenuItem =
+  | { type: 'folder'; data: Folder; characterCount: number; expanded: boolean }
+  | { type: 'character'; data: Character; nested?: boolean }
+  | { type: 'group'; data: GroupChat };
+
+function menuItemKey(item: MenuItem): string {
+  return item.type === 'folder' ? `folder:${item.data.id}` : item.data.id;
+}
 
 const WELCOME_ID = '__welcome__';
 const WELCOME_CHARACTER: Character = {
@@ -88,6 +102,10 @@ function HomeScreen() {
   const deleteGroupChat = useAppStore(s => s.deleteGroupChat);
   const saveGroupChat = useAppStore(s => s.saveGroupChat);
   const loadGroupChats = useAppStore(s => s.loadGroupChats);
+  const folders = useAppStore(s => s.folders);
+  const saveFolder = useAppStore(s => s.saveFolder);
+  const deleteFolder = useAppStore(s => s.deleteFolder);
+  const moveCharacterToFolder = useAppStore(s => s.moveCharacterToFolder);
 
   const [activeTab, setActiveTab] = useState<ContentTab>('menu');
   const [activeChatCharacter, setActiveChatCharacter] =
@@ -103,6 +121,19 @@ function HomeScreen() {
   const [deleteConfirmGroupId, setDeleteConfirmGroupId] = useState<
     string | null
   >(null);
+  const [deleteConfirmFolderId, setDeleteConfirmFolderId] = useState<
+    string | null
+  >(null);
+  const [expandedFolders, setExpandedFolders] = useState<
+    Record<string, boolean>
+  >({});
+  const [renamingFolder, setRenamingFolder] = useState<{
+    id: string;
+    draft: string;
+  } | null>(null);
+  const [movingCharacter, setMovingCharacter] = useState<Character | null>(
+    null,
+  );
   const [editingGroup, setEditingGroup] = useState<GroupChat | null>(null);
   const [showConvertGroup, setShowConvertGroup] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -126,6 +157,10 @@ function HomeScreen() {
           setShowConvertGroup(false);
           return true;
         }
+        if (renamingFolder !== null) {
+          setRenamingFolder(null);
+          return true;
+        }
         if (Platform.OS !== 'android') return false;
         const now = Date.now();
         if (now - lastBackRef.current < 2000) {
@@ -136,7 +171,7 @@ function HomeScreen() {
         return true;
       });
       return () => sub.remove();
-    }, [showHistory, editingGroup, showConvertGroup]),
+    }, [showHistory, editingGroup, showConvertGroup, renamingFolder]),
   );
 
   useEffect(() => {
@@ -302,6 +337,30 @@ function HomeScreen() {
       prev.map(s => (s.id === sessionId ? { ...s, name: name.trim() } : s)),
     );
   }, []);
+
+  const toggleFolder = useCallback((id: string) => {
+    setExpandedFolders(prev => ({ ...prev, [id]: !(prev[id] ?? true) }));
+  }, []);
+
+  const handleFolderRenameSave = useCallback(() => {
+    if (!renamingFolder || !renamingFolder.draft.trim()) return;
+    saveFolder({ id: renamingFolder.id, name: renamingFolder.draft.trim() });
+    setRenamingFolder(null);
+  }, [renamingFolder, saveFolder]);
+
+  const handleCharacterMove = useCallback((char: Character) => {
+    setMovingCharacter(char);
+  }, []);
+
+  const handleMoveSelect = useCallback(
+    (folderId: string) => {
+      if (movingCharacter) {
+        moveCharacterToFolder(movingCharacter.id, folderId);
+      }
+      setMovingCharacter(null);
+    },
+    [movingCharacter, moveCharacterToFolder],
+  );
 
   const handleConvertSave = useCallback(
     (group: GroupChat) => {
@@ -477,13 +536,101 @@ function HomeScreen() {
 
   const showWelcomeCard = !welcomeDismissed && characters.length === 0;
 
-  const menuData = [
-    ...(showWelcomeCard
-      ? [{ type: 'character' as const, data: WELCOME_CHARACTER }]
-      : []),
-    ...characters.map(c => ({ type: 'character' as const, data: c })),
-    ...groupChats.map(g => ({ type: 'group' as const, data: g })),
-  ];
+  const menuData = useMemo(() => {
+    const items: MenuItem[] = [];
+    if (showWelcomeCard) {
+      items.push({ type: 'character', data: WELCOME_CHARACTER });
+    }
+    const folderIds = new Set(folders.map(f => f.id));
+    for (const folder of folders) {
+      const members = characters.filter(c => c.folderId === folder.id);
+      const expanded = expandedFolders[folder.id] ?? true;
+      items.push({
+        type: 'folder',
+        data: folder,
+        characterCount: members.length,
+        expanded,
+      });
+      if (expanded) {
+        for (const char of members) {
+          items.push({ type: 'character', data: char, nested: true });
+        }
+      }
+    }
+    for (const char of characters) {
+      if (!char.folderId || !folderIds.has(char.folderId)) {
+        items.push({ type: 'character', data: char });
+      }
+    }
+    for (const group of groupChats) {
+      items.push({ type: 'group', data: group });
+    }
+    return items;
+  }, [characters, groupChats, folders, showWelcomeCard, expandedFolders]);
+
+  const renderMenuItem = ({ item }: { item: MenuItem }) => {
+    if (item.type === 'folder') {
+      return (
+        <FolderCard
+          item={item.data}
+          characterCount={item.characterCount}
+          expanded={item.expanded}
+          isConfirmingDelete={deleteConfirmFolderId === item.data.id}
+          onToggleExpand={toggleFolder}
+          onRename={folder =>
+            setRenamingFolder({ id: folder.id, draft: folder.name })
+          }
+          onTriggerDelete={setDeleteConfirmFolderId}
+          onConfirmDelete={id => {
+            deleteFolder(id);
+            setDeleteConfirmFolderId(null);
+          }}
+          onCancelDelete={() => setDeleteConfirmFolderId(null)}
+        />
+      );
+    }
+
+    if (item.type === 'character') {
+      return (
+        <View style={item.nested ? st.folderNested : undefined}>
+          <CharacterCard
+            item={item.data}
+            showCharacterIcons={showCharacterIcons}
+            isConfirmingDelete={deleteConfirmId === item.data.id}
+            hideEdit={item.data.id === WELCOME_ID}
+            onMove={handleCharacterMove}
+            onOpenChat={handleCharacterOpenChat}
+            onEdit={handleCharacterEdit}
+            onTriggerDelete={setDeleteConfirmId}
+            onConfirmDelete={(id: string) => {
+              if (id === WELCOME_ID) {
+                handleWelcomeDelete();
+              } else {
+                deleteCharacter(id);
+              }
+              setDeleteConfirmId(null);
+            }}
+            onCancelDelete={() => setDeleteConfirmId(null)}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <GroupCard
+        item={item.data}
+        isConfirmingDelete={deleteConfirmGroupId === item.data.id}
+        onOpenChat={handleGroupOpenChat}
+        onEdit={handleGroupEdit}
+        onTriggerDelete={setDeleteConfirmGroupId}
+        onConfirmDelete={(id: string) => {
+          deleteGroupChat(id);
+          setDeleteConfirmGroupId(null);
+        }}
+        onCancelDelete={() => setDeleteConfirmGroupId(null)}
+      />
+    );
+  };
 
   return (
     <View style={st.screen}>
@@ -512,44 +659,8 @@ function HomeScreen() {
               <View style={st.flatListContainer}>
                 <FlatList
                   data={menuData}
-                  keyExtractor={item => item.data.id}
-                  renderItem={({ item }) =>
-                    item.type === 'character' ? (
-                      <CharacterCard
-                        item={item.data as Character}
-                        showCharacterIcons={showCharacterIcons}
-                        isConfirmingDelete={deleteConfirmId === item.data.id}
-                        hideEdit={(item.data as Character).id === WELCOME_ID}
-                        onOpenChat={handleCharacterOpenChat}
-                        onEdit={handleCharacterEdit}
-                        onTriggerDelete={setDeleteConfirmId}
-                        onConfirmDelete={(id: string) => {
-                          if (id === WELCOME_ID) {
-                            handleWelcomeDelete();
-                          } else {
-                            deleteCharacter(id);
-                          }
-                          setDeleteConfirmId(null);
-                        }}
-                        onCancelDelete={() => setDeleteConfirmId(null)}
-                      />
-                    ) : (
-                      <GroupCard
-                        item={item.data as GroupChat}
-                        isConfirmingDelete={
-                          deleteConfirmGroupId === item.data.id
-                        }
-                        onOpenChat={handleGroupOpenChat}
-                        onEdit={handleGroupEdit}
-                        onTriggerDelete={setDeleteConfirmGroupId}
-                        onConfirmDelete={(id: string) => {
-                          deleteGroupChat(id);
-                          setDeleteConfirmGroupId(null);
-                        }}
-                        onCancelDelete={() => setDeleteConfirmGroupId(null)}
-                      />
-                    )
-                  }
+                  keyExtractor={menuItemKey}
+                  renderItem={renderMenuItem}
                   contentContainerStyle={st.flatListContent}
                   style={st.flatListContainer}
                   ListEmptyComponent={
@@ -571,42 +682,8 @@ function HomeScreen() {
           <View style={st.flatListContainer}>
             <FlatList
               data={menuData}
-              keyExtractor={item => item.data.id}
-              renderItem={({ item }) =>
-                item.type === 'character' ? (
-                  <CharacterCard
-                    item={item.data as Character}
-                    showCharacterIcons={showCharacterIcons}
-                    isConfirmingDelete={deleteConfirmId === item.data.id}
-                    hideEdit={(item.data as Character).id === WELCOME_ID}
-                    onOpenChat={handleCharacterOpenChat}
-                    onEdit={handleCharacterEdit}
-                    onTriggerDelete={setDeleteConfirmId}
-                    onConfirmDelete={(id: string) => {
-                      if (id === WELCOME_ID) {
-                        handleWelcomeDelete();
-                      } else {
-                        deleteCharacter(id);
-                      }
-                      setDeleteConfirmId(null);
-                    }}
-                    onCancelDelete={() => setDeleteConfirmId(null)}
-                  />
-                ) : (
-                  <GroupCard
-                    item={item.data as GroupChat}
-                    isConfirmingDelete={deleteConfirmGroupId === item.data.id}
-                    onOpenChat={handleGroupOpenChat}
-                    onEdit={handleGroupEdit}
-                    onTriggerDelete={setDeleteConfirmGroupId}
-                    onConfirmDelete={(id: string) => {
-                      deleteGroupChat(id);
-                      setDeleteConfirmGroupId(null);
-                    }}
-                    onCancelDelete={() => setDeleteConfirmGroupId(null)}
-                  />
-                )
-              }
+              keyExtractor={menuItemKey}
+              renderItem={renderMenuItem}
               contentContainerStyle={st.flatListContent}
               style={st.flatListContainer}
               ListEmptyComponent={
@@ -684,6 +761,52 @@ function HomeScreen() {
           onClose={() => setShowConvertGroup(false)}
           onSave={handleConvertSave}
         />
+
+        <FolderPicker
+          visible={movingCharacter !== null}
+          selectedId={movingCharacter?.folderId}
+          onSelect={handleMoveSelect}
+          onClose={() => setMovingCharacter(null)}
+        />
+
+        {renamingFolder && (
+          <KeyboardAvoidingView
+            style={st.historyPopupOverlay}
+            behavior="padding"
+          >
+            <View style={st.historyPopupCard}>
+              <Text style={st.historyPopupTitle}>Rename Folder</Text>
+              <TextInput
+                style={st.historyQCInput}
+                placeholder="Folder name..."
+                placeholderTextColor={st.textMuted.color}
+                value={renamingFolder.draft}
+                onChangeText={draft =>
+                  setRenamingFolder({ ...renamingFolder, draft })
+                }
+                autoFocus
+                onSubmitEditing={handleFolderRenameSave}
+              />
+              <View style={st.historyQCFormActions}>
+                <TouchableOpacity
+                  onPress={() => setRenamingFolder(null)}
+                  style={st.historyQCFormBtn}
+                >
+                  <Text style={st.historyQCFormBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleFolderRenameSave}
+                  style={[
+                    st.historyQCFormBtn,
+                    !renamingFolder.draft.trim() && { opacity: 0.4 },
+                  ]}
+                >
+                  <Text style={st.historyQCFormBtnText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        )}
       </View>
     </View>
   );

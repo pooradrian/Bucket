@@ -27,6 +27,7 @@ import {
 } from './CustomFields';
 import AutoGrowTextInput from './components/AutoGrowTextInput';
 import GroupEditor from './components/GroupEditor';
+import FolderPicker from './components/FolderPicker';
 
 export interface Character {
   id: string;
@@ -40,6 +41,7 @@ export interface Character {
   icon?: string;
   customFields?: CustomFieldValue[];
   personaId?: string;
+  folderId?: string;
 }
 
 interface CharacterEditorProps {
@@ -57,6 +59,7 @@ export default function CharacterEditor({
 }: CharacterEditorProps) {
   const st = useTheme();
   const lorebooks = useAppStore(store => store.lorebooks);
+  const folders = useAppStore(store => store.folders);
   const saveGroupChat = useAppStore(store => store.saveGroupChat);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -74,6 +77,8 @@ export default function CharacterEditor({
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [personaId, setPersonaId] = useState('');
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+  const [folderId, setFolderId] = useState('');
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
 
   const lorebookSlide = useSharedValue(300);
   const lorebookContentStyle = useAnimatedStyle(() => ({
@@ -122,6 +127,7 @@ export default function CharacterEditor({
       setLorebookIds(character.lorebookIds || []);
       setIcon(character.icon || '');
       setPersonaId(character.personaId || '');
+      setFolderId(character.folderId || '');
     } else {
       setName('');
       setDescription('');
@@ -133,6 +139,7 @@ export default function CharacterEditor({
       setLorebookIds([]);
       setIcon('');
       setPersonaId('');
+      setFolderId('');
     }
   }, [character]);
 
@@ -153,6 +160,7 @@ export default function CharacterEditor({
       icon,
       customFields,
       personaId: personaId || undefined,
+      folderId: folderId || undefined,
     };
     if (exampleMessages.trim()) {
       newCharacter.exampleMessages = exampleMessages.trim();
@@ -391,6 +399,27 @@ export default function CharacterEditor({
             )}
           </View>
 
+          {/* Folder */}
+          <View style={st.card}>
+            <Text style={st.cardTitle}>Folder</Text>
+            <TouchableOpacity onPress={() => setShowFolderPicker(true)}>
+              <Text style={st.cardDescription}>
+                {folderId
+                  ? folders.find(f => f.id === folderId)?.name ||
+                    'Unknown folder'
+                  : 'No folder'}
+              </Text>
+            </TouchableOpacity>
+            {folderId && (
+              <TouchableOpacity
+                onPress={() => setFolderId('')}
+                style={st.removeAssignment}
+              >
+                <Text style={st.removeAssignmentText}>Remove from folder</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* Lorebook Picker Modal */}
           <Modal
             visible={showLorebookPicker}
@@ -551,6 +580,16 @@ export default function CharacterEditor({
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <FolderPicker
+        visible={showFolderPicker}
+        selectedId={folderId || undefined}
+        onSelect={id => {
+          setFolderId(id);
+          setShowFolderPicker(false);
+        }}
+        onClose={() => setShowFolderPicker(false)}
+      />
 
       {/* Group Editor Modal */}
       <GroupEditor

@@ -2,7 +2,7 @@ import { Character } from '../CharacterEditor';
 import { LorebookState } from '../RAGHandler';
 import { ChatSession } from '../useChat';
 import { PromptConfig } from '../PromptHandler';
-import { AppSettings, GroupChat } from '../store';
+import { AppSettings, Folder, GroupChat } from '../store';
 import { DBQuickCharacter } from '../Database';
 
 export type ImportFormat = 'ccv1' | 'ccv2' | 'buk' | 'perchance' | 'lorebook';
@@ -16,6 +16,7 @@ export interface BukImportResult {
   sessions: ChatSession[];
   quickCharacters: DBQuickCharacter[];
   groups: GroupChat[];
+  folders: Folder[];
   skippedCharacters: string[];
 }
 
@@ -28,6 +29,7 @@ export interface ExportOptions {
   format: ExportFormat;
   characterIds: string[];
   groupIds: string[];
+  folderIds: string[];
   includeSettings: boolean;
   includeLorebooks: boolean;
   includeChats: boolean;

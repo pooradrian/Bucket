@@ -42,6 +42,9 @@ import {
   saveGroupChatToDB,
   getAllCharactersFromDB,
   getAllGroupChatsFromDB,
+  getAllFoldersFromDB,
+  saveFolderToDB,
+  setCharacterFolder,
   getQuickCharactersForCharacter,
   getQuickCharactersForSession,
   getAllSessionsForCharacter,
@@ -61,6 +64,7 @@ function clearAll() {
     'group_chat_members',
     'group_chats',
     'characters',
+    'folders',
     'lorebook_entries',
     'lorebooks',
     'kv_store',
@@ -75,12 +79,14 @@ async function exportBundle(
   charIds: string[],
   groupIds: string[] = [],
   includeChats = true,
+  folderIds: string[] = getAllFoldersFromDB().map(f => f.id),
 ) {
   bundleBase64 = null;
   await exportBuk({
     format: 'buk',
     characterIds: charIds,
     groupIds,
+    folderIds,
     includeSettings: false,
     includeLorebooks: false,
     includeChats,
@@ -121,6 +127,7 @@ beforeEach(async () => {
     lorebook_id: '',
     custom_fields: '',
     persona_id: '',
+    folder_id: '',
   });
   const session: ChatSession = {
     id: sessionId,
@@ -252,6 +259,7 @@ describe('importing chats for a character that already exists', () => {
       lorebook_id: '',
       custom_fields: '',
       persona_id: '',
+      folder_id: '',
     });
 
     const result = await importBundle();
@@ -288,6 +296,99 @@ describe('group round trip', () => {
     const after = await getAllGroupChatsFromDB();
     expect(after.map(g => g.name)).toEqual(['Gang']);
     expect(after[0].characterIds).toEqual([charId]);
+  });
+});
+
+describe('folder round trip', () => {
+  test('folder and its assignments survive a fresh device import', async () => {
+    saveFolderToDB({ id: 'folder-1', name: 'Noir' });
+    setCharacterFolder(charId, 'folder-1');
+
+    await exportBundle([charId]);
+    clearAll();
+
+    const result = await importBundle();
+    expect(result.folders.map(f => f.name)).toEqual(['Noir']);
+
+    const folders = getAllFoldersFromDB();
+    expect(folders.map(f => f.name)).toEqual(['Noir']);
+
+    const [importedChar] = await getAllCharactersFromDB();
+    expect(importedChar.folder_id).toBe(folders[0].id);
+  });
+
+  test('re-import merges into an existing folder of the same name', async () => {
+    saveFolderToDB({ id: 'folder-1', name: 'Noir' });
+    setCharacterFolder(charId, 'folder-1');
+    await exportBundle([charId]);
+
+    clearAll();
+    saveFolderToDB({ id: 'folder-local', name: 'Noir' });
+
+    const result = await importBundle();
+    expect(result.folders.map(f => f.id)).toEqual(['folder-local']);
+
+    const folders = getAllFoldersFromDB();
+    expect(folders.map(f => f.id)).toEqual(['folder-local']);
+
+    const [importedChar] = await getAllCharactersFromDB();
+    expect(importedChar.folder_id).toBe('folder-local');
+  });
+
+  test('re-importing into the same database keeps the existing folder', async () => {
+    saveFolderToDB({ id: 'folder-1', name: 'Noir' });
+    setCharacterFolder(charId, 'folder-1');
+    await exportBundle([charId]);
+
+    const result = await importBundle();
+    expect(result.skippedCharacters).toEqual(['Alice']);
+    expect(getAllFoldersFromDB().map(f => f.id)).toEqual(['folder-1']);
+
+    const [importedChar] = await getAllCharactersFromDB();
+    expect(importedChar.folder_id).toBe('folder-1');
+  });
+
+  test('folders without selected characters are left out of the bundle', async () => {
+    saveFolderToDB({ id: 'folder-1', name: 'Noir' });
+    saveFolderToDB({ id: 'folder-2', name: 'Fantasy' });
+    setCharacterFolder(charId, 'folder-1');
+
+    await exportBundle([charId]);
+    const bundle = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+    expect(bundle.file('folders/folder-1.json')).not.toBeNull();
+    expect(bundle.file('folders/folder-2.json')).toBeNull();
+  });
+
+  test('only selected folders are put in the bundle', async () => {
+    saveFolderToDB({ id: 'folder-1', name: 'Noir' });
+    saveFolderToDB({ id: 'folder-2', name: 'Fantasy' });
+    setCharacterFolder(charId, 'folder-1');
+    await saveCharacterToDB({
+      id: 'char-2',
+      name: 'Bob',
+      description: '',
+      initial_message: '',
+      writing_style: '',
+      personality: '',
+      scenario: '',
+      example_messages: '',
+      icon: '',
+      lorebook_id: '',
+      custom_fields: '',
+      persona_id: '',
+      folder_id: '',
+    });
+    setCharacterFolder('char-2', 'folder-2');
+
+    await exportBundle([charId, 'char-2'], [], true, ['folder-2']);
+    const bundle = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+    expect(bundle.file('folders/folder-1.json')).toBeNull();
+    expect(bundle.file('folders/folder-2.json')).not.toBeNull();
+
+    const folderJson = JSON.parse(
+      (await bundle.file('folders/folder-2.json')!.async('string')) as string,
+    );
+    expect(folderJson.characterIds).toEqual(['char-2']);
   });
 });
 
@@ -353,6 +454,7 @@ describe('quick character icon bundling', () => {
       lorebook_id: '',
       custom_fields: '',
       persona_id: '',
+      folder_id: '',
     });
     await saveQuickCharacter({
       id: starredQcId,

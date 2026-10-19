@@ -124,6 +124,7 @@ export async function importCharacter(fileUri: string): Promise<ImportResult> {
     lorebook_id: '',
     custom_fields: JSON.stringify(char.customFields || []),
     persona_id: char.personaId || '',
+    folder_id: '',
   });
 
   return { character: char, format };

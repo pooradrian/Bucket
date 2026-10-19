@@ -72,6 +72,7 @@ export default function App() {
   const appSettings = useAppStore(s => s.appSettings);
   const loadCharacters = useAppStore(s => s.loadCharacters);
   const loadGroupChats = useAppStore(s => s.loadGroupChats);
+  const loadFolders = useAppStore(s => s.loadFolders);
   const loadLorebooks = useAppStore(s => s.loadLorebooks);
   const loadSettings = useAppStore(s => s.loadSettings);
   const showSysStats = useAppStore(s => s.showSysStats);
@@ -90,11 +91,18 @@ export default function App() {
       setLoaded(true);
       loadCharacters();
       loadGroupChats();
+      loadFolders();
       loadLorebooks();
       if (useAppStore.getState().appSettings.dynamicIcon)
         setIcon(useAppStore.getState().appSettings.themeMode);
     })();
-  }, [loadSettings, loadCharacters, loadGroupChats, loadLorebooks]);
+  }, [
+    loadSettings,
+    loadCharacters,
+    loadGroupChats,
+    loadFolders,
+    loadLorebooks,
+  ]);
 
   useEffect(() => {
     if (!loaded) return;

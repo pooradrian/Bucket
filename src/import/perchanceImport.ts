@@ -109,6 +109,7 @@ export async function importPerchance(
       lorebook_id: (char.lorebookIds || []).join(','),
       custom_fields: JSON.stringify(char.customFields || []),
       persona_id: char.personaId || '',
+      folder_id: '',
     });
   }
 

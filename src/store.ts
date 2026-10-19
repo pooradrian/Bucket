@@ -13,6 +13,10 @@ import {
   getAllGroupChatsFromDB,
   saveGroupChatToDB,
   deleteGroupChatFromDB,
+  getAllFoldersFromDB,
+  saveFolderToDB,
+  deleteFolderFromDB,
+  setCharacterFolder,
 } from './Database';
 import { setLoggingEnabled, logEvent } from './EventLogger';
 import { parseCustomFields, getCustomField } from './CustomFields';
@@ -23,6 +27,11 @@ export interface GroupChat {
   description: string;
   icon?: string;
   characterIds: string[];
+}
+
+export interface Folder {
+  id: string;
+  name: string;
 }
 
 export interface ThemePreset {
@@ -134,6 +143,12 @@ interface AppStore {
   loadGroupChats: () => Promise<void>;
   saveGroupChat: (group: GroupChat) => Promise<void>;
   deleteGroupChat: (id: string) => void;
+
+  folders: Folder[];
+  loadFolders: () => Promise<void>;
+  saveFolder: (folder: Folder) => void;
+  deleteFolder: (id: string) => void;
+  moveCharacterToFolder: (characterId: string, folderId: string) => void;
 
   lorebooks: LorebookState[];
   setLorebooks: (lorebooks: LorebookState[]) => void;
@@ -296,6 +311,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
               : [],
             icon: c.icon || undefined,
             personaId: c.persona_id || undefined,
+            folderId: c.folder_id || undefined,
           };
         }),
         charactersLoading: false,
@@ -326,6 +342,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         lorebook_id: (char.lorebookIds || []).join(','),
         custom_fields: JSON.stringify(char.customFields || []),
         persona_id: char.personaId || '',
+        folder_id: char.folderId || '',
       });
       set({ characters: updated });
       logEvent('character_saved', {
@@ -337,6 +354,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         hasScenario: !!char.scenario,
         hasExamples: !!char.exampleMessages,
         lorebookCount: (char.lorebookIds || []).length,
+        hasFolder: !!char.folderId,
         iconSize: char.icon?.length || 0,
         isNew: exists === -1,
       });
@@ -417,6 +435,59 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
     } catch (e) {
       console.warn('Failed to delete group chat:', e);
+    }
+  },
+
+  folders: [],
+  loadFolders: async () => {
+    try {
+      set({ folders: getAllFoldersFromDB() });
+    } catch (e) {
+      console.warn('Failed to load folders:', e);
+    }
+  },
+  saveFolder: folder => {
+    try {
+      const isNew = !get().folders.some(f => f.id === folder.id);
+      saveFolderToDB(folder);
+      set(s => ({
+        folders: (isNew
+          ? [...s.folders, folder]
+          : s.folders.map(f => (f.id === folder.id ? folder : f))
+        ).sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+      logEvent('folder_saved', { nameLen: folder.name.length, isNew });
+    } catch (e) {
+      console.warn('Failed to save folder:', e);
+    }
+  },
+  deleteFolder: id => {
+    try {
+      const folder = get().folders.find(f => f.id === id);
+      deleteFolderFromDB(id);
+      set(s => ({
+        folders: s.folders.filter(f => f.id !== id),
+        characters: s.characters.map(c =>
+          c.folderId === id ? { ...c, folderId: undefined } : c,
+        ),
+      }));
+      if (folder) {
+        logEvent('folder_deleted', { nameLen: folder.name.length });
+      }
+    } catch (e) {
+      console.warn('Failed to delete folder:', e);
+    }
+  },
+  moveCharacterToFolder: (characterId, folderId) => {
+    try {
+      setCharacterFolder(characterId, folderId);
+      set(s => ({
+        characters: s.characters.map(c =>
+          c.id === characterId ? { ...c, folderId: folderId || undefined } : c,
+        ),
+      }));
+    } catch (e) {
+      console.warn('Failed to move character:', e);
     }
   },
 

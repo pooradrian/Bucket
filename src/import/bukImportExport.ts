@@ -9,7 +9,7 @@ import {
 } from '../RAGHandler';
 import { ChatSession } from '../useChat';
 import { DEFAULT_PROMPT_CONFIG } from '../PromptHandler';
-import { DEFAULT_APP_SETTINGS, GroupChat } from '../store';
+import { DEFAULT_APP_SETTINGS, Folder, GroupChat } from '../store';
 import {
   generateId,
   saveCharacterToDB,
@@ -29,6 +29,9 @@ import {
   getAllGroupChatsFromDB,
   saveGroupChatToDB,
   getDbConnection,
+  getAllFoldersFromDB,
+  saveFolderToDB,
+  setCharacterFolder,
   SessionSummary,
   DBQuickCharacter,
 } from '../Database';
@@ -95,6 +98,12 @@ function normalizeQuickCharacter(
   };
 }
 
+interface BukFolder {
+  id: string;
+  name: string;
+  characterIds: string[];
+}
+
 export async function importBuk(fileUri: string): Promise<BukImportResult> {
   const response = await fetch(fileUri);
   const buffer = await response.arrayBuffer();
@@ -106,6 +115,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     sessions: [],
     quickCharacters: [],
     groups: [],
+    folders: [],
     skippedCharacters: [],
   };
 
@@ -358,6 +368,32 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     }
   }
 
+  const parsedFolders: BukFolder[] = [];
+  const folderDir = zip.folder('folders');
+  if (folderDir) {
+    const folderFiles = folderDir.filter(() => true);
+    for (const [, file] of Object.entries(folderFiles)) {
+      if (file.dir) continue;
+      try {
+        const text = await file.async('string');
+        const parsed = JSON.parse(text);
+        if (!parsed.name) continue;
+        parsedFolders.push({
+          id:
+            typeof parsed.id === 'string' && parsed.id
+              ? parsed.id
+              : generateId(),
+          name: parsed.name,
+          characterIds: Array.isArray(parsed.characterIds)
+            ? parsed.characterIds
+            : [],
+        });
+      } catch (e) {
+        console.warn('Failed to import folder:', e);
+      }
+    }
+  }
+
   for (const lorebook of result.lorebooks) {
     await saveLorebookToDB(lorebook);
   }
@@ -376,6 +412,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       lorebook_id: (char.lorebookIds || []).join(','),
       custom_fields: JSON.stringify(char.customFields || []),
       persona_id: char.personaId || '',
+      folder_id: '',
     });
   }
 
@@ -426,6 +463,34 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     }
   }
   result.groups = importedGroups;
+
+  const importedFolders: Folder[] = [];
+  if (parsedFolders.length > 0) {
+    const existingFolders = getAllFoldersFromDB();
+    const folderIds = new Set(existingFolders.map(f => f.id));
+    const folderIdByName = new Map(existingFolders.map(f => [f.name, f.id]));
+    for (const folder of parsedFolders) {
+      const targetId =
+        (folderIds.has(folder.id) ? folder.id : undefined) ??
+        folderIdByName.get(folder.name) ??
+        folder.id;
+      if (!folderIds.has(targetId)) {
+        saveFolderToDB({ id: targetId, name: folder.name });
+        folderIds.add(targetId);
+        folderIdByName.set(folder.name, targetId);
+      }
+      if (!importedFolders.some(f => f.id === targetId)) {
+        importedFolders.push({ id: targetId, name: folder.name });
+      }
+      for (const charId of folder.characterIds) {
+        const mapped = origIdToNewId.get(charId) ?? charId;
+        if (validCharIds.has(mapped)) {
+          setCharacterFolder(mapped, targetId);
+        }
+      }
+    }
+  }
+  result.folders = importedFolders;
 
   const importedSessions: ChatSession[] = [];
   for (const session of result.sessions) {
@@ -514,6 +579,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
         ? c.lorebook_id.split(',').filter(Boolean)
         : [],
       personaId: c.persona_id || undefined,
+      folderId: c.folder_id || undefined,
     }));
 
   if (options.includeSettings) {
@@ -574,6 +640,31 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
       } catch (e) {
         console.warn('Failed to export icon:', e);
       }
+    }
+  }
+
+  const exportedFolderIds = new Set(
+    characters.map(c => c.folderId).filter((id): id is string => !!id),
+  );
+  if (exportedFolderIds.size > 0) {
+    const folderFolder = zip.folder('folders');
+    for (const folder of getAllFoldersFromDB()) {
+      if (!exportedFolderIds.has(folder.id)) continue;
+      if (!options.folderIds.includes(folder.id)) continue;
+      folderFolder?.file(
+        `${folder.id}.json`,
+        JSON.stringify(
+          {
+            id: folder.id,
+            name: folder.name,
+            characterIds: characters
+              .filter(c => c.folderId === folder.id)
+              .map(c => c.id),
+          },
+          null,
+          2,
+        ),
+      );
     }
   }
 
