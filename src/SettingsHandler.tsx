@@ -245,12 +245,14 @@ const PROVIDER_SECTIONS: Partial<Record<SettingsView, ProvidersSection>> = {
 interface SettingsHandlerProps {
   onApply?: (settings: AppSettings) => void;
   onOpenDebugger?: () => void;
+  onClose: () => void;
   bottomInset: number;
 }
 
 export default function SettingsHandler({
   onApply,
   onOpenDebugger,
+  onClose,
   bottomInset,
 }: SettingsHandlerProps) {
   const st = useTheme();
@@ -474,11 +476,12 @@ export default function SettingsHandler({
   return (
     <View style={st.settingsContainer}>
       <View style={st.settingsHeader}>
-        {settingsView !== 'main' && (
-          <TouchableOpacity onPress={goBack} style={st.settingsBackBtn}>
-            <Text style={st.settingsBackBtnText}>{'‹ Back'}</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={settingsView === 'main' ? onClose : goBack}
+          style={st.settingsBackBtn}
+        >
+          <Text style={st.settingsBackBtnText}>{'‹ Back'}</Text>
+        </TouchableOpacity>
         <Text style={st.settingsHeaderName}>{VIEW_TITLES[settingsView]}</Text>
       </View>
       <KeyboardAvoidingView

@@ -859,6 +859,7 @@ function SettingsScreen() {
         <SettingsHandler
           onApply={updated => setAppSettings(updated as unknown as AppSettings)}
           onOpenDebugger={() => navigation.navigate('Debugger')}
+          onClose={() => navigation.goBack()}
           bottomInset={insets.bottom}
         />
       </View>
