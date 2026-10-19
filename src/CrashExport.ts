@@ -1,124 +1,229 @@
+import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
-import JSZip from 'jszip';
+import pkg from '../package.json';
 import {
   getAllCharactersFromDB,
-  getAllLorebooksFromDB,
-  getLorebookEntriesFromDB,
-  getAllSessionsForCharacter,
-  getSessionById,
-  getKV,
+  getAllGroupChatsFromDB,
+  getAllFoldersFromDB,
 } from './Database';
-import { parseCustomFields } from './CustomFields';
-import { saveToDisk } from './ImportExport';
-import { logEvent } from './EventLogger';
+import { exportBuk, saveToDisk } from './ImportExport';
+import {
+  getEvents,
+  isLoggingEnabled,
+  logEvent,
+  readLogFile,
+} from './EventLogger';
 
 const CRASH_EXPORT_DIR = `${RNFS.DocumentDirectoryPath}/crash_recovery`;
 const CRASH_MARKER_PATH = `${CRASH_EXPORT_DIR}/crash_marker.txt`;
 
-async function safeReadFileBase64(filePath: string): Promise<string | null> {
+export type CrashKind = 'crash' | 'roadblock';
+
+export interface CrashLogEvent {
+  type: string;
+  timestamp: number;
+  summary: string;
+}
+
+export interface CrashReport {
+  timestamp: string;
+  kind: CrashKind;
+  context: string;
+  errorName: string;
+  errorMessage: string;
+  errorStack: string;
+  appVersion: string;
+  platform: string;
+  events: CrashLogEvent[];
+}
+
+function errorInfo(error: unknown): {
+  errorName: string;
+  errorMessage: string;
+  errorStack: string;
+} {
+  if (error instanceof Error) {
+    return {
+      errorName: error.name || 'Error',
+      errorMessage: error.message || '',
+      errorStack: error.stack || '',
+    };
+  }
+  return {
+    errorName: 'Error',
+    errorMessage: typeof error === 'string' ? error : String(error),
+    errorStack: '',
+  };
+}
+
+export function buildCrashReport(
+  kind: CrashKind,
+  error: unknown,
+  context = '',
+): CrashReport {
+  return {
+    timestamp: new Date().toISOString(),
+    kind,
+    context,
+    ...errorInfo(error),
+    appVersion: pkg.version,
+    platform: `${Platform.OS} ${Platform.Version}`,
+    events: getEvents(30)
+      .map(e => ({ type: e.type, timestamp: e.timestamp, summary: e.summary }))
+      .reverse(),
+  };
+}
+
+function writeCrashReport(report: CrashReport): void {
   try {
-    const contents = await RNFS.readFile(filePath, 'base64');
-    return contents || null;
+    RNFS.mkdir(CRASH_EXPORT_DIR)
+      .then(() =>
+        RNFS.writeFile(CRASH_MARKER_PATH, JSON.stringify(report), 'utf8'),
+      )
+      .catch(e => console.warn('CrashReport write failed:', e));
+  } catch {
+    // never throw from the crash path
+  }
+}
+
+export function reportRoadblock(error: unknown, context = ''): CrashReport {
+  const report = buildCrashReport('roadblock', error, context);
+  writeCrashReport(report);
+  return report;
+}
+
+function isCrashReport(value: unknown): value is CrashReport {
+  if (!value || typeof value !== 'object') return false;
+  const r = value as Partial<CrashReport>;
+  return (
+    typeof r.timestamp === 'string' &&
+    typeof r.errorName === 'string' &&
+    typeof r.errorMessage === 'string'
+  );
+}
+
+export async function readPendingCrash(): Promise<CrashReport | null> {
+  let raw: string;
+  try {
+    raw = await RNFS.readFile(CRASH_MARKER_PATH, 'utf8');
   } catch {
     return null;
   }
+
+  const text = raw.trim();
+  if (!text) return null;
+
+  try {
+    const parsed = JSON.parse(text);
+    if (isCrashReport(parsed)) {
+      return {
+        ...parsed,
+        events: Array.isArray(parsed.events) ? parsed.events : [],
+      };
+    }
+  } catch {
+    // not JSON: pre-report versions wrote a bare ISO timestamp
+  }
+
+  return {
+    timestamp: Number.isNaN(Date.parse(text)) ? new Date().toISOString() : text,
+    kind: 'crash',
+    context: 'Previous session',
+    errorName: 'Crash',
+    errorMessage: 'Bucket closed unexpectedly during the previous session.',
+    errorStack: '',
+    appVersion: pkg.version,
+    platform: `${Platform.OS} ${Platform.Version}`,
+    events: [],
+  };
+}
+
+export function clearPendingCrash(): void {
+  RNFS.unlink(CRASH_MARKER_PATH).catch(() => {});
+}
+
+export function formatCrashLog(report: CrashReport, eventLog = ''): string {
+  const header = [
+    'Bucket crash report',
+    `Time: ${report.timestamp}`,
+    `App: v${report.appVersion} (${report.platform})`,
+    `Kind: ${report.kind}${report.context ? ` - ${report.context}` : ''}`,
+    `Error: ${report.errorName}: ${report.errorMessage}`,
+  ];
+
+  const parts = [header.join('\n')];
+
+  if (report.errorStack.trim()) {
+    parts.push(`Stack:\n${report.errorStack.trim()}`);
+  }
+
+  if (report.events.length > 0) {
+    parts.push(
+      'Recent activity:\n' +
+        report.events
+          .map(
+            e =>
+              `${new Date(e.timestamp).toISOString()} ${e.type}: ${e.summary}`,
+          )
+          .join('\n'),
+    );
+  }
+
+  const tail = eventLog.split('\n').filter(Boolean).slice(-200).join('\n');
+  if (tail) {
+    parts.push(`Event log tail:\n${tail}`);
+  }
+
+  return parts.join('\n\n');
+}
+
+export async function getCrashLogText(report: CrashReport): Promise<string> {
+  let log = '';
+  if (isLoggingEnabled()) {
+    try {
+      log = await readLogFile();
+    } catch {}
+  }
+  return formatCrashLog(report, log);
 }
 
 export async function crashExport(): Promise<string | null> {
   try {
-    await RNFS.mkdir(CRASH_EXPORT_DIR);
-
-    const zip = new JSZip();
-
     const characters = await getAllCharactersFromDB();
-    const charFolder = zip.folder('characters');
-    for (const char of characters) {
-      const customFields = parseCustomFields(char.custom_fields);
-      const cc = {
-        spec: 'chara_card_v2',
-        data: {
-          name: char.name,
-          description: char.description,
-          personality: char.personality,
-          scenario: char.scenario,
-          first_mes: char.initial_message,
-          mes_example: char.example_messages || '',
-          alternate_greetings: [],
-          system_prompt: '',
-          post_history_instructions: '',
-          creator_notes: 'Exported from Bucket',
-          tags: [],
-          creator: '',
-          character_version: '1.0',
-          extensions:
-            customFields.length > 0 ? { bucket: { customFields } } : {},
-        },
-      };
-      charFolder?.file(`${char.id}.json`, JSON.stringify(cc, null, 2));
-    }
-
-    const iconFolder = zip.folder('icons');
-    for (const char of characters) {
-      if (!char.icon) continue;
-      const base64 = await safeReadFileBase64(char.icon.replace('file://', ''));
-      if (base64) {
-        const ext = char.icon.split('.').pop() || 'png';
-        iconFolder?.file(`${char.id}.${ext}`, base64, { base64: true });
-      }
-    }
-
-    const lorebooks = await getAllLorebooksFromDB();
-    const lorebookFolder = zip.folder('lorebooks');
-    for (const lorebook of lorebooks) {
-      const entries = await getLorebookEntriesFromDB(lorebook.id);
-      const content = entries.map(e => e.text).join('\n');
-      lorebookFolder?.file(lorebook.fileName, content);
-    }
-
-    const chatFolder = zip.folder('chats');
-    for (const char of characters) {
-      const sessions = await getAllSessionsForCharacter(char.id);
-      for (const summary of sessions) {
-        const session = await getSessionById(summary.id);
-        if (session) {
-          chatFolder?.file(
-            `${session.id}.json`,
-            JSON.stringify(session, null, 2),
-          );
-        }
-      }
-    }
-
-    const settingsRaw = getKV('settings');
-    if (settingsRaw) {
-      zip.file('Bucket/settings.json', settingsRaw);
-    }
-    const promptRaw = getKV('promptConfig');
-    if (promptRaw) {
-      const prompt = JSON.parse(promptRaw);
-      delete prompt.apiUrl;
-      delete prompt.apiKey;
-      zip.file('Bucket/prompt.json', JSON.stringify(prompt, null, 2));
-    }
+    const groups = await getAllGroupChatsFromDB();
+    const folders = getAllFoldersFromDB();
+    const report = await readPendingCrash();
 
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
     const filename = `CRASH-${dateStr}@${timeStr}.buk`;
 
-    const base64 = await zip.generateAsync({
-      type: 'base64',
-      compression: 'DEFLATE',
+    const path = await exportBuk({
+      format: 'buk',
+      characterIds: characters.map(c => c.id),
+      groupIds: groups.map(g => g.id),
+      folderIds: folders.map(f => f.id),
+      includeSettings: true,
+      includeLorebooks: true,
+      includeChats: true,
+      extraFiles: report
+        ? { 'Bucket/crash_log.txt': await getCrashLogText(report) }
+        : undefined,
     });
-    const path = `${CRASH_EXPORT_DIR}/${filename}`;
-    await RNFS.writeFile(path, base64, 'base64');
 
-    saveToDisk(path, 'application/octet-stream', filename).catch(e =>
-      console.warn('CrashExport save failed:', e),
-    );
+    try {
+      await saveToDisk(path, 'application/octet-stream', filename);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg !== 'User did not share') {
+        console.warn('Crash export save failed:', e);
+      }
+    }
 
     return path;
-  } catch {
+  } catch (e) {
+    console.warn('Crash export failed:', e);
     return null;
   }
 }
@@ -126,54 +231,14 @@ export async function crashExport(): Promise<string | null> {
 let installed = false;
 
 /**
- * Writes a minimal marker file during a fatal error.
+ * Writes a detailed crash report when a fatal JS error happens.  The
+ * report is picked up on the next launch by `readPendingCrash()`, which
+ * is what drives the crash prompt.
  *
- * The actual recovery export is deferred to the next app launch via
- * `checkPendingCrashExport()`, because doing heavy async work (reading
- * all characters/chats, zipping, invoking the save-sheet UI) inside the
- * fatal global error handler is unlikely to complete and may worsen the
- * crash.
+ * Doing heavy work (exporting data, showing UI) inside the global error
+ * handler is unlikely to complete and may worsen the crash, so only the
+ * small report file is written here.
  */
-function writeCrashMarker(): void {
-  try {
-    const ts = new Date().toISOString();
-    RNFS.mkdir(CRASH_EXPORT_DIR)
-      .then(() => RNFS.writeFile(CRASH_MARKER_PATH, ts, 'utf8'))
-      .catch(e => console.warn('CrashExport marker write failed:', e));
-  } catch {
-    // never throw
-  }
-}
-
-/**
- * Checks for a crash marker left by a previous fatal error and, if
- * found, runs the full recovery export.  Should be called early during
- * app startup (after the DB is initialised).
- *
- * Returns the marker timestamp if a pending crash was detected, or
- * `null` if no crash marker was present.
- */
-export async function checkPendingCrashExport(): Promise<string | null> {
-  let marker: string | null = null;
-  try {
-    marker = await RNFS.readFile(CRASH_MARKER_PATH, 'utf8');
-  } catch {
-    return null;
-  }
-
-  // Delete the marker immediately so a subsequent crash doesn't
-  // produce a duplicate export.
-  RNFS.unlink(CRASH_MARKER_PATH).catch(() => {});
-
-  try {
-    await crashExport();
-  } catch (e) {
-    console.warn('Pending crash export failed:', e);
-  }
-
-  return marker;
-}
-
 export function installCrashExport(): void {
   if (installed) return;
   installed = true;
@@ -182,7 +247,7 @@ export function installCrashExport(): void {
 
   ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
     if (isFatal) {
-      writeCrashMarker();
+      writeCrashReport(buildCrashReport('crash', error));
       logEvent('fatal_error', {
         errorName: error.name || 'Error',
         errorMsg: error.message || '',

@@ -33,4 +33,5 @@ export interface ExportOptions {
   includeSettings: boolean;
   includeLorebooks: boolean;
   includeChats: boolean;
+  extraFiles?: Record<string, string>;
 }

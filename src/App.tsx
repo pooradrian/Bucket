@@ -1,11 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import pkg from '../package.json';
 import { useAppStore } from './store';
 import { ThemeProvider } from './ThemeContext';
-import { installCrashExport, checkPendingCrashExport } from './CrashExport';
+import {
+  CrashReport,
+  clearPendingCrash,
+  installCrashExport,
+  readPendingCrash,
+  reportRoadblock,
+} from './CrashExport';
+import CrashPrompt from './CrashPrompt';
 import { RootNavigator } from './Navigation';
 import { initDB } from './Database';
 import { setIcon } from './IconModule';
@@ -80,21 +87,27 @@ export default function App() {
 
   const [loaded, setLoaded] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
+  const [crashReport, setCrashReport] = useState<CrashReport | null>(null);
   const splashStart = useRef(Date.now());
 
   useEffect(() => {
     (async () => {
-      initDB();
       installCrashExport();
-      await checkPendingCrashExport();
-      await loadSettings();
+      let report = await readPendingCrash();
+      try {
+        initDB();
+        await loadSettings();
+        loadCharacters();
+        loadGroupChats();
+        loadFolders();
+        loadLorebooks();
+        if (useAppStore.getState().appSettings.dynamicIcon)
+          setIcon(useAppStore.getState().appSettings.themeMode);
+      } catch (e) {
+        report = report ?? reportRoadblock(e, 'Startup');
+      }
+      if (report) setCrashReport(report);
       setLoaded(true);
-      loadCharacters();
-      loadGroupChats();
-      loadFolders();
-      loadLorebooks();
-      if (useAppStore.getState().appSettings.dynamicIcon)
-        setIcon(useAppStore.getState().appSettings.themeMode);
     })();
   }, [
     loadSettings,
@@ -103,6 +116,11 @@ export default function App() {
     loadFolders,
     loadLorebooks,
   ]);
+
+  const dismissCrash = useCallback(() => {
+    setCrashReport(null);
+    clearPendingCrash();
+  }, []);
 
   useEffect(() => {
     if (!loaded) return;
@@ -129,6 +147,7 @@ export default function App() {
           <RootNavigator />
         </NavigationContainer>
         <SysStatsOverlay visible={showSysStats} onClose={toggleSysStats} />
+        <CrashPrompt report={crashReport} onDismiss={dismissCrash} />
       </ThemeProvider>
     </SafeAreaProvider>
   );
