@@ -8,16 +8,7 @@ import React, {
 import { FlatList } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { Character } from './CharacterEditor';
-import {
-  loadPromptConfig,
-  sendToLLM,
-  sendToGroupLLM,
-  sendToQCLLM,
-  PromptConfig,
-} from './PromptHandler';
-import { RawRequest } from './Endpoint';
 import { LorebookState } from './RAGHandler';
-import { splitThinking } from './thinking';
 import { useAppStore, GroupChat } from './store';
 import {
   getSessionById,
@@ -27,19 +18,15 @@ import {
   updateMessage,
   updateMessageWithVariants,
   updateSessionTimestamp,
-  setLastReplyCharacterId,
   generateId,
   getLorebookEntriesFromDB,
 } from './Database';
-import { checkAndSummarize, getSummarizationConfig } from './Summarizer';
 import {
-  applyDisplacements,
-  DisplacementRule,
-  parseDisplacements,
-} from './displacement';
-import { stripSpeakerNamePrefixes } from './PromptHandler';
+  startGeneration,
+  stopGeneration,
+  useGenerationStore,
+} from './GenerationEngine';
 import { logEvent } from './EventLogger';
-import { playNotificationSound, vibrateDevice } from './NotificationModule';
 
 export interface ReplyVariant {
   id: string;
@@ -48,12 +35,6 @@ export interface ReplyVariant {
   characterId?: string;
   thinkingMs?: number;
   speakerName?: string;
-}
-
-function serializeRequest(request: RawRequest): string {
-  const strippedBody = { ...request.body };
-  delete (strippedBody as Record<string, unknown>).stream;
-  return JSON.stringify({ url: request.url, body: strippedBody });
 }
 
 export interface ChatMessage {
@@ -130,70 +111,6 @@ export function reconcileSelectedQC(
   return fresh;
 }
 
-function notifyCompletion(): void {
-  const { appSettings } = useAppStore.getState();
-  if (
-    appSettings.notificationMode === 'vibrate' ||
-    appSettings.notificationMode === 'both'
-  ) {
-    vibrateDevice();
-  }
-  if (
-    appSettings.notificationMode === 'sound' ||
-    appSettings.notificationMode === 'both'
-  ) {
-    playNotificationSound(appSettings.notificationSound);
-  }
-}
-
-async function maybeSummarize(
-  opts: {
-    summarize?: boolean;
-    summaryBase?: ChatSession;
-    replaceMessageId?: string;
-  },
-  resultContent: string,
-  assistantUpdatedAt: number,
-  replyCharId: string | undefined,
-  messages: ChatMessage[],
-  promptConfig: PromptConfig,
-  requestInfo: ChatMessage['requestInfo'],
-  applyResult: (summarized: ChatSession) => void,
-): Promise<void> {
-  if (!opts.summarize || !opts.summaryBase) {
-    return;
-  }
-  const sumConfig = getSummarizationConfig(promptConfig);
-  if (!sumConfig.enabled) {
-    return;
-  }
-  const finalAssistantMessage: ChatMessage = {
-    id: opts.replaceMessageId ?? '',
-    role: 'assistant',
-    content: resultContent,
-    timestamp: assistantUpdatedAt,
-    requestInfo,
-    ...(replyCharId ? { characterId: replyCharId } : {}),
-  };
-  const withAssistant: ChatSession = {
-    ...opts.summaryBase,
-    messages: opts.replaceMessageId
-      ? opts.summaryBase.messages.map(m =>
-          m.id === opts.replaceMessageId ? finalAssistantMessage : m,
-        )
-      : [...messages, finalAssistantMessage],
-    updatedAt: assistantUpdatedAt,
-  };
-  const summarized = await checkAndSummarize(
-    withAssistant,
-    sumConfig,
-    promptConfig,
-  );
-  if (summarized.messages.length !== withAssistant.messages.length) {
-    applyResult(summarized);
-  }
-}
-
 export function useChat({
   character,
   groupChat,
@@ -263,17 +180,13 @@ export function useChat({
 
   const [session, setSession] = useState<ChatSession | null>(null);
   const [inputText, setInputText] = useState('');
-  const [sending, setSending] = useState(false);
-  const displacementSeedRef = useRef(0);
-  const displacementRulesRef = useRef<DisplacementRule[]>([]);
-  const [streamingContent, setStreamingContent] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
+  const [sendingLocal, setSendingLocal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
     null,
   );
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [selectedReplyCharacter, setSelectedReplyCharacter] =
     useState<Character | null>(null);
   const [selectedQC, setSelectedQC] = useState<QuickCharacter | null>(null);
@@ -285,16 +198,6 @@ export function useChat({
     variantIndexMapRef.current = variantIndexMap;
   }, [variantIndexMap]);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const streamingContentRef = useRef('');
-  const rawStreamRef = useRef('');
-  const streamingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const thinkStartRef = useRef(0);
-  const thinkMsRef = useRef<number | null>(null);
-  const replacingMessageIdRef = useRef<string | null>(null);
-  const [replacingMessageId, setReplacingMessageId] = useState<string | null>(
-    null,
-  );
   // Always tracks the id of the session currently shown in the UI. Used to
   // detect when the active session changes mid-stream so that streamed results
   // are not applied to (or persisted into) the wrong session.
@@ -308,10 +211,6 @@ export function useChat({
 
   useEffect(() => {
     return () => {
-      if (streamingTimerRef.current) {
-        clearTimeout(streamingTimerRef.current);
-        streamingTimerRef.current = null;
-      }
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
         scrollTimeoutRef.current = null;
@@ -323,7 +222,27 @@ export function useChat({
   // Sessions created in memory but not yet written to the DB. A session row is
   // only inserted once it actually has content, so empty threads never appear.
   const unpersistedRef = useRef<Set<string>>(new Set());
-  const speakerNamesRef = useRef<(string | undefined)[]>([]);
+  const seenRevisionRef = useRef<Record<string, number>>({});
+
+  const runSessionId = session?.id ?? null;
+  const run = useGenerationStore(s =>
+    runSessionId ? s.runs[runSessionId] : undefined,
+  );
+  const runRevision = useGenerationStore(s =>
+    runSessionId ? (s.revisions[runSessionId] ?? 0) : 0,
+  );
+  const storedError = useGenerationStore(s =>
+    runSessionId ? (s.errors[runSessionId] ?? '') : '',
+  );
+  const needsSync =
+    !!runSessionId &&
+    runRevision > 0 &&
+    seenRevisionRef.current[runSessionId] !== runRevision;
+  const sending = sendingLocal || !!run || syncing || needsSync;
+  const isStreaming = !!run;
+  const streamingContent = run?.content ?? '';
+  const replacingMessageId = run?.replaceMessageId ?? null;
+  const error = storedError || null;
 
   const ensureSessionPersisted = useCallback(
     async (s: ChatSession) => {
@@ -362,42 +281,6 @@ export function useChat({
     [],
   );
 
-  const flushStreamingContent = useCallback((token: string) => {
-    rawStreamRef.current += token;
-    if (!streamingTimerRef.current) {
-      streamingTimerRef.current = setTimeout(() => {
-        streamingTimerRef.current = null;
-        const displaced = applyDisplacements(
-          rawStreamRef.current,
-          displacementRulesRef.current,
-          displacementSeedRef.current,
-        );
-        const cleaned = stripSpeakerNamePrefixes(
-          displaced,
-          speakerNamesRef.current,
-        );
-        streamingContentRef.current = cleaned;
-        setStreamingContent(cleaned);
-        if (thinkMsRef.current == null) {
-          const split = splitThinking(cleaned);
-          if (split.hasThinking && !split.open) {
-            thinkMsRef.current = Math.round(Date.now() - thinkStartRef.current);
-          }
-        }
-      }, 50);
-    }
-  }, []);
-
-  const resetStreamingContent = useCallback(() => {
-    if (streamingTimerRef.current) {
-      clearTimeout(streamingTimerRef.current);
-      streamingTimerRef.current = null;
-    }
-    rawStreamRef.current = '';
-    streamingContentRef.current = '';
-    setStreamingContent('');
-  }, []);
-
   const isGroupChat = !!groupChat;
   const groupMembers = useMemo(() => {
     if (!isGroupChat || !groupChat) return [];
@@ -407,13 +290,6 @@ export function useChat({
   }, [isGroupChat, groupChat, allCharacters]);
   const activeCharacter =
     character || (groupMembers.length > 0 ? groupMembers[0] : null);
-  speakerNamesRef.current = [
-    activeCharacter?.name,
-    selectedQC?.name,
-    selectedReplyCharacter?.name,
-    ...quickCharacters.map(q => q?.name),
-    ...groupMembers.map(c => c.name),
-  ];
 
   const persistMessage = useCallback(
     async (sessionId: string, message: ChatMessage, updatedAt: number) => {
@@ -532,10 +408,43 @@ export function useChat({
     }
   }, [quickCharacters, selectedQC]);
 
-  // Shared send/retry/regenerate engine. `messages` is the conversation
-  // history handed to the model; `userText` is the latest user turn. Cancel
-  // saves append the partial stream to the *current* session's messages (which,
-  // for all three callers, equals the base messages they passed in).
+  // Reloads the session from the DB whenever the engine mutates it (new
+  // reply, cancelled partial, summarization) so this screen reflects changes
+  // that happened while it was unmounted or in the background.
+  useEffect(() => {
+    const sessionId = session?.id;
+    if (!sessionId || runRevision <= 0) {
+      return;
+    }
+    if (seenRevisionRef.current[sessionId] === runRevision) {
+      return;
+    }
+    seenRevisionRef.current[sessionId] = runRevision;
+    let cancelled = false;
+    setSyncing(true);
+    (async () => {
+      try {
+        const fresh = await getSessionById(sessionId);
+        if (!cancelled && fresh) {
+          setSession(prev => (prev && prev.id === sessionId ? fresh : prev));
+        }
+      } catch (e) {
+        console.warn('Failed to reload session:', e);
+      } finally {
+        if (!cancelled) {
+          setSyncing(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [runRevision, session?.id]);
+
+  // Shared send/retry/regenerate entry point. The request itself runs in the
+  // generation engine so it keeps streaming while this screen is unmounted;
+  // `messages` is the conversation history handed to the model and `userText`
+  // is the latest user turn.
   const runLLMRequest = useCallback(
     async (
       startSessionId: string,
@@ -544,7 +453,6 @@ export function useChat({
       opts: {
         setLastReplyCharacter?: boolean;
         summarize?: boolean;
-        summaryBase?: ChatSession;
         replaceMessageId?: string;
         existingVariants?: ReplyVariant[];
         continueMode?: boolean;
@@ -554,10 +462,6 @@ export function useChat({
         };
       } = {},
     ) => {
-      setSending(true);
-      setError(null);
-      replacingMessageIdRef.current = opts.replaceMessageId ?? null;
-      setReplacingMessageId(opts.replaceMessageId ?? null);
       const targetReplyCharacter = opts.continueTarget
         ? (opts.continueTarget.character ?? null)
         : isGroupChat
@@ -566,251 +470,33 @@ export function useChat({
       const targetQC = opts.continueTarget
         ? (opts.continueTarget.qc ?? null)
         : selectedQC;
+      if (isGroupChat && !targetReplyCharacter) {
+        return;
+      }
+      if (!isGroupChat && !targetQC && !activeCharacter) {
+        return;
+      }
+      setSendingLocal(true);
       try {
-        // Fresh config per request so settings changes reach open chats
-        // without remounting them.
-        const promptConfig = await loadPromptConfig();
-        displacementSeedRef.current = Math.floor(Math.random() * 0x7fffffff);
-        displacementRulesRef.current = parseDisplacements(
-          promptConfig.wordDisplacements,
-        );
-        rawStreamRef.current = '';
-        streamingContentRef.current = '';
-        thinkStartRef.current = Date.now();
-        thinkMsRef.current = null;
-        setIsStreaming(true);
-        const ctrl = new AbortController();
-        abortControllerRef.current = ctrl;
-
-        let result;
-        if (isGroupChat && targetReplyCharacter) {
-          result = await sendToGroupLLM(
-            groupMembers,
-            targetReplyCharacter,
-            userText,
-            messages,
-            promptConfig,
-            flushStreamingContent,
-            ctrl,
-            opts.continueMode,
-          );
-        } else if (targetQC && activeCharacter) {
-          result = await sendToQCLLM(
-            targetQC,
-            activeCharacter,
-            userText,
-            messages,
-            promptConfig,
-            flushStreamingContent,
-            ctrl,
-            opts.continueMode,
-            quickCharacters,
-          );
-        } else if (activeCharacter) {
-          result = await sendToLLM(
-            activeCharacter,
-            userText,
-            messages,
-            promptConfig,
-            flushStreamingContent,
-            await loadChatLorebooks(),
-            ctrl,
-            opts.continueMode,
-            quickCharacters,
-          );
-        } else {
-          return;
-        }
-
-        const content = applyDisplacements(
-          result.content,
-          displacementRulesRef.current,
-          displacementSeedRef.current,
-        );
-        if (!content.trim()) {
-          throw new Error(
-            'The model returned an empty response. Try again, or use Continue.',
-          );
-        }
-
-        const replyCharId =
-          isGroupChat && targetReplyCharacter
-            ? targetReplyCharacter.id
-            : targetQC
-              ? targetQC.id
-              : quickCharacters.length > 0 && activeCharacter
-                ? activeCharacter.id
-                : undefined;
-        const assistantUpdatedAt = Date.now();
-        const requestInfo = serializeRequest(result.request);
-        let thinkingMs: number | null = thinkMsRef.current;
-        if (thinkingMs == null) {
-          const split = splitThinking(content);
-          if (split.hasThinking && !split.open) {
-            thinkingMs = Math.round(result.metrics.totalMs);
-          }
-        }
-        const thinkingMsValue = thinkingMs ?? undefined;
-        if (opts.replaceMessageId) {
-          const replaceId = opts.replaceMessageId;
-          updateSessionIfCurrent(startSessionId, prev => ({
-            ...prev,
-            messages: prev.messages.map(m =>
-              m.id === replaceId
-                ? {
-                    ...m,
-                    content,
-                    timestamp: assistantUpdatedAt,
-                    characterId: replyCharId ?? m.characterId,
-                    variants: opts.existingVariants ?? m.variants,
-                    requestInfo,
-                    thinkingMs: thinkingMsValue,
-                  }
-                : m,
-            ),
-            updatedAt: assistantUpdatedAt,
-          }));
-          updateMessageWithVariants(
-            replaceId,
-            result.content,
-            assistantUpdatedAt,
-            opts.existingVariants ?? [],
-            requestInfo,
-            thinkingMsValue,
-            replyCharId,
-          );
-          updateSessionTimestamp(startSessionId, assistantUpdatedAt);
-        } else {
-          const assistantMessage: ChatMessage = {
-            id: generateId(),
-            role: 'assistant',
-            content,
-            timestamp: assistantUpdatedAt,
-            requestInfo,
-            ...(replyCharId ? { characterId: replyCharId } : {}),
-            ...(thinkingMsValue !== undefined
-              ? { thinkingMs: thinkingMsValue }
-              : {}),
-          };
-          updateSessionIfCurrent(startSessionId, prev => ({
-            ...prev,
-            messages: [...prev.messages, assistantMessage],
-            updatedAt: assistantUpdatedAt,
-          }));
-          persistMessage(startSessionId, assistantMessage, assistantUpdatedAt);
-        }
-        if (opts.setLastReplyCharacter && isGroupChat && targetReplyCharacter) {
-          setLastReplyCharacterId(startSessionId, targetReplyCharacter.id);
-        }
-        notifyCompletion();
-        setIsStreaming(false);
-        resetStreamingContent();
-        logEvent('message_streamed', {
-          charCount: content.length,
-          durationMs: result.metrics.totalMs,
-          sessionMsgCount: messages.length + 1,
-        });
-
-        await maybeSummarize(
-          opts,
-          result.content,
-          assistantUpdatedAt,
-          replyCharId,
+        startGeneration({
+          sessionId: startSessionId,
+          character: activeCharacter,
+          groupChat: groupChat ?? null,
+          groupMembers,
+          replyCharacter: isGroupChat ? targetReplyCharacter : null,
+          qc: isGroupChat ? null : targetQC,
+          quickCharacters,
           messages,
-          promptConfig,
-          requestInfo,
-          summarized =>
-            updateSessionIfCurrent(startSessionId, () => summarized),
-        );
-      } catch (e: unknown) {
-        setIsStreaming(false);
-        const isCancelled =
-          e instanceof Error && e.message === 'Request was cancelled';
-        if (isCancelled) {
-          const partial = streamingContentRef.current;
-          const cancelledRequest = (e as Error & { request?: RawRequest })
-            .request;
-          const cancelRequestInfo = cancelledRequest
-            ? serializeRequest(cancelledRequest)
-            : undefined;
-          const partialSplit = splitThinking(partial);
-          const cancelledThinkingMs =
-            partialSplit.hasThinking && !partialSplit.open
-              ? (thinkMsRef.current ?? undefined)
-              : undefined;
-          if (opts.replaceMessageId) {
-            const replaceId = opts.replaceMessageId;
-            const existingVariants = opts.existingVariants ?? [];
-            if (partial.length > 0) {
-              const cancelUpdatedAt = Date.now();
-              updateSessionIfCurrent(startSessionId, prev => ({
-                ...prev,
-                messages: prev.messages.map(m =>
-                  m.id === replaceId
-                    ? {
-                        ...m,
-                        content: partial,
-                        timestamp: cancelUpdatedAt,
-                        variants: existingVariants,
-                        requestInfo: cancelRequestInfo,
-                        thinkingMs: cancelledThinkingMs,
-                      }
-                    : m,
-                ),
-                updatedAt: cancelUpdatedAt,
-              }));
-              updateMessageWithVariants(
-                replaceId,
-                partial,
-                cancelUpdatedAt,
-                existingVariants,
-                cancelRequestInfo,
-                cancelledThinkingMs,
-              );
-              updateSessionTimestamp(startSessionId, cancelUpdatedAt);
-            }
-          } else if (partial.length > 0) {
-            const cancelReplyCharId =
-              isGroupChat && targetReplyCharacter
-                ? targetReplyCharacter.id
-                : targetQC
-                  ? targetQC.id
-                  : quickCharacters.length > 0 && activeCharacter
-                    ? activeCharacter.id
-                    : undefined;
-            const assistantMessage: ChatMessage = {
-              id: generateId(),
-              role: 'assistant',
-              content: partial,
-              timestamp: Date.now(),
-              requestInfo: cancelRequestInfo,
-              ...(cancelReplyCharId ? { characterId: cancelReplyCharId } : {}),
-              ...(cancelledThinkingMs !== undefined
-                ? { thinkingMs: cancelledThinkingMs }
-                : {}),
-            };
-            const cancelUpdatedAt = Date.now();
-            updateSessionIfCurrent(startSessionId, prev => ({
-              ...prev,
-              messages: [...prev.messages, assistantMessage],
-              updatedAt: cancelUpdatedAt,
-            }));
-            persistMessage(startSessionId, assistantMessage, cancelUpdatedAt);
-          }
-          resetStreamingContent();
-        } else {
-          setError(
-            e instanceof Error
-              ? e.message
-              : 'Something went wrong. Tap to retry.',
-          );
-          resetStreamingContent();
-        }
+          userText,
+          lorebooks: targetQC ? undefined : await loadChatLorebooks(),
+          summarize: opts.summarize,
+          continueMode: opts.continueMode,
+          replaceMessageId: opts.replaceMessageId,
+          existingVariants: opts.existingVariants,
+          setLastReplyCharacter: opts.setLastReplyCharacter,
+        });
       } finally {
-        abortControllerRef.current = null;
-        replacingMessageIdRef.current = null;
-        setReplacingMessageId(null);
-        setSending(false);
+        setSendingLocal(false);
       }
     },
     [
@@ -820,11 +506,8 @@ export function useChat({
       quickCharacters,
       groupMembers,
       activeCharacter,
+      groupChat,
       loadChatLorebooks,
-      persistMessage,
-      flushStreamingContent,
-      resetStreamingContent,
-      updateSessionIfCurrent,
     ],
   );
 
@@ -855,7 +538,7 @@ export function useChat({
       if (unpersistedRef.current.has(startSessionId)) {
         await ensureSessionPersisted(withUser);
       } else {
-        persistMessage(startSessionId, userMessage, withUser.updatedAt);
+        await persistMessage(startSessionId, userMessage, withUser.updatedAt);
       }
       setSession(withUser);
       setInputText('');
@@ -874,7 +557,6 @@ export function useChat({
       await runLLMRequest(startSessionId, withUser.messages, trimmed, {
         setLastReplyCharacter: true,
         summarize: true,
-        summaryBase: withUser,
       });
     },
     [
@@ -1013,6 +695,8 @@ export function useChat({
       return;
     }
 
+    await ensureSessionPersisted(session);
+
     const archivedVariant: ReplyVariant = {
       id: generateId(),
       content: lastMsg.content,
@@ -1044,7 +728,13 @@ export function useChat({
       existingVariants,
     });
     logEvent('message_regenerated', { sessionMsgCount: baseMessages.length });
-  }, [session, sending, updateSessionIfCurrent, runLLMRequest]);
+  }, [
+    session,
+    sending,
+    ensureSessionPersisted,
+    updateSessionIfCurrent,
+    runLLMRequest,
+  ]);
 
   const commitVariantUpdate = useCallback(
     async (
@@ -1361,7 +1051,10 @@ export function useChat({
   );
 
   const handleStop = useCallback(() => {
-    abortControllerRef.current?.abort();
+    const sessionId = sessionIdRef.current;
+    if (sessionId) {
+      stopGeneration(sessionId);
+    }
   }, []);
 
   const handleRetryError = useCallback(async () => {

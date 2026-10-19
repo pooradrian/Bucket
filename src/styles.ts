@@ -186,6 +186,53 @@ export function createStyles(s: AppSettings) {
     },
 
     // =========================================================================
+    // Generation banner
+    // =========================================================================
+    generationBar: {
+      borderTopWidth: 1,
+      borderTopColor: s.borderPrimary,
+      backgroundColor: s.bgSecondary,
+      paddingHorizontal: 16,
+    },
+    generationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+      gap: 12,
+    },
+    generationRowDivider: {
+      borderTopWidth: 1,
+      borderTopColor: s.borderPrimary,
+    },
+    generationInfo: {
+      flex: 1,
+    },
+    generationLabel: {
+      flex: 1,
+      color: s.textPrimary,
+      fontSize: 13,
+      fontWeight: '500',
+    },
+    generationMeta: {
+      color: s.textMuted,
+      fontSize: 11,
+      marginTop: 1,
+      marginLeft: 24,
+    },
+    generationStopBtn: {
+      borderWidth: 1,
+      borderColor: s.dangerColor,
+      borderRadius: s.inputRadius,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+    },
+    generationStopText: {
+      color: s.dangerColor,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    // =========================================================================
     // App.tsx — bottom bar
     // =========================================================================
     bottomBar: {
