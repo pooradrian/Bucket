@@ -56,6 +56,12 @@ import FolderCard from './components/FolderCard';
 import FolderPicker from './components/FolderPicker';
 import HistoryModal from './components/HistoryModal';
 import TabBar from './components/TabBar';
+import GenerationBanner from './components/GenerationBanner';
+import {
+  clearGenerationError,
+  stopGeneration,
+  useGenerationStore,
+} from './GenerationEngine';
 import WelcomeGuide from './WelcomeGuide';
 
 type RootStackParamList = {
@@ -253,6 +259,8 @@ function HomeScreen() {
   const handleDeleteSession = useCallback(
     (sessionId: string) => {
       const session = historySessions.find(s => s.id === sessionId);
+      stopGeneration(sessionId);
+      clearGenerationError(sessionId);
       deleteSession(sessionId);
       logEvent('session_deleted', { msgCount: session?.messageCount ?? 0 });
       if (sessionId === activeSessionId) {
@@ -297,6 +305,29 @@ function HomeScreen() {
       setActiveTab('chat');
     },
     [],
+  );
+
+  const handleOpenGeneration = useCallback(
+    (sessionId: string) => {
+      const run = useGenerationStore.getState().runs[sessionId];
+      if (!run) {
+        return;
+      }
+      const char = run.characterId
+        ? (characters.find(c => c.id === run.characterId) ?? null)
+        : null;
+      const group = run.groupChatId
+        ? (groupChats.find(g => g.id === run.groupChatId) ?? null)
+        : null;
+      if (!char && !group) {
+        return;
+      }
+      setActiveChatCharacter(char);
+      setActiveGroupChat(group);
+      setActiveSessionId(sessionId);
+      setActiveTab('chat');
+    },
+    [characters, groupChats],
   );
 
   const handleCharacterOpenChat = useCallback(
@@ -729,6 +760,11 @@ function HomeScreen() {
         ) : (
           menuList
         )}
+
+        <GenerationBanner
+          excludeSessionId={isChat ? activeSessionId : null}
+          onOpen={handleOpenGeneration}
+        />
 
         <View style={[st.bottomBar, { paddingBottom: insets.bottom }]}>
           <TabBar
