@@ -181,7 +181,7 @@ export function useChat({
   const [session, setSession] = useState<ChatSession | null>(null);
   const [inputText, setInputText] = useState('');
   const [sendingLocal, setSendingLocal] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncingSessionId, setSyncingSessionId] = useState<string | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
     null,
   );
@@ -223,6 +223,7 @@ export function useChat({
   // only inserted once it actually has content, so empty threads never appear.
   const unpersistedRef = useRef<Set<string>>(new Set());
   const seenRevisionRef = useRef<Record<string, number>>({});
+  const failedRevisionRef = useRef<Record<string, number>>({});
 
   const runSessionId = session?.id ?? null;
   const run = useGenerationStore(s =>
@@ -237,8 +238,13 @@ export function useChat({
   const needsSync =
     !!runSessionId &&
     runRevision > 0 &&
-    seenRevisionRef.current[runSessionId] !== runRevision;
-  const sending = sendingLocal || !!run || syncing || needsSync;
+    seenRevisionRef.current[runSessionId] !== runRevision &&
+    failedRevisionRef.current[runSessionId] !== runRevision;
+  const sending =
+    sendingLocal ||
+    !!run ||
+    (!!runSessionId && syncingSessionId === runSessionId) ||
+    needsSync;
   const isStreaming = !!run;
   const streamingContent = run?.content ?? '';
   const replacingMessageId = run?.replaceMessageId ?? null;
@@ -419,20 +425,27 @@ export function useChat({
     if (seenRevisionRef.current[sessionId] === runRevision) {
       return;
     }
-    seenRevisionRef.current[sessionId] = runRevision;
     let cancelled = false;
-    setSyncing(true);
+    setSyncingSessionId(sessionId);
     (async () => {
       try {
         const fresh = await getSessionById(sessionId);
-        if (!cancelled && fresh) {
+        if (cancelled) {
+          return;
+        }
+        seenRevisionRef.current[sessionId] = runRevision;
+        delete failedRevisionRef.current[sessionId];
+        if (fresh) {
           setSession(prev => (prev && prev.id === sessionId ? fresh : prev));
         }
       } catch (e) {
+        if (!cancelled) {
+          failedRevisionRef.current[sessionId] = runRevision;
+        }
         console.warn('Failed to reload session:', e);
       } finally {
         if (!cancelled) {
-          setSyncing(false);
+          setSyncingSessionId(null);
         }
       }
     })();
