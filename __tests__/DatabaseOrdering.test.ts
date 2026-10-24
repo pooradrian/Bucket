@@ -90,6 +90,22 @@ beforeAll(async () => {
     )
   `);
   db.execute(`
+    CREATE TABLE group_chats (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      icon TEXT DEFAULT ''
+    )
+  `);
+  db.execute(`
+    CREATE TABLE group_chat_members (
+      group_chat_id TEXT NOT NULL,
+      character_id TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (group_chat_id, character_id)
+    )
+  `);
+  db.execute(`
     CREATE TABLE characters (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
@@ -108,6 +124,14 @@ beforeAll(async () => {
   db.execute('CREATE INDEX idx_messages_session ON chat_messages(session_id)');
   db.execute('PRAGMA user_version = 11');
 
+  db.execute('INSERT INTO characters (id, name) VALUES (?, ?)', [
+    'char1',
+    'Char One',
+  ]);
+  db.execute('INSERT INTO characters (id, name) VALUES (?, ?)', [
+    'char2',
+    'Char Two',
+  ]);
   db.execute(
     'INSERT INTO chat_sessions (id, character_id, created_at, updated_at) VALUES (?, ?, ?, ?)',
     ['s1', 'char1', 1, 1],
@@ -127,11 +151,11 @@ beforeAll(async () => {
   }
 });
 
-test('upgrade runs migrations through v16', () => {
+test('upgrade runs migrations through v17', () => {
   const result = db.execute('PRAGMA user_version');
   expect(result.results?.[0]?.user_version).toBe(11);
   initDB();
-  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(16);
+  expect(db.execute('PRAGMA user_version').results?.[0]?.user_version).toBe(17);
 });
 
 test('backfill restores insertion order for threads whose timestamps were rewritten', async () => {
