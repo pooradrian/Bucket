@@ -20,6 +20,7 @@ interface CrashPromptProps {
 export default function CrashPrompt({ report, onDismiss }: CrashPromptProps) {
   const st = useTheme();
   const activityLogging = useAppStore(s => s.appSettings.debugLogging);
+  const reportHasActivity = (report?.events.length ?? 0) > 0;
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -68,10 +69,10 @@ export default function CrashPrompt({ report, onDismiss }: CrashPromptProps) {
               ? 'Something went wrong while Bucket was starting. Copy the log or export a full backup of your data.'
               : 'Bucket closed unexpectedly last time. Copy the log or export a full backup of your data.'}
           </Text>
-          {activityLogging ? (
+          {activityLogging || reportHasActivity ? (
             <Text style={st.crashPromptWarning}>
-              Activity logging is on: the copied log and full export include
-              your recent activity. Review before sharing.
+              This report includes recent activity recorded by Bucket. Review it
+              before sharing.
             </Text>
           ) : null}
           <ScrollView style={st.crashPromptLog}>
