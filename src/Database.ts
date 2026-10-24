@@ -4,7 +4,7 @@ import { encrypt, decrypt } from './Crypto';
 import { LorebookEntry, LorebookState } from './RAGHandler';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 16;
+const CURRENT_VERSION = 17;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -307,6 +307,33 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
           )
         `);
         addColumnIfMissing(conn, 'characters', 'folder_id', 'TEXT DEFAULT ""');
+      }
+
+      if (v === 17) {
+        conn.execute(`
+          DELETE FROM chat_sessions
+          WHERE (group_chat_id IS NULL OR group_chat_id = '')
+            AND (
+              character_id IS NULL
+              OR character_id = ''
+              OR character_id NOT IN (SELECT id FROM characters)
+            )
+        `);
+        conn.execute(`
+          DELETE FROM chat_sessions
+          WHERE group_chat_id IS NOT NULL
+            AND group_chat_id <> ''
+            AND group_chat_id NOT IN (SELECT id FROM group_chats)
+        `);
+        conn.execute(`
+          DELETE FROM quick_characters
+          WHERE session_id NOT IN (SELECT id FROM chat_sessions)
+            AND (
+              starred = 0
+              OR character_id = ''
+              OR character_id NOT IN (SELECT id FROM characters)
+            )
+        `);
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -1050,7 +1077,27 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
 
 export function deleteCharacterFromDB(id: string): void {
   const d = initDB();
-  d.execute('DELETE FROM characters WHERE id = ?', [id]);
+  d.execute('BEGIN');
+  try {
+    d.execute(
+      `DELETE FROM quick_characters
+       WHERE character_id = ?
+          OR session_id IN (
+            SELECT id FROM chat_sessions
+            WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = '')
+          )`,
+      [id, id],
+    );
+    d.execute(
+      "DELETE FROM chat_sessions WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = '')",
+      [id],
+    );
+    d.execute('DELETE FROM characters WHERE id = ?', [id]);
+    d.execute('COMMIT');
+  } catch (e) {
+    d.execute('ROLLBACK');
+    throw e;
+  }
   checkpointWAL();
 }
 
@@ -1292,6 +1339,11 @@ export function deleteGroupChatFromDB(id: string): void {
   const d = initDB();
   d.execute('BEGIN');
   try {
+    d.execute(
+      'DELETE FROM quick_characters WHERE session_id IN (SELECT id FROM chat_sessions WHERE group_chat_id = ?)',
+      [id],
+    );
+    d.execute('DELETE FROM chat_sessions WHERE group_chat_id = ?', [id]);
     d.execute('DELETE FROM group_chat_members WHERE group_chat_id = ?', [id]);
     d.execute('DELETE FROM group_chats WHERE id = ?', [id]);
     d.execute('COMMIT');
