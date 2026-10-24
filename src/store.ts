@@ -129,30 +129,30 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 interface AppStore {
   appSettings: AppSettings;
   setAppSettings: (settings: AppSettings) => void;
-  loadSettings: () => Promise<void>;
+  loadSettings: () => Promise<boolean>;
   applyThemeMode: (mode: 'dark' | 'light') => void;
 
   characters: Character[];
   charactersLoading: boolean;
-  loadCharacters: () => Promise<void>;
+  loadCharacters: () => Promise<boolean>;
   saveCharacter: (char: Character) => Promise<void>;
   deleteCharacter: (id: string) => void;
 
   groupChats: GroupChat[];
   groupChatsLoading: boolean;
-  loadGroupChats: () => Promise<void>;
+  loadGroupChats: () => Promise<boolean>;
   saveGroupChat: (group: GroupChat) => Promise<void>;
   deleteGroupChat: (id: string) => void;
 
   folders: Folder[];
-  loadFolders: () => Promise<void>;
+  loadFolders: () => Promise<boolean>;
   saveFolder: (folder: Folder) => void;
   deleteFolder: (id: string) => void;
   moveCharacterToFolder: (characterId: string, folderId: string) => void;
 
   lorebooks: LorebookState[];
   setLorebooks: (lorebooks: LorebookState[]) => void;
-  loadLorebooks: () => Promise<void>;
+  loadLorebooks: () => Promise<boolean>;
 
   promptConfigVersion: number;
   bumpPromptConfigVersion: () => void;
@@ -263,8 +263,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         set({ appSettings: settings });
         setLoggingEnabled(settings.debugLogging);
       }
+      return true;
     } catch (e) {
       console.warn('Failed to load settings:', e);
+      return false;
     }
   },
   applyThemeMode: mode => {
@@ -316,9 +318,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         }),
         charactersLoading: false,
       });
+      return true;
     } catch (e) {
       console.warn('Failed to load characters:', e);
       set({ charactersLoading: false });
+      return false;
     }
   },
   saveCharacter: async char => {
@@ -391,9 +395,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
         })),
         groupChatsLoading: false,
       });
+      return true;
     } catch (e) {
       console.warn('Failed to load group chats:', e);
       set({ groupChatsLoading: false });
+      return false;
     }
   },
   saveGroupChat: async group => {
@@ -442,8 +448,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   loadFolders: async () => {
     try {
       set({ folders: getAllFoldersFromDB() });
+      return true;
     } catch (e) {
       console.warn('Failed to load folders:', e);
+      return false;
     }
   },
   saveFolder: folder => {
@@ -500,8 +508,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
     try {
       const loaded = await loadAllLorebooksFromStorage();
       set({ lorebooks: loaded });
+      return true;
     } catch (e) {
       console.warn('Failed to load lorebooks:', e);
+      return false;
     }
   },
 

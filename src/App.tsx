@@ -96,11 +96,20 @@ export default function App() {
       let report = await readPendingCrash();
       try {
         initDB();
-        await loadSettings();
-        loadCharacters();
-        loadGroupChats();
-        loadFolders();
-        loadLorebooks();
+        const steps: Array<[string, () => Promise<boolean>]> = [
+          ['settings', loadSettings],
+          ['characters', loadCharacters],
+          ['group chats', loadGroupChats],
+          ['folders', loadFolders],
+          ['lorebooks', loadLorebooks],
+        ];
+        const results = await Promise.all(steps.map(([, load]) => load()));
+        const failed = steps
+          .filter((_, index) => !results[index])
+          .map(([name]) => name);
+        if (failed.length > 0) {
+          throw new Error(`Failed to load ${failed.join(', ')}.`);
+        }
         if (useAppStore.getState().appSettings.dynamicIcon)
           setIcon(useAppStore.getState().appSettings.themeMode);
       } catch (e) {

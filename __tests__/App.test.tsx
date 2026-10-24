@@ -125,6 +125,8 @@ import React from 'react';
 import { Text } from 'react-native';
 import ReactTestRenderer from 'react-test-renderer';
 import App from '../src/App';
+import { reportRoadblock } from '../src/CrashExport';
+import { getAllCharactersFromDB } from '../src/Database';
 
 test('renders the splash screen without crashing', async () => {
   let tree: ReactTestRenderer.ReactTestRenderer;
@@ -137,4 +139,20 @@ test('renders the splash screen without crashing', async () => {
     .map(n => String(n.props.children))
     .join('');
   expect(text).toContain('Poor Adrian');
+  ReactTestRenderer.act(() => tree!.unmount());
+});
+
+test('reports failed startup loads as a roadblock', async () => {
+  (getAllCharactersFromDB as jest.Mock).mockRejectedValueOnce(
+    new Error('characters failed'),
+  );
+
+  let tree!: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(async () => {
+    tree = ReactTestRenderer.create(<App />);
+    await new Promise(r => setTimeout(r, 50));
+  });
+
+  expect(reportRoadblock).toHaveBeenCalledWith(expect.any(Error), 'Startup');
+  ReactTestRenderer.act(() => tree.unmount());
 });
