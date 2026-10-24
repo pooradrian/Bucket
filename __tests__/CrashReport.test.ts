@@ -37,6 +37,7 @@ import { exportBuk, saveToDisk } from '../src/ImportExport';
 import { isLoggingEnabled, readLogFile } from '../src/EventLogger';
 import {
   buildCrashReport,
+  clearPendingCrash,
   crashExport,
   formatCrashLog,
   getCrashLogText,
@@ -140,6 +141,20 @@ describe('readPendingCrash', () => {
     expect(read?.kind).toBe('crash');
   });
 
+  it('reads a native crash marker when the JS marker is missing', async () => {
+    const report = buildCrashReport('crash', new Error('native boom'));
+    mockReadFile.mockImplementation((path: string) =>
+      path.endsWith('native_crash_marker.txt')
+        ? Promise.resolve(JSON.stringify(report))
+        : Promise.reject(new Error('ENOENT')),
+    );
+
+    const read = await readPendingCrash();
+
+    expect(read?.errorMessage).toBe('native boom');
+    expect(read?.kind).toBe('crash');
+  });
+
   it('falls back to the legacy timestamp marker', async () => {
     mockReadFile.mockResolvedValueOnce('2026-07-01T10:00:00.000Z');
 
@@ -148,6 +163,17 @@ describe('readPendingCrash', () => {
     expect(read?.timestamp).toBe('2026-07-01T10:00:00.000Z');
     expect(read?.kind).toBe('crash');
     expect(read?.errorMessage).toContain('closed unexpectedly');
+  });
+
+  it('clears both the JS and native markers', () => {
+    clearPendingCrash();
+
+    expect(RNFS.unlink).toHaveBeenCalledWith(
+      '/tmp/docs/crash_recovery/crash_marker.txt',
+    );
+    expect(RNFS.unlink).toHaveBeenCalledWith(
+      '/tmp/docs/crash_recovery/native_crash_marker.txt',
+    );
   });
 });
 
