@@ -172,6 +172,15 @@ async function runGeneration(
     ...groupMembers.map(c => c.name),
   ];
 
+  const replyCharId =
+    groupChat && replyCharacter
+      ? replyCharacter.id
+      : qc
+        ? qc.id
+        : quickCharacters.length > 0 && character
+          ? character.id
+          : undefined;
+
   let rules: DisplacementRule[] = [];
   let seed = 0;
   let raw = '';
@@ -254,14 +263,6 @@ async function runGeneration(
       );
     }
 
-    const replyCharId =
-      groupChat && replyCharacter
-        ? replyCharacter.id
-        : qc
-          ? qc.id
-          : quickCharacters.length > 0 && character
-            ? character.id
-            : undefined;
     const assistantUpdatedAt = Date.now();
     const requestInfo = serializeRequest(result.request);
     if (thinkingMs == null) {
@@ -349,17 +350,10 @@ async function runGeneration(
             request.existingVariants ?? [],
             cancelRequestInfo,
             cancelledThinkingMs,
+            replyCharId,
           );
           updateSessionTimestamp(sessionId, cancelUpdatedAt);
         } else if (partial.length > 0) {
-          const replyCharId =
-            groupChat && replyCharacter
-              ? replyCharacter.id
-              : qc
-                ? qc.id
-                : quickCharacters.length > 0 && character
-                  ? character.id
-                  : undefined;
           const assistantMessage: ChatMessage = {
             id: generateId(),
             role: 'assistant',
