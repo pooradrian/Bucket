@@ -16,6 +16,7 @@ import {
 
 const CRASH_EXPORT_DIR = `${RNFS.DocumentDirectoryPath}/crash_recovery`;
 const CRASH_MARKER_PATH = `${CRASH_EXPORT_DIR}/crash_marker.txt`;
+const NATIVE_CRASH_MARKER_PATH = `${CRASH_EXPORT_DIR}/native_crash_marker.txt`;
 
 export type CrashKind = 'crash' | 'roadblock';
 
@@ -76,11 +77,9 @@ export function buildCrashReport(
 
 function writeCrashReport(report: CrashReport): void {
   try {
-    RNFS.mkdir(CRASH_EXPORT_DIR)
-      .then(() =>
-        RNFS.writeFile(CRASH_MARKER_PATH, JSON.stringify(report), 'utf8'),
-      )
-      .catch(e => console.warn('CrashReport write failed:', e));
+    RNFS.writeFile(CRASH_MARKER_PATH, JSON.stringify(report), 'utf8').catch(e =>
+      console.warn('CrashReport write failed:', e),
+    );
   } catch {
     // never throw from the crash path
   }
@@ -102,14 +101,7 @@ function isCrashReport(value: unknown): value is CrashReport {
   );
 }
 
-export async function readPendingCrash(): Promise<CrashReport | null> {
-  let raw: string;
-  try {
-    raw = await RNFS.readFile(CRASH_MARKER_PATH, 'utf8');
-  } catch {
-    return null;
-  }
-
+function parseCrashMarker(raw: string): CrashReport | null {
   const text = raw.trim();
   if (!text) return null;
 
@@ -138,8 +130,31 @@ export async function readPendingCrash(): Promise<CrashReport | null> {
   };
 }
 
+async function readMarker(path: string): Promise<string | null> {
+  try {
+    return await RNFS.readFile(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+export async function readPendingCrash(): Promise<CrashReport | null> {
+  const [jsMarker, nativeMarker] = await Promise.all([
+    readMarker(CRASH_MARKER_PATH),
+    readMarker(NATIVE_CRASH_MARKER_PATH),
+  ]);
+
+  for (const marker of [jsMarker, nativeMarker]) {
+    if (!marker) continue;
+    const report = parseCrashMarker(marker);
+    if (report) return report;
+  }
+  return null;
+}
+
 export function clearPendingCrash(): void {
   RNFS.unlink(CRASH_MARKER_PATH).catch(() => {});
+  RNFS.unlink(NATIVE_CRASH_MARKER_PATH).catch(() => {});
 }
 
 export function formatCrashLog(report: CrashReport, eventLog = ''): string {
@@ -242,6 +257,8 @@ let installed = false;
 export function installCrashExport(): void {
   if (installed) return;
   installed = true;
+
+  RNFS.mkdir(CRASH_EXPORT_DIR).catch(() => {});
 
   const originalHandler = ErrorUtils.getGlobalHandler();
 

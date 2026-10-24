@@ -24,6 +24,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    NativeCrashHandler.install(this)
     NitroCryptoOnLoad.initializeNative()
     loadReactNative(this)
   }
