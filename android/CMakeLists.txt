@@ -10,6 +10,7 @@ add_library(
   ../cpp/cpp-adapter.cpp
   ../cpp/AesGcm.cpp
   ../cpp/HybridNativeCrypto.cpp
+  ../cpp/HybridNativeEmbeddings.cpp
 )
 
 set_target_properties(
@@ -23,10 +24,11 @@ set_target_properties(
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroCrypto+autolinking.cmake)
 
 include_directories(../cpp)
+include_directories(../cpp/llama/include)
 
 find_library(LOG_LIB log)
 
-target_link_libraries(NitroCrypto ${LOG_LIB} android)
+target_link_libraries(NitroCrypto ${LOG_LIB} android ${CMAKE_DL_LIBS})
 
 target_compile_options(
   NitroCrypto

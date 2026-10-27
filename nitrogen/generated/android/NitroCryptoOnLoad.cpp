@@ -16,6 +16,7 @@
 #include <NitroModules/HybridObjectRegistry.hpp>
 
 #include "HybridNativeCrypto.hpp"
+#include "HybridNativeEmbeddings.hpp"
 
 namespace margelo::nitro::crypto {
 
@@ -42,6 +43,15 @@ void registerAllNatives() {
                     "The HybridObject \"HybridNativeCrypto\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridNativeCrypto>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "NativeEmbeddings",
+    []() -> std::shared_ptr<HybridObject> {
+      static_assert(std::is_default_constructible_v<HybridNativeEmbeddings>,
+                    "The HybridObject \"HybridNativeEmbeddings\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridNativeEmbeddings>();
     }
   );
 }

@@ -64,6 +64,8 @@ export interface PromptConfig {
   topP: string;
   ragModel: string;
   ragEnabled: boolean;
+  ragSource: 'api' | 'local';
+  ragLocalModel: string;
   ragMaxEntriesToSend: string;
   ragMaxResults: string;
   summarizationEnabled: boolean;
@@ -113,6 +115,8 @@ $LOREBOOK$`,
   topP: '',
   ragModel: '',
   ragEnabled: false,
+  ragSource: 'api',
+  ragLocalModel: '',
   ragMaxEntriesToSend: '50',
   ragMaxResults: '5',
   summarizationEnabled: false,
@@ -970,6 +974,8 @@ export async function sendToLLM(
       const ragConfig: RAGConfig = {
         enabled: true,
         model: resolved.ragModel,
+        source: resolved.ragSource,
+        localModel: resolved.ragLocalModel,
         maxEntriesToSend: resolved.ragMaxEntriesToSend,
         maxResults: resolved.ragMaxResults,
       };
@@ -982,13 +988,17 @@ export async function sendToLLM(
         historyMessages.push({ role: 'user', content: userMessage });
       }
 
-      const relevant = await retrieveRelevantLorebook(
-        historyMessages,
-        combinedLorebook,
-        ragConfig,
-        resolved,
-      );
-      lorebookContext = buildRAGInjection(relevant);
+      try {
+        const relevant = await retrieveRelevantLorebook(
+          historyMessages,
+          combinedLorebook,
+          ragConfig,
+          resolved,
+        );
+        lorebookContext = buildRAGInjection(relevant);
+      } catch (e) {
+        console.warn('Lorebook retrieval failed:', e);
+      }
     }
   }
 

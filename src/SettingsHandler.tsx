@@ -430,6 +430,7 @@ export default function SettingsHandler({
           section={lorebooksSection}
           promptValues={promptValues}
           setPromptValues={setPromptValues}
+          accent={values.accentColor}
         />
       );
     }

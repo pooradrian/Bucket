@@ -10,8 +10,9 @@ import { useAppStore } from '../store';
 import { PromptConfig } from '../PromptHandler';
 import { logEvent } from '../EventLogger';
 import { useTheme } from '../ThemeContext';
-import { TextField } from './ui';
+import { OptionRow, TextField } from './ui';
 import LorebookEditor from '../components/LorebookEditor';
+import OnDeviceEmbeddings from './OnDeviceEmbeddings';
 
 export type LorebooksSection = 'lorebooks' | 'rag';
 
@@ -19,12 +20,14 @@ interface LorebooksViewProps {
   section: LorebooksSection;
   promptValues: PromptConfig;
   setPromptValues: React.Dispatch<React.SetStateAction<PromptConfig>>;
+  accent: string;
 }
 
 export default function LorebooksView({
   section,
   promptValues,
   setPromptValues,
+  accent,
 }: LorebooksViewProps) {
   const st = useTheme();
   const lorebooks = useAppStore(s => s.lorebooks);
@@ -77,16 +80,48 @@ export default function LorebooksView({
   );
 
   if (section === 'rag') {
+    const local = promptValues.ragSource === 'local';
     return (
       <>
-        <TextField
-          label="Embedding Model (leave blank to use main model)"
-          value={promptValues.ragModel}
-          onChangeText={text =>
-            setPromptValues(prev => ({ ...prev, ragModel: text }))
+        <OptionRow
+          label="Embeddings source"
+          note={
+            local
+              ? 'Vectors are computed on this device'
+              : 'Vectors come from your provider /embeddings endpoint'
           }
-          placeholder="e.g. nomic-embed-text"
+          options={[
+            { value: 'api', label: 'API' },
+            { value: 'local', label: 'On-device' },
+          ]}
+          value={local ? 'local' : 'api'}
+          accent={accent}
+          onChange={value =>
+            setPromptValues(prev => ({
+              ...prev,
+              ragSource: value === 'local' ? 'local' : 'api',
+            }))
+          }
         />
+
+        {local ? (
+          <OnDeviceEmbeddings
+            accent={accent}
+            activeModel={promptValues.ragLocalModel}
+            onChangeModel={name =>
+              setPromptValues(prev => ({ ...prev, ragLocalModel: name }))
+            }
+          />
+        ) : (
+          <TextField
+            label="Embedding Model (leave blank to use main model)"
+            value={promptValues.ragModel}
+            onChangeText={text =>
+              setPromptValues(prev => ({ ...prev, ragModel: text }))
+            }
+            placeholder="e.g. nomic-embed-text"
+          />
+        )}
 
         <TextField
           label="Max entries to embed per retrieval"

@@ -33,6 +33,8 @@ export const configCommand: CommandHandler = async (rest, env, io) => {
       `Top P:         ${config.topP || '(default)'}`,
       `Embedding Model: ${config.ragModel || '(uses main model)'}`,
       `RAG Enabled:   ${config.ragEnabled ? 'yes' : 'no'}`,
+      `RAG Source:    ${config.ragSource}`,
+      `RAG GGUF:      ${config.ragLocalModel || '(none imported)'}`,
       `RAG Max Entry: ${config.ragMaxEntriesToSend}`,
       `RAG Max Res:   ${config.ragMaxResults}`,
     ].join('\n'),
@@ -72,10 +74,18 @@ export const configSetCommand: CommandHandler = async (rest, env, io) => {
     config.historyCutoffAmount = value;
   } else if (key === 'ragmodel' || key === 'embedmodel') {
     config.ragModel = value;
+  } else if (key === 'ragsource' || key === 'embedsource') {
+    if (value !== 'api' && value !== 'local') {
+      io.log('error', 'ragsource must be "api" or "local"');
+      return;
+    }
+    config.ragSource = value;
+  } else if (key === 'ragfile' || key === 'embedfile') {
+    config.ragLocalModel = value;
   } else {
     io.log(
       'error',
-      `Unknown key "${key}". Use: prefix, suffix, usr, model, apiurl, apikey, cutoffmode, cutoffamount`,
+      `Unknown key "${key}". Use: prefix, suffix, usr, model, apiurl, apikey, cutoffmode, cutoffamount, ragmodel, ragsource, ragfile`,
     );
     return;
   }
