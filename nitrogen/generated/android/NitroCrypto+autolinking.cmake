@@ -34,6 +34,7 @@ target_sources(
   ../nitrogen/generated/android/NitroCryptoOnLoad.cpp
   # Shared Nitrogen C++ sources
   ../nitrogen/generated/shared/c++/HybridNativeCryptoSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridNativeEmbeddingsSpec.cpp
   # Android-specific Nitrogen C++ sources
   
 )

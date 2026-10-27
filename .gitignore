@@ -68,6 +68,7 @@ yarn-error.log
 TODO.md
 AGENTS.md
 .vscode/
+dist/
 
 # Release signing (never commit)
 release.keystore

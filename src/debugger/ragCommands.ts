@@ -1,7 +1,8 @@
 import { loadPromptConfig } from '../PromptHandler';
 import { getLorebookEntriesFromDB, getAllLorebooksFromDB } from '../Database';
-import { embeddingsUrl, getEmbeddings } from '../Endpoint';
+import { embeddingsUrl } from '../Endpoint';
 import {
+  embedTexts,
   rankLorebookEntries,
   MIN_SIMILARITY,
   ScoredEntry,
@@ -11,18 +12,34 @@ import { CommandHandler } from './types';
 export const embedCommand: CommandHandler = async (rest, env, io) => {
   const text = rest.join(' ') || 'The quick brown fox jumps over the lazy dog.';
   const config = await loadPromptConfig();
-  if (!config.apiUrl?.trim()) {
+  const local = config.ragSource === 'local';
+  if (!local && !config.apiUrl?.trim()) {
     io.log('error', 'No API URL configured. Run: config.set apiurl <url>');
     return;
   }
-  const model = config.ragModel?.trim() || config.model;
+  const model = local
+    ? config.ragLocalModel
+    : config.ragModel?.trim() || config.model;
   io.log(
     'info',
-    `POST ${embeddingsUrl(config.apiUrl)}\nModel: ${model}\nInput: "${text}"`,
+    local
+      ? `On-device model: ${model || '(none imported)'}\nInput: "${text}"`
+      : `POST ${embeddingsUrl(config.apiUrl)}\nModel: ${model}\nInput: "${text}"`,
   );
   try {
     const t0 = performance.now();
-    const vectors = await getEmbeddings([text], model, config);
+    const vectors = await embedTexts(
+      [text],
+      {
+        enabled: true,
+        model: config.ragModel,
+        source: local ? 'local' : 'api',
+        localModel: config.ragLocalModel,
+        maxEntriesToSend: config.ragMaxEntriesToSend,
+        maxResults: config.ragMaxResults,
+      },
+      config,
+    );
     const ms = (performance.now() - t0).toFixed(0);
     const vec = vectors[0];
     const sample = vec
@@ -44,7 +61,9 @@ export const embedCommand: CommandHandler = async (rest, env, io) => {
     );
     io.log(
       'info',
-      'Set an embedding model with config.set ragmodel <name> — your server must expose the /embeddings endpoint.',
+      local
+        ? 'Install the on-device runtime and import a GGUF model in Settings → Lorebooks & RAG.'
+        : 'Set an embedding model with config.set ragmodel <name> — your server must expose the /embeddings endpoint.',
     );
   }
 };
@@ -72,10 +91,15 @@ export const ragCommand: CommandHandler = async (rest, env, io) => {
   }
 
   const config = await loadPromptConfig();
-  const model = config.ragModel?.trim() || config.model;
+  const local = config.ragSource === 'local';
+  const model = local
+    ? config.ragLocalModel
+    : config.ragModel?.trim() || config.model;
   const ragConfig = {
     enabled: true,
     model,
+    source: local ? ('local' as const) : ('api' as const),
+    localModel: config.ragLocalModel,
     maxEntriesToSend: config.ragMaxEntriesToSend,
     maxResults: config.ragMaxResults,
   };

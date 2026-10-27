@@ -35,10 +35,27 @@ const NativeCrypto = {
   },
 };
 
+const NativeEmbeddings = {
+  getAbi: jest.fn(() => 'arm64-v8a'),
+  getRuntimeLoaded: jest.fn(() => false),
+  loadRuntime: jest.fn().mockResolvedValue('ok'),
+  loadModel: jest.fn().mockResolvedValue({
+    dimensions: 2,
+    contextSize: 512,
+    description: 'mock',
+    pooling: 'mean',
+  }),
+  embed: jest.fn().mockResolvedValue([]),
+  releaseModel: jest.fn().mockResolvedValue(undefined),
+};
+
 export const NitroModules = {
   createHybridObject: jest.fn().mockImplementation((name: string) => {
     if (name === 'NativeCrypto') {
       return NativeCrypto;
+    }
+    if (name === 'NativeEmbeddings') {
+      return NativeEmbeddings;
     }
     throw new Error(`Unknown HybridObject: ${name}`);
   }),

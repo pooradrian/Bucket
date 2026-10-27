@@ -1,0 +1,46 @@
+name: Build embedding runtime
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'embedding-runtime-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Android NDK
+        run: |
+          SDKMANAGER=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;27.0.12077973" "cmake;3.22.1" > /dev/null
+
+      - name: Build runtime libraries
+        run: scripts/build-embedding-runtime.sh
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "name=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=embedding-runtime-v1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Attach runtime to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          files=(dist/embedding-runtime/v1/upload/*.so dist/embedding-runtime/v1/manifest.json)
+          gh release view "$tag" > /dev/null 2>&1 \
+            || gh release create "$tag" --title "Embedding runtime $tag" --prerelease \
+                 --notes "CPU llama.cpp libraries for Bucket's on-device embeddings. Downloaded by the app on demand."
+          gh release upload "$tag" "${files[@]}" --clobber

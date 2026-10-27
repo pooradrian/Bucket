@@ -11,6 +11,7 @@
 #import <type_traits>
 
 #include "HybridNativeCrypto.hpp"
+#include "HybridNativeEmbeddings.hpp"
 
 @interface NitroCryptoAutolinking : NSObject
 @end
@@ -28,6 +29,15 @@
                     "The HybridObject \"HybridNativeCrypto\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridNativeCrypto>();
+    }
+  );
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "NativeEmbeddings",
+    []() -> std::shared_ptr<HybridObject> {
+      static_assert(std::is_default_constructible_v<HybridNativeEmbeddings>,
+                    "The HybridObject \"HybridNativeEmbeddings\" is not default-constructible! "
+                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
+      return std::make_shared<HybridNativeEmbeddings>();
     }
   );
 }

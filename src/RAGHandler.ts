@@ -1,6 +1,7 @@
 import { pick, types } from '@react-native-documents/picker';
 import { ChatMessageObject, PromptConfig } from './PromptHandler';
 import { getEmbeddings } from './Endpoint';
+import { embedLocal } from './LocalEmbeddings';
 import {
   generateId,
   saveLorebookToDB,
@@ -18,6 +19,8 @@ export interface RAGConfig {
   model: string;
   maxEntriesToSend: string;
   maxResults: string;
+  source?: 'api' | 'local';
+  localModel?: string;
 }
 
 export interface LorebookState {
@@ -171,25 +174,35 @@ function buildQuery(recentMessages: ChatMessageObject[]): string {
     : joined;
 }
 
-async function embedTexts(
+export async function embedTexts(
   texts: string[],
-  model: string,
-  config: PromptConfig,
+  ragConfig: RAGConfig,
+  promptConfig: PromptConfig,
 ): Promise<number[][]> {
-  const cached = texts.map(t => EMBEDDING_CACHE.get(`${model}\u0000${t}`));
+  const local = ragConfig.source === 'local';
+  const model = local
+    ? ragConfig.localModel?.trim() || ''
+    : ragConfig.model?.trim() || promptConfig.model;
+  const cacheKey = (text: string) =>
+    `${local ? 'local' : 'api'}\u0000${model}\u0000${text}`;
+  const cached = texts.map(t => EMBEDDING_CACHE.get(cacheKey(t)));
   const missingIdx: number[] = [];
   cached.forEach((v, i) => {
     if (!v) missingIdx.push(i);
   });
   if (missingIdx.length > 0) {
-    const fetched = await getEmbeddings(
-      missingIdx.map(i => texts[i]),
-      model,
-      config,
-    );
+    const inputs = missingIdx.map(i => texts[i]);
+    const fetched = local
+      ? await embedLocal(inputs, model)
+      : await getEmbeddings(inputs, model, promptConfig);
+    if (fetched.length !== inputs.length) {
+      throw new Error(
+        `Embeddings returned ${fetched.length} vectors for ${inputs.length} inputs`,
+      );
+    }
     missingIdx.forEach((textIdx, i) => {
       const vector = fetched[i];
-      EMBEDDING_CACHE.set(`${model}\u0000${texts[textIdx]}`, vector);
+      EMBEDDING_CACHE.set(cacheKey(texts[textIdx]), vector);
       cached[textIdx] = vector;
     });
   }
@@ -206,10 +219,9 @@ export async function rankLorebookEntries(
   if (!query.trim() || capped.length === 0) {
     return [];
   }
-  const model = ragConfig.model?.trim() || promptConfig.model;
   const vectors = await embedTexts(
     [query, ...capped.map(e => e.text)],
-    model,
+    ragConfig,
     promptConfig,
   );
   return capped
