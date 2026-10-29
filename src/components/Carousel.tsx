@@ -43,6 +43,8 @@ import {
   splitThinking,
   visibleContent,
 } from '../thinking';
+import { formatRagDuration, parseRagInfo } from '../ragInfo';
+import type { RetrievalInfo } from '../PromptHandler';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -86,6 +88,8 @@ interface CarouselProps {
   sending: boolean;
   isStreaming: boolean;
   streamingContent: string;
+  streamingPhase: 'rag' | 'generating';
+  streamingRag: RetrievalInfo | null;
   replacingMessageId: string | null;
   onStop: () => void;
 }
@@ -96,6 +100,7 @@ interface CardItem {
   timestamp: number;
   live: boolean;
   thinkingMs?: number;
+  rag?: RetrievalInfo;
 }
 
 interface Colors {
@@ -112,6 +117,7 @@ interface Colors {
   fontSizeBody: number;
   forceItalic: boolean;
   showThinking: boolean;
+  showRag: boolean;
   blurType: 'dark' | 'light';
   overlay: string;
 }
@@ -150,6 +156,8 @@ export default function Carousel({
   sending,
   isStreaming,
   streamingContent,
+  streamingPhase,
+  streamingRag,
   replacingMessageId,
   onStop,
 }: CarouselProps) {
@@ -169,6 +177,7 @@ export default function Carousel({
       fontSizeBody: theme.fontSizeBody,
       forceItalic: theme.forceItalic,
       showThinking: theme.showThinking,
+      showRag: theme.showRag,
       blurType: isDarkTheme(theme.bgPrimary, theme.textMuted)
         ? ('dark' as const)
         : ('light' as const),
@@ -188,6 +197,7 @@ export default function Carousel({
       theme.fontSizeBody,
       theme.forceItalic,
       theme.showThinking,
+      theme.showRag,
     ],
   );
 
@@ -200,6 +210,7 @@ export default function Carousel({
       live: false,
       ...(v.thinkingMs !== undefined ? { thinkingMs: v.thinkingMs } : {}),
     }));
+    const rag = parseRagInfo(message.requestInfo);
     list.push({
       key: 'live',
       content: message.content,
@@ -208,6 +219,7 @@ export default function Carousel({
       ...(message.thinkingMs !== undefined
         ? { thinkingMs: message.thinkingMs }
         : {}),
+      ...(rag ? { rag } : {}),
     });
     list.sort((a, b) => a.timestamp - b.timestamp);
     return list;
@@ -683,6 +695,8 @@ export default function Carousel({
           animMs={Math.max(0, theme.carouselAnimMs)}
           actions={i === cIndex && cardH > 0 && !overflows ? actionsNode : null}
           liveStreamText={item.live ? liveStreamText : null}
+          liveRag={item.live ? streamingRag : null}
+          livePhase={streamingPhase}
         />,
       );
     }
@@ -710,6 +724,8 @@ export default function Carousel({
     vh,
     theme.carouselAnimMs,
     cardH,
+    streamingRag,
+    streamingPhase,
   ]);
 
   const ready = origin !== undefined && targetCenter !== null;
@@ -973,6 +989,8 @@ function CarouselCard({
   vh,
   animMs,
   liveStreamText,
+  liveRag,
+  livePhase,
 }: {
   item: CardItem;
   i: number;
@@ -994,6 +1012,8 @@ function CarouselCard({
   vh?: number;
   animMs?: number;
   liveStreamText?: string | null;
+  liveRag?: RetrievalInfo | null;
+  livePhase?: 'rag' | 'generating';
 }) {
   const [cardW, setCardW] = useState(0);
   const didSyncRef = useRef(false);
@@ -1078,6 +1098,13 @@ function CarouselCard({
   const textColor = isUser ? colors.textPrimary : colors.textSecondary;
   const showTyping = liveStreamText != null && liveStreamText.length === 0;
   const displayContent = liveStreamText ?? item.content;
+  const cardRag =
+    item.live && colors.showRag
+      ? liveStreamText != null
+        ? liveRag ?? null
+        : item.rag ?? null
+      : null;
+  const [ragExpanded, setRagExpanded] = useState(false);
   const thought = splitThinking(displayContent);
   const thoughtDuration = liveStreamText != null ? undefined : item.thinkingMs;
   const showThoughtBlock =
@@ -1156,8 +1183,64 @@ function CarouselCard({
                 />
               ) : (
                 <>
+                  {cardRag ? (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => setRagExpanded(v => !v)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            color: colors.textMuted,
+                            fontSize: 12,
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          {ragExpanded ? '▾ ' : '▸ '}RAG took{' '}
+                          {formatRagDuration(cardRag.ms)}
+                        </Text>
+                      </TouchableOpacity>
+                      {ragExpanded &&
+                        (cardRag.results.length > 0 ? (
+                          cardRag.results.map((result, index) => (
+                            <Text
+                              key={index}
+                              style={{
+                                color: colors.textMuted,
+                                fontSize: 12,
+                                lineHeight: 17,
+                              }}
+                            >
+                              • {result}
+                            </Text>
+                          ))
+                        ) : (
+                          <Text
+                            style={{
+                              color: colors.textMuted,
+                              fontSize: 12,
+                              fontStyle: 'italic',
+                            }}
+                          >
+                            No entries matched.
+                          </Text>
+                        ))}
+                    </>
+                  ) : null}
                   {showTyping ? (
-                    <TypingDots color={textColor} />
+                    livePhase === 'rag' && !cardRag ? (
+                      <Text
+                        style={{
+                          color: colors.textMuted,
+                          fontSize: 12,
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        rag…
+                      </Text>
+                    ) : (
+                      <TypingDots color={textColor} />
+                    )
                   ) : showThoughtBlock ? (
                     <>
                       <TouchableOpacity

@@ -90,7 +90,7 @@ test('v17 migration deletes sessions whose character or group chat is gone', () 
 
   initDB();
 
-  expect(conn().prepare('PRAGMA user_version').all()[0].user_version).toBe(17);
+  expect(conn().prepare('PRAGMA user_version').all()[0].user_version).toBe(18);
   expect(count("SELECT COUNT(*) as count FROM chat_sessions WHERE id = 'valid-solo'")).toBe(1);
   expect(count("SELECT COUNT(*) as count FROM chat_sessions WHERE id = 'orphan-solo'")).toBe(0);
   expect(count("SELECT COUNT(*) as count FROM chat_sessions WHERE id = 'valid-group'")).toBe(1);

@@ -29,6 +29,7 @@ export const SETTINGS_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'showCharacterIcons',
   'showGroupCharNames',
   'showThinking',
+  'showRag',
   'dynamicIcon',
   'forceItalic',
   'debugLogging',
@@ -71,6 +72,7 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   showCharacterIcons: 'Show character icons',
   showGroupCharNames: 'Group chat selector',
   showThinking: 'Show thinking',
+  showRag: 'Show RAG details',
   dynamicIcon: 'Match icon to theme',
   forceItalic: 'Force italic (font fallback)',
   debugLogging: 'Activity logging',
@@ -115,6 +117,7 @@ export const NUMERIC_KEYS: Exclude<
   | 'showCharacterIcons'
   | 'showGroupCharNames'
   | 'showThinking'
+  | 'showRag'
   | 'forceItalic'
   | 'debugLogging'
   | 'notificationSound'

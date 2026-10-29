@@ -21,12 +21,15 @@ import { useTheme } from '../ThemeContext';
 import { Character } from '../CharacterEditor';
 import { QuickCharacter } from '../useChat';
 import { formatRelativeTime } from '../relativeTime';
+import { useAppStore } from '../store';
+import MemoryTab from './MemoryTab';
 
-type HistoryTab = 'threads' | 'characters';
+type HistoryTab = 'threads' | 'characters' | 'memory';
 
 interface HistoryModalProps {
   visible: boolean;
   sessions: SessionSummary[];
+  character: Character | null;
   activeSessionId: string | null;
   quickCharacters: QuickCharacter[];
   isGroupChat: boolean;
@@ -60,6 +63,7 @@ interface HistoryModalProps {
 export default function HistoryModal({
   visible,
   sessions,
+  character,
   activeSessionId,
   quickCharacters,
   isGroupChat,
@@ -77,6 +81,7 @@ export default function HistoryModal({
   onDeleteQC,
 }: HistoryModalProps) {
   const st = useTheme();
+  const accent = useAppStore(s => s.appSettings.accentColor);
   const historySlide = useSharedValue(300);
 
   const [tab, setTab] = useState<HistoryTab>('threads');
@@ -123,6 +128,8 @@ export default function HistoryModal({
       setQcFormVisible(false);
     }
   };
+
+  const showMemoryTab = !isGroupChat && !!character;
 
   const handlePickQcIcon = async () => {
     const result = await launchImageLibrary({
@@ -488,9 +495,38 @@ export default function HistoryModal({
                   Characters
                 </Text>
               </TouchableOpacity>
+              {showMemoryTab && (
+                <TouchableOpacity
+                  onPress={() => switchTab('memory')}
+                  style={[
+                    st.historyTabBtn,
+                    tab === 'memory' && st.historyTabBtnActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      st.historyTabBtnText,
+                      tab === 'memory' && st.historyTabBtnTextActive,
+                    ]}
+                  >
+                    Memory
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            {tab === 'threads' ? renderThreadsTab() : renderCharactersTab()}
+            {tab === 'memory' && character ? (
+              <MemoryTab
+                character={character}
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                accent={accent}
+              />
+            ) : tab === 'threads' ? (
+              renderThreadsTab()
+            ) : (
+              renderCharactersTab()
+            )}
           </Animated.View>
 
           {renaming && (

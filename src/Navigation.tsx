@@ -781,6 +781,7 @@ function HomeScreen() {
         <HistoryModal
           visible={showHistory}
           sessions={historySessions}
+          character={activeChatCharacter}
           activeSessionId={activeSessionId}
           quickCharacters={quickCharacters}
           isGroupChat={!!activeGroupChat}

@@ -32,6 +32,9 @@ import {
   getAllFoldersFromDB,
   saveFolderToDB,
   setCharacterFolder,
+  getAllMemoriesFromDB,
+  getMemoriesForScopeFromDB,
+  saveMemoryToDB,
   SessionSummary,
   DBQuickCharacter,
 } from '../Database';
@@ -117,6 +120,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     groups: [],
     folders: [],
     skippedCharacters: [],
+    memories: 0,
   };
 
   const settingsFile = zip.file('Bucket/settings.json');
@@ -318,6 +322,35 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     }
   }
 
+  const importedMemories: Array<{
+    scope: string;
+    text: string;
+    sourceSessionId: string;
+    pinned: boolean;
+  }> = [];
+  const memoriesFile = zip.file('memories.json');
+  if (memoriesFile) {
+    try {
+      const parsed = JSON.parse(await memoriesFile.async('string'));
+      const entries = Array.isArray(parsed?.memories) ? parsed.memories : [];
+      for (const entry of entries) {
+        if (typeof entry?.text !== 'string' || !entry.text.trim()) continue;
+        if (typeof entry?.scope !== 'string') continue;
+        importedMemories.push({
+          scope: entry.scope,
+          text: entry.text.trim(),
+          sourceSessionId:
+            typeof entry.sourceSessionId === 'string'
+              ? entry.sourceSessionId
+              : '',
+          pinned: !!entry.pinned,
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to import memories:', e);
+    }
+  }
+
   const charQcDir = zip.folder('quickcharacters');
   if (charQcDir) {
     const charQcFiles = charQcDir.filter(() => true);
@@ -505,6 +538,48 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     }
   }
   result.sessions = importedSessions;
+
+  for (const memory of importedMemories) {
+    let scopeId = memory.scope;
+    if (scopeId.startsWith('character:')) {
+      const mapped = origIdToNewId.get(scopeId.slice('character:'.length));
+      if (!mapped) continue;
+      scopeId = `character:${mapped}`;
+    } else if (scopeId.startsWith('session:')) {
+      const sessionId = scopeId.slice('session:'.length);
+      if (
+        !existingSessionIds.has(sessionId) &&
+        !importedSessions.some(session => session.id === sessionId)
+      ) {
+        continue;
+      }
+    } else {
+      continue;
+    }
+    try {
+      const existing = await getMemoriesForScopeFromDB(scopeId);
+      const key = memory.text.toLowerCase();
+      if (existing.some(item => item.text.trim().toLowerCase() === key)) {
+        continue;
+      }
+      const now = Date.now();
+      await saveMemoryToDB({
+        id: generateId(),
+        scopeId,
+        text: memory.text,
+        vector: [],
+        vectorKey: '',
+        sourceSessionId: memory.sourceSessionId,
+        createdAt: now,
+        updatedAt: now,
+        lastUsedAt: 0,
+        pinned: memory.pinned,
+      });
+      result.memories++;
+    } catch (e) {
+      console.warn('Failed to import memory:', e);
+    }
+  }
 
   await restoreQuickCharacterIcons(zip, result.quickCharacters, existingQcIds);
 
@@ -740,6 +815,36 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
     }
     for (const groupId of options.groupIds) {
       await exportSessions(await getSessionsForGroupChat(groupId));
+    }
+
+    const memories = (await getAllMemoriesFromDB()).filter(memory => {
+      if (memory.scopeId.startsWith('character:')) {
+        return options.characterIds.includes(
+          memory.scopeId.slice('character:'.length),
+        );
+      }
+      if (memory.scopeId.startsWith('session:')) {
+        return exportedSessionIds.has(memory.scopeId.slice('session:'.length));
+      }
+      return false;
+    });
+    if (memories.length > 0) {
+      zip.file(
+        'memories.json',
+        JSON.stringify(
+          {
+            version: 1,
+            memories: memories.map(memory => ({
+              scope: memory.scopeId,
+              text: memory.text,
+              sourceSessionId: memory.sourceSessionId,
+              pinned: memory.pinned,
+            })),
+          },
+          null,
+          2,
+        ),
+      );
     }
   }
 

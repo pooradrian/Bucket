@@ -28,6 +28,18 @@ import {
   visibleContent,
 } from './thinking';
 import Carousel from './components/Carousel';
+import MemoryBackfillModal from './components/MemoryBackfillModal';
+import { formatRagDuration, parseRagInfo } from './ragInfo';
+import { loadPromptConfig } from './PromptHandler';
+import type { PromptConfig, RetrievalInfo } from './PromptHandler';
+import { getKV, getMemoryCountFromDB, setKV } from './Database';
+import {
+  getMemoryConfig,
+  loadMemorySettings,
+  memoryScopeId,
+  MemorySettings,
+  MEMORY_MIN_MESSAGES_FOR_BACKFILL,
+} from './Memory';
 
 const DOUBLE_TAP_DELAY_MS = 300;
 
@@ -65,9 +77,51 @@ interface MessageBubbleProps {
   onDelete: (msg: ChatMessage) => void;
   onRegenerate: () => void;
   onRetry: () => void;
+  livePhase?: 'rag' | 'generating';
+  liveRag?: RetrievalInfo | null;
 }
 
-function TypingIndicator({ st }: { st: ReturnType<typeof useTheme> }) {
+function RagHeader({
+  rag,
+  st,
+  expanded,
+  onToggle,
+}: {
+  rag: RetrievalInfo;
+  st: ReturnType<typeof useTheme>;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <TouchableOpacity onPress={onToggle} activeOpacity={0.7}>
+        <Text style={st.thinkingLabel}>
+          {expanded ? '▾ ' : '▸ '}RAG took {formatRagDuration(rag.ms)}
+        </Text>
+      </TouchableOpacity>
+      {expanded &&
+        (rag.results.length > 0 ? (
+          rag.results.map((result, index) => (
+            <Text key={index} style={st.thinkingBody}>
+              • {result}
+            </Text>
+          ))
+        ) : (
+          <Text style={st.thinkingBody}>No entries matched.</Text>
+        ))}
+    </>
+  );
+}
+
+function TypingIndicator({
+  st,
+  label,
+  rag,
+}: {
+  st: ReturnType<typeof useTheme>;
+  label?: string;
+  rag?: RetrievalInfo | null;
+}) {
   const opacities = useRef([
     new Animated.Value(0.3),
     new Animated.Value(0.3),
@@ -97,14 +151,28 @@ function TypingIndicator({ st }: { st: ReturnType<typeof useTheme> }) {
     return () => composite.stop();
   }, [opacities]);
 
+  const [ragExpanded, setRagExpanded] = useState(false);
+
   return (
     <View style={[st.messageContainer, st.messageContainerAssistant]}>
       <View style={[st.bubble, st.bubbleAssistant, st.typingBubble]}>
-        <View style={st.typingDots}>
-          {opacities.map((val, i) => (
-            <Animated.View key={i} style={[st.typingDot, { opacity: val }]} />
-          ))}
-        </View>
+        {rag ? (
+          <RagHeader
+            rag={rag}
+            st={st}
+            expanded={ragExpanded}
+            onToggle={() => setRagExpanded(v => !v)}
+          />
+        ) : null}
+        {label ? (
+          <Text style={st.thinkingLabel}>{label}</Text>
+        ) : (
+          <View style={st.typingDots}>
+            {opacities.map((val, i) => (
+              <Animated.View key={i} style={[st.typingDot, { opacity: val }]} />
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -134,9 +202,12 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   onDelete,
   onRegenerate,
   onRetry,
+  livePhase,
+  liveRag,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const showThinking = useAppStore(s => s.appSettings.showThinking);
+  const showRag = useAppStore(s => s.appSettings.showRag);
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
   const groupCharDisplay = useAppStore(s => s.appSettings.showGroupCharNames);
   const isUser = item.role === 'user';
@@ -147,6 +218,12 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   const thought = splitThinking(item.content);
   const showThoughtBlock =
     thought.hasThinking && (showThinking || !thought.answer);
+  const rag =
+    isStreamingMsg || isTyping
+      ? (liveRag ?? null)
+      : parseRagInfo(item.requestInfo);
+  const showRagBlock = !!rag && showRag && !isUser && !isEditing;
+  const [ragExpanded, setRagExpanded] = useState(false);
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [thinkElapsed, setThinkElapsed] = useState(0);
   const openSinceRef = useRef(0);
@@ -200,7 +277,13 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   }
 
   if (isTyping) {
-    return <TypingIndicator st={st} />;
+    return (
+      <TypingIndicator
+        st={st}
+        label={livePhase === 'rag' && !rag ? 'rag…' : undefined}
+        rag={showRag ? rag : null}
+      />
+    );
   }
 
   const showAvatar =
@@ -268,6 +351,14 @@ const MessageBubble = React.memo(function MessageBubbleInner({
         }}
         style={[st.bubble, isUser ? st.bubbleUser : st.bubbleAssistant]}
       >
+        {showRagBlock && rag ? (
+          <RagHeader
+            rag={rag}
+            st={st}
+            expanded={ragExpanded}
+            onToggle={() => setRagExpanded(v => !v)}
+          />
+        ) : null}
         {isEditing ? (
           <>
             <TextInput
@@ -450,6 +541,8 @@ export default function ChatHandler({
     sending,
     isStreaming,
     streamingContent,
+    streamingPhase,
+    streamingRag,
     selectedMessageId,
     setSelectedMessageId,
     editingMessageId,
@@ -684,6 +777,54 @@ export default function ChatHandler({
     groupCharDisplay === 'avatar' || groupCharDisplay === 'both';
   const showName = groupCharDisplay === 'name' || groupCharDisplay === 'both';
 
+  const checkedBackfillRef = useRef<string | null>(null);
+  const [backfillRequest, setBackfillRequest] = useState<{
+    sessionId: string;
+    characterName: string;
+    scopeId: string;
+    settings: MemorySettings;
+    config: PromptConfig;
+    messages: ChatMessage[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!session || isGroupChat || !character) return;
+    if (checkedBackfillRef.current === session.id) return;
+    if (session.messages.length < MEMORY_MIN_MESSAGES_FOR_BACKFILL) return;
+    checkedBackfillRef.current = session.id;
+    const askedKey = `memoryBackfillAsked:${session.id}`;
+    if (getKV(askedKey)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const settings = loadMemorySettings(character.id);
+        if (cancelled || !settings.enabled) return;
+        const config = await loadPromptConfig();
+        const memoryConfig = getMemoryConfig(settings, config);
+        const scopeId = memoryScopeId(
+          memoryConfig.scope,
+          character.id,
+          session.id,
+        );
+        if (getMemoryCountFromDB(scopeId) > 0) return;
+        setKV(askedKey, '1');
+        setBackfillRequest({
+          sessionId: session.id,
+          characterName: character.name,
+          scopeId,
+          settings,
+          config,
+          messages: session.messages,
+        });
+      } catch (e) {
+        console.warn('Memory backfill check failed:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, isGroupChat, character]);
+
   const scrollOffsetRef = useRef(0);
 
   const [showGoDown, setShowGoDown] = useState(false);
@@ -799,6 +940,8 @@ export default function ChatHandler({
           onDelete={handleDeleteMessage}
           onRegenerate={handleRegenerate}
           onRetry={handleRetryError}
+          livePhase={streamingPhase}
+          liveRag={streamingRag}
         />
       );
     },
@@ -808,6 +951,8 @@ export default function ChatHandler({
       sending,
       isStreaming,
       replacingMessageId,
+      streamingPhase,
+      streamingRag,
       st,
       variantIndexMap,
       carouselMessageId,
@@ -1217,8 +1362,23 @@ export default function ChatHandler({
           sending={sending}
           isStreaming={isStreaming}
           streamingContent={streamingContent}
+          streamingPhase={streamingPhase}
+          streamingRag={streamingRag}
           replacingMessageId={replacingMessageId}
           onStop={handleStop}
+        />
+      )}
+      {backfillRequest && (
+        <MemoryBackfillModal
+          visible
+          sessionId={backfillRequest.sessionId}
+          characterName={backfillRequest.characterName}
+          scopeId={backfillRequest.scopeId}
+          messages={backfillRequest.messages}
+          settings={backfillRequest.settings}
+          config={backfillRequest.config}
+          accent={accentColor}
+          onClose={() => setBackfillRequest(null)}
         />
       )}
     </>

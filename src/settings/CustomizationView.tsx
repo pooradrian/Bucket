@@ -240,6 +240,14 @@ export default function CustomizationView({
       />
 
       <BoolToggle
+        label={LABELS.showRag}
+        note="Shows how long lorebook and memory retrieval took above replies, with the retrieved entries."
+        value={values.showRag === 'true'}
+        accent={values.accentColor}
+        onChange={next => handleChange('showRag', next ? 'true' : 'false')}
+      />
+
+      <BoolToggle
         label={LABELS.forceItalic}
         note="Skews *italic* text geometrically for fonts without an italic face."
         value={values.forceItalic === 'true'}
