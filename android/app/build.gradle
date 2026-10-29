@@ -99,8 +99,8 @@ android {
         applicationId "com.bucket"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10801
-        versionName "1.8.1"
+        versionCode 10802
+        versionName "1.8.2"
 
         externalNativeBuild {
             cmake {
