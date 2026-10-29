@@ -4,10 +4,20 @@ jest.mock('../src/PromptHandler', () => ({
   sendToGroupLLM: jest.fn(),
   sendToQCLLM: jest.fn(),
   stripSpeakerNamePrefixes: (text: string) => text,
+  historyWithoutLatestUserTurn: (history: unknown) => history,
+}));
+
+jest.mock('@react-native-documents/picker', () => ({
+  pick: jest.fn(),
+  types: {},
+  saveDocuments: jest.fn(),
+  isKnownType: jest.fn(),
 }));
 
 jest.mock('../src/Database', () => ({
   addMessage: jest.fn().mockResolvedValue(undefined),
+  getKV: jest.fn(() => null),
+  setKV: jest.fn(),
   generateId: jest.fn().mockReturnValue('generated-id'),
   getSessionById: jest.fn().mockResolvedValue(null),
   setLastReplyCharacterId: jest.fn(),
@@ -35,8 +45,8 @@ jest.mock('../src/store', () => ({
   },
 }));
 
-import { updateMessageWithVariants } from '../src/Database';
-import { sendToGroupLLM } from '../src/PromptHandler';
+import { addMessage, updateMessageWithVariants } from '../src/Database';
+import { sendToGroupLLM, sendToLLM } from '../src/PromptHandler';
 import {
   GenerationRequest,
   startGeneration,
@@ -45,6 +55,8 @@ import {
 } from '../src/GenerationEngine';
 
 const mockSendToGroupLLM = sendToGroupLLM as jest.Mock;
+const mockSendToLLM = sendToLLM as jest.Mock;
+const mockAddMessage = addMessage as jest.Mock;
 const mockUpdate = updateMessageWithVariants as jest.Mock;
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -122,4 +134,52 @@ it('keeps the reply speaker when a regeneration is stopped', async () => {
     undefined,
     'char-2',
   );
+});
+
+it('stores retrieval timing and results with the reply', async () => {
+  mockSendToLLM.mockImplementation(
+    async (
+      _character: unknown,
+      _userText: unknown,
+      _messages: unknown,
+      _config: unknown,
+      _onToken: unknown,
+      _lorebooks: unknown,
+      _controller: unknown,
+      _continueMode: unknown,
+      _quickCharacters: unknown,
+      _memoryContext: unknown,
+      onRetrieval: (info: {
+        ms: number;
+        results: string[];
+      }) => void,
+    ) => {
+      onRetrieval({ ms: 42, results: ['Elves live in Sylvara.'] });
+      return {
+        content: 'The elves wave.',
+        request: { url: 'http://example.test', body: { messages: [] } },
+        metrics: { promptBuildMs: 1, ttfbMs: 2, bodyReadMs: 3, totalMs: 4 },
+        retrieval: { ms: 42, results: ['Elves live in Sylvara.'] },
+      };
+    },
+  );
+
+  startGeneration({
+    sessionId: 'session-1',
+    character: alice,
+    groupChat: null,
+    groupMembers: [],
+    quickCharacters: [],
+    messages: [],
+    userText: 'hi',
+  });
+
+  await settle();
+  await settle();
+
+  expect(mockAddMessage).toHaveBeenCalled();
+  const saved = mockAddMessage.mock.calls[0][1];
+  const requestInfo = JSON.parse(saved.requestInfo);
+  expect(requestInfo.rag.results).toEqual(['Elves live in Sylvara.']);
+  expect(typeof requestInfo.rag.ms).toBe('number');
 });

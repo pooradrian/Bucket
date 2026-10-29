@@ -30,6 +30,11 @@ export interface TimingMetrics {
   totalMs: number;
 }
 
+export interface RetrievalInfo {
+  ms: number;
+  results: string[];
+}
+
 export interface Persona {
   id: string;
   name: string;
@@ -97,7 +102,8 @@ $GROUPINSTRUCTION$
 
 $CHARBLOCK$
 
-$LOREBOOK$`,
+$LOREBOOK$
+$MEMORY$`,
   suffix: 'Now write the next message as $QUICKCHARNAME$.',
   quickCharacterPrompt: DEFAULT_QUICK_CHARACTER_PROMPT,
   userDescription: '',
@@ -208,6 +214,12 @@ export const PLACEHOLDERS: Placeholder[] = [
   },
   {
     group: 'Conversation',
+    key: '$MEMORY$',
+    description:
+      'Long-term memories retrieved for this message. Empty when long-term memory is off or finds nothing',
+  },
+  {
+    group: 'Conversation',
     key: '$GROUPINSTRUCTION$',
     description:
       'Who is speaking in a group chat and who to write as. Empty outside group chats',
@@ -263,6 +275,14 @@ const LEGACY_PREFIX = 'You are a roleplay companion.';
 
 const LEGACY_SUFFIX = 'Now write the next message as the assistant.';
 
+const LEGACY_DEFAULT_PREFIX = `You are a roleplay companion.
+$USRDESC$
+$GROUPINSTRUCTION$
+
+$CHARBLOCK$
+
+$LOREBOOK$`;
+
 const PREVIOUS_QUICK_CHARACTER_PROMPT = `You are roleplaying as $QUICKCHARNAME$.
 
 Write this reply as $QUICKCHARNAME$ and nobody else:
@@ -287,6 +307,10 @@ Write this reply as $CHARNAME$ and nobody else:
 
 function migratePromptConfig(config: PromptConfig): boolean {
   let changed = false;
+  if (config.prefix === LEGACY_DEFAULT_PREFIX) {
+    config.prefix = DEFAULT_PROMPT_CONFIG.prefix;
+    changed = true;
+  }
   if (config.suffix === LEGACY_SUFFIX) {
     config.suffix = DEFAULT_PROMPT_CONFIG.suffix;
     changed = true;
@@ -587,6 +611,7 @@ interface PromptExtras {
   charBlock?: string;
   groupInstruction?: string;
   lorebook?: string;
+  memory?: string;
 }
 
 function resolvePlaceholders(
@@ -633,6 +658,7 @@ function resolvePlaceholders(
     ['$QUICKCHARBLOCK$', extras.qc ? buildQuickCharBlock(extras.qc) : ''],
     ['$USRDESC$', userDescription],
     ['$LOREBOOK$', extras.lorebook ?? ''],
+    ['$MEMORY$', extras.memory ?? ''],
     ['$GROUPINSTRUCTION$', extras.groupInstruction ?? ''],
   ];
 
@@ -726,9 +752,14 @@ export function buildPrompt(
   lorebookContext?: string,
   qc?: QuickCharacterFields,
   quickCharacters?: QuickCharacterFields[],
+  memoryContext?: string,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(character, config);
-  const extras: PromptExtras = { qc, lorebook: lorebookContext };
+  const extras: PromptExtras = {
+    qc,
+    lorebook: lorebookContext,
+    memory: memoryContext,
+  };
   const resolvedPrefix = resolvePlaceholders(
     config.prefix,
     character,
@@ -777,6 +808,7 @@ export function buildGroupPrompt(
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
   lorebookContext?: string,
+  memoryContext?: string,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(selectedCharacter, config);
   const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
@@ -785,6 +817,7 @@ export function buildGroupPrompt(
     charBlock: charBlocks,
     groupInstruction,
     lorebook: lorebookContext,
+    memory: memoryContext,
   };
 
   const resolvedPrefix = resolvePlaceholders(
@@ -835,9 +868,14 @@ export function buildContinuePrompt(
   lorebookContext?: string,
   qc?: QuickCharacterFields,
   quickCharacters?: QuickCharacterFields[],
+  memoryContext?: string,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(character, config);
-  const extras: PromptExtras = { qc, lorebook: lorebookContext };
+  const extras: PromptExtras = {
+    qc,
+    lorebook: lorebookContext,
+    memory: memoryContext,
+  };
   const resolvedPrefix = resolvePlaceholders(
     config.prefix,
     character,
@@ -888,11 +926,16 @@ export function buildGroupContinuePrompt(
   selectedCharacter: Character,
   history: ChatMessage[],
   config: PromptConfig = DEFAULT_PROMPT_CONFIG,
+  memoryContext?: string,
 ): ChatMessageObject[] {
   const userDescription = resolveUserDescription(selectedCharacter, config);
   const charBlocks = characters.map(c => buildCharBlock(c)).join('\n\n---\n\n');
   const groupInstruction = `You are roleplaying as multiple characters in a group conversation. The characters are:\n${characters.map(c => `- ${c.name}`).join('\n')}\n\nThe user has selected **${selectedCharacter.name}** to respond next. Write ONLY as ${selectedCharacter.name}. Stay in character and respond naturally to the conversation.\n\nIMPORTANT: In the conversation history below, messages from each character are prefixed with their name in brackets, like [CharacterName]: message. Use this to understand who said what.`;
-  const extras: PromptExtras = { charBlock: charBlocks, groupInstruction };
+  const extras: PromptExtras = {
+    charBlock: charBlocks,
+    groupInstruction,
+    memory: memoryContext,
+  };
 
   const resolvedPrefix = resolvePlaceholders(
     config.prefix,
@@ -948,12 +991,21 @@ export async function sendToLLM(
   controller?: AbortController,
   continueMode: boolean = false,
   quickCharacters?: QuickCharacterFields[],
-): Promise<{ content: string; request: RawRequest; metrics: TimingMetrics }> {
+  memoryContext?: string,
+  onRetrieval?: (info: RetrievalInfo) => void,
+): Promise<{
+  content: string;
+  request: RawRequest;
+  metrics: TimingMetrics;
+  retrieval: RetrievalInfo;
+}> {
   const buildStart = performance.now();
 
   const resolved = await resolveProvider(config);
   history = historyWithoutLatestUserTurn(history, userMessage);
 
+  const retrievalStart = performance.now();
+  let retrieval: RetrievalInfo = { ms: 0, results: [] };
   let lorebookContext: string | undefined;
   if (lorebooks && lorebooks.length > 0) {
     const combinedEntries: { id: number; text: string }[] = [];
@@ -988,8 +1040,9 @@ export async function sendToLLM(
         historyMessages.push({ role: 'user', content: userMessage });
       }
 
+      let relevant: string[] = [];
       try {
-        const relevant = await retrieveRelevantLorebook(
+        relevant = await retrieveRelevantLorebook(
           historyMessages,
           combinedLorebook,
           ragConfig,
@@ -999,8 +1052,13 @@ export async function sendToLLM(
       } catch (e) {
         console.warn('Lorebook retrieval failed:', e);
       }
+      retrieval = {
+        ms: Math.round(performance.now() - retrievalStart),
+        results: relevant,
+      };
     }
   }
+  onRetrieval?.(retrieval);
 
   const messages = continueMode
     ? buildContinuePrompt(
@@ -1010,6 +1068,7 @@ export async function sendToLLM(
         lorebookContext,
         undefined,
         quickCharacters,
+        memoryContext,
       )
     : buildPrompt(
         character,
@@ -1019,6 +1078,7 @@ export async function sendToLLM(
         lorebookContext,
         undefined,
         quickCharacters,
+        memoryContext,
       );
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(
@@ -1033,7 +1093,7 @@ export async function sendToLLM(
     ...(quickCharacters ?? []).map(q => q.name),
   ]);
   result.metrics.promptBuildMs = promptBuildMs;
-  return result;
+  return { ...result, retrieval };
 }
 
 export async function sendToGroupLLM(

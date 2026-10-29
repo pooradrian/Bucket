@@ -149,9 +149,34 @@ export interface ScoredEntry {
 export const MIN_SIMILARITY = 0.25;
 const QUERY_MESSAGE_COUNT = 3;
 const QUERY_MAX_CHARS = 4000;
+const EMBEDDING_CACHE_LIMIT = 512;
 const EMBEDDING_CACHE = new Map<string, number[]>();
 
+export function embeddingTarget(
+  ragConfig: RAGConfig,
+  promptConfig: PromptConfig,
+): { local: boolean; model: string } {
+  const local = ragConfig.source === 'local';
+  return {
+    local,
+    model: local
+      ? ragConfig.localModel?.trim() || ''
+      : ragConfig.model?.trim() || promptConfig.model,
+  };
+}
+
+export function embeddingKey(
+  ragConfig: RAGConfig,
+  promptConfig: PromptConfig,
+): string {
+  const target = embeddingTarget(ragConfig, promptConfig);
+  return JSON.stringify([target.local ? 'local' : 'api', target.model]);
+}
+
 export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length === 0 || a.length !== b.length) {
+    return 0;
+  }
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -179,12 +204,9 @@ export async function embedTexts(
   ragConfig: RAGConfig,
   promptConfig: PromptConfig,
 ): Promise<number[][]> {
-  const local = ragConfig.source === 'local';
-  const model = local
-    ? ragConfig.localModel?.trim() || ''
-    : ragConfig.model?.trim() || promptConfig.model;
+  const target = embeddingTarget(ragConfig, promptConfig);
   const cacheKey = (text: string) =>
-    `${local ? 'local' : 'api'}\u0000${model}\u0000${text}`;
+    `${target.local ? 'local' : 'api'}\u0000${target.model}\u0000${text}`;
   const cached = texts.map(t => EMBEDDING_CACHE.get(cacheKey(t)));
   const missingIdx: number[] = [];
   cached.forEach((v, i) => {
@@ -192,9 +214,9 @@ export async function embedTexts(
   });
   if (missingIdx.length > 0) {
     const inputs = missingIdx.map(i => texts[i]);
-    const fetched = local
-      ? await embedLocal(inputs, model)
-      : await getEmbeddings(inputs, model, promptConfig);
+    const fetched = target.local
+      ? await embedLocal(inputs, target.model)
+      : await getEmbeddings(inputs, target.model, promptConfig);
     if (fetched.length !== inputs.length) {
       throw new Error(
         `Embeddings returned ${fetched.length} vectors for ${inputs.length} inputs`,
@@ -203,6 +225,12 @@ export async function embedTexts(
     missingIdx.forEach((textIdx, i) => {
       const vector = fetched[i];
       EMBEDDING_CACHE.set(cacheKey(texts[textIdx]), vector);
+      if (EMBEDDING_CACHE.size > EMBEDDING_CACHE_LIMIT) {
+        const oldest = EMBEDDING_CACHE.keys().next().value;
+        if (oldest) {
+          EMBEDDING_CACHE.delete(oldest);
+        }
+      }
       cached[textIdx] = vector;
     });
   }

@@ -2,9 +2,10 @@ import { open, NitroSQLiteConnection } from 'react-native-nitro-sqlite';
 import { ChatSession, ChatMessage, ReplyVariant } from './useChat';
 import { encrypt, decrypt } from './Crypto';
 import { LorebookEntry, LorebookState } from './RAGHandler';
+import type { StoredMemory } from './Memory';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 17;
+const CURRENT_VERSION = 18;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -334,6 +335,26 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
               OR character_id NOT IN (SELECT id FROM characters)
             )
         `);
+      }
+
+      if (v === 18) {
+        conn.execute(`
+          CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY NOT NULL,
+            scope_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            vector TEXT DEFAULT '',
+            vector_key TEXT DEFAULT '',
+            source_session_id TEXT DEFAULT '',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL DEFAULT 0,
+            pinned INTEGER NOT NULL DEFAULT 0
+          )
+        `);
+        conn.execute(
+          'CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope_id)',
+        );
       }
 
       conn.execute(`PRAGMA user_version = ${v}`);
@@ -696,6 +717,15 @@ export function deleteSession(sessionId: string): void {
     'DELETE FROM quick_characters WHERE session_id = ? AND starred = 0',
     [sessionId],
   );
+  d.execute('DELETE FROM memories WHERE scope_id = ?', [`session:${sessionId}`]);
+  d.execute(
+    'DELETE FROM kv_store WHERE key IN (?, ?, ?)',
+    [
+      `memorySeq:${sessionId}`,
+      `memoryQueries:${sessionId}`,
+      `memoryBackfillAsked:${sessionId}`,
+    ],
+  );
   d.execute('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
   for (const [id, entry] of searchCache) {
     if (entry.sessionId === sessionId) {
@@ -1026,6 +1056,243 @@ export async function getLorebookEntriesFromDB(
     .map(r => r.value);
 }
 
+function parseVector(raw: string): number[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((n): n is number => typeof n === 'number');
+  } catch {
+    return [];
+  }
+}
+
+async function decryptMemoryRow(
+  row: Record<string, unknown>,
+): Promise<StoredMemory | null> {
+  try {
+    return {
+      id: row.id as string,
+      scopeId: row.scope_id as string,
+      text: await decrypt(row.text as string),
+      vector: parseVector(
+        row.vector ? await decrypt(row.vector as string) : '',
+      ),
+      vectorKey: (row.vector_key as string) || '',
+      sourceSessionId: (row.source_session_id as string) || '',
+      createdAt: row.created_at as number,
+      updatedAt: row.updated_at as number,
+      lastUsedAt: row.last_used_at as number,
+      pinned: (row.pinned as number) === 1,
+    };
+  } catch (e) {
+    console.warn('Failed to decrypt memory row:', e);
+    return null;
+  }
+}
+
+const MEMORY_COLUMNS =
+  'id, scope_id, text, vector, vector_key, source_session_id, created_at, updated_at, last_used_at, pinned';
+
+export async function saveMemoryToDB(memory: StoredMemory): Promise<void> {
+  const d = initDB();
+  d.execute(
+    `INSERT OR REPLACE INTO memories (${MEMORY_COLUMNS})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      memory.id,
+      memory.scopeId,
+      await encrypt(memory.text),
+      memory.vector.length > 0
+        ? await encrypt(JSON.stringify(memory.vector))
+        : '',
+      memory.vectorKey,
+      memory.sourceSessionId,
+      memory.createdAt,
+      memory.updatedAt,
+      memory.lastUsedAt,
+      memory.pinned ? 1 : 0,
+    ],
+  );
+}
+
+export async function updateMemoryInDB(
+  id: string,
+  patch: {
+    text?: string;
+    vector?: number[];
+    vectorKey?: string;
+    pinned?: boolean;
+  },
+): Promise<void> {
+  const d = initDB();
+  const sets: string[] = [];
+  const params: (string | number)[] = [];
+  if (patch.text !== undefined) {
+    sets.push('text = ?');
+    params.push(await encrypt(patch.text));
+  }
+  if (patch.vector !== undefined) {
+    sets.push('vector = ?');
+    params.push(
+      patch.vector.length > 0 ? await encrypt(JSON.stringify(patch.vector)) : '',
+    );
+    sets.push('vector_key = ?');
+    params.push(patch.vector.length > 0 ? patch.vectorKey || '' : '');
+  }
+  if (patch.pinned !== undefined) {
+    sets.push('pinned = ?');
+    params.push(patch.pinned ? 1 : 0);
+  }
+  if (sets.length === 0) {
+    return;
+  }
+  if (patch.text !== undefined && patch.vector === undefined) {
+    sets.push("vector = ''", "vector_key = ''");
+  }
+  sets.push('updated_at = ?');
+  params.push(Date.now());
+  params.push(id);
+  d.execute(`UPDATE memories SET ${sets.join(', ')} WHERE id = ?`, params);
+}
+
+export function deleteMemoryFromDB(id: string): void {
+  initDB().execute('DELETE FROM memories WHERE id = ?', [id]);
+}
+
+export function deleteMemoriesForScopeFromDB(scopeId: string): void {
+  initDB().execute('DELETE FROM memories WHERE scope_id = ?', [scopeId]);
+}
+
+export function getMemoryCountFromDB(scopeId: string): number {
+  const result = initDB().execute(
+    'SELECT COUNT(*) AS count FROM memories WHERE scope_id = ?',
+    [scopeId],
+  );
+  return (result.results?.[0]?.count as number) ?? 0;
+}
+
+export async function getMemoriesForScopeFromDB(
+  scopeId: string,
+): Promise<StoredMemory[]> {
+  const result = initDB().execute(
+    `SELECT ${MEMORY_COLUMNS} FROM memories WHERE scope_id = ? ORDER BY created_at`,
+    [scopeId],
+  );
+  const settled = await Promise.allSettled(
+    (result.results || []).map(row => decryptMemoryRow(row)),
+  );
+  return settled
+    .filter(
+      (r): r is PromiseFulfilledResult<StoredMemory | null> =>
+        r.status === 'fulfilled',
+    )
+    .map(r => r.value)
+    .filter((m): m is StoredMemory => m !== null);
+}
+
+export async function getAllMemoriesFromDB(): Promise<StoredMemory[]> {
+  const result = initDB().execute(
+    `SELECT ${MEMORY_COLUMNS} FROM memories ORDER BY created_at DESC, id`,
+  );
+  const settled = await Promise.allSettled(
+    (result.results || []).map(row => decryptMemoryRow(row)),
+  );
+  return settled
+    .filter(
+      (r): r is PromiseFulfilledResult<StoredMemory | null> =>
+        r.status === 'fulfilled',
+    )
+    .map(r => r.value)
+    .filter((m): m is StoredMemory => m !== null);
+}
+
+export async function getAllMemoryListingsFromDB(): Promise<
+  Array<StoredMemory & { scopeLabel: string }>
+> {
+  const result = initDB().execute(
+    `SELECT m.${MEMORY_COLUMNS.split(', ').join(', m.')},
+       CASE
+         WHEN m.scope_id LIKE 'character:%' THEN COALESCE(c.name, '')
+         WHEN m.scope_id LIKE 'session:%'
+           THEN COALESCE(NULLIF(s.name, ''), c2.name, '')
+         ELSE ''
+       END AS scope_label
+     FROM memories m
+     LEFT JOIN characters c ON m.scope_id = 'character:' || c.id
+     LEFT JOIN chat_sessions s ON m.scope_id = 'session:' || s.id
+     LEFT JOIN characters c2 ON s.character_id = c2.id
+     ORDER BY m.created_at DESC, m.id`,
+  );
+  const settled = await Promise.allSettled(
+    (result.results || []).map(async row => {
+      const memory = await decryptMemoryRow(row);
+      return memory
+        ? { ...memory, scopeLabel: (row.scope_label as string) || '' }
+        : null;
+    }),
+  );
+  return settled
+    .filter(
+      (
+        r,
+      ): r is PromiseFulfilledResult<
+        (StoredMemory & { scopeLabel: string }) | null
+      > => r.status === 'fulfilled',
+    )
+    .map(r => r.value)
+    .filter((m): m is StoredMemory & { scopeLabel: string } => m !== null);
+}
+
+export async function getMemoriesMissingVectorFromDB(
+  scopeId: string,
+  vectorKey: string,
+  limit: number,
+): Promise<StoredMemory[]> {
+  const result = initDB().execute(
+    `SELECT ${MEMORY_COLUMNS} FROM memories
+     WHERE scope_id = ? AND (vector = '' OR vector_key <> ?)
+     ORDER BY created_at DESC LIMIT ?`,
+    [scopeId, vectorKey, limit],
+  );
+  const settled = await Promise.allSettled(
+    (result.results || []).map(row => decryptMemoryRow(row)),
+  );
+  return settled
+    .filter(
+      (r): r is PromiseFulfilledResult<StoredMemory | null> =>
+        r.status === 'fulfilled',
+    )
+    .map(r => r.value)
+    .filter((m): m is StoredMemory => m !== null);
+}
+
+export function touchMemoriesInDB(ids: string[], at: number): void {
+  if (ids.length === 0) {
+    return;
+  }
+  const placeholders = ids.map(() => '?').join(', ');
+  initDB().execute(
+    `UPDATE memories SET last_used_at = ? WHERE id IN (${placeholders})`,
+    [at, ...ids],
+  );
+}
+
+export function pruneMemoriesInDB(scopeId: string, keep: number): number {
+  if (!Number.isFinite(keep) || keep <= 0) {
+    return 0;
+  }
+  const result = initDB().execute(
+    `DELETE FROM memories
+     WHERE scope_id = ? AND pinned = 0 AND id NOT IN (
+       SELECT id FROM memories WHERE scope_id = ?
+       ORDER BY pinned DESC, last_used_at DESC, created_at DESC LIMIT ?
+     )`,
+    [scopeId, scopeId, Math.floor(keep)],
+  );
+  return result.rowsAffected ?? 0;
+}
+
 interface DBCharacter {
   id: string;
   name: string;
@@ -1087,6 +1354,15 @@ export function deleteCharacterFromDB(id: string): void {
             WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = '')
           )`,
       [id, id],
+    );
+    d.execute(
+      `DELETE FROM memories
+       WHERE scope_id = ?
+          OR scope_id IN (
+            SELECT 'session:' || id FROM chat_sessions
+            WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = '')
+          )`,
+      [`character:${id}`, id],
     );
     d.execute(
       "DELETE FROM chat_sessions WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = '')",

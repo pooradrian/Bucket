@@ -14,7 +14,9 @@ import {
   sendToLLM,
   sendToQCLLM,
   stripSpeakerNamePrefixes,
+  historyWithoutLatestUserTurn,
 } from './PromptHandler';
+import type { RetrievalInfo } from './PromptHandler';
 import type { RawRequest } from './Endpoint';
 import {
   applyDisplacements,
@@ -31,6 +33,13 @@ import {
   updateSessionTimestamp,
 } from './Database';
 import { checkAndSummarize, getSummarizationConfig } from './Summarizer';
+import {
+  buildMemoryContext,
+  getMemoryConfig,
+  loadMemorySettings,
+  memoryScopeId,
+  queueMemoryPass,
+} from './Memory';
 import { logEvent } from './EventLogger';
 import { playNotificationSound, vibrateDevice } from './NotificationModule';
 
@@ -63,6 +72,8 @@ export interface GenerationRun {
   startedAt: number;
   content: string;
   thinkingMs?: number;
+  phase: 'rag' | 'generating';
+  rag?: RetrievalInfo;
   replaceMessageId?: string;
 }
 
@@ -93,10 +104,17 @@ function notifyCompletion(): void {
   }
 }
 
-function serializeRequest(request: RawRequest): string {
+function serializeRequest(
+  request: RawRequest,
+  rag?: RetrievalInfo,
+): string {
   const strippedBody = { ...request.body };
   delete (strippedBody as Record<string, unknown>).stream;
-  return JSON.stringify({ url: request.url, body: strippedBody });
+  return JSON.stringify({
+    url: request.url,
+    body: strippedBody,
+    ...(rag ? { rag } : {}),
+  });
 }
 
 function bumpRevision(sessionId: string): void {
@@ -121,6 +139,29 @@ function setRunContent(
         ...state.runs,
         [sessionId]: { ...run, content, thinkingMs: thinkingMs ?? run.thinkingMs },
       },
+    };
+  });
+}
+
+function setRunPhase(
+  sessionId: string,
+  phase: GenerationRun['phase'],
+): void {
+  useGenerationStore.setState(state => {
+    const run = state.runs[sessionId];
+    if (!run || run.phase === phase) return state;
+    return {
+      runs: { ...state.runs, [sessionId]: { ...run, phase } },
+    };
+  });
+}
+
+function setRunRag(sessionId: string, rag: RetrievalInfo): void {
+  useGenerationStore.setState(state => {
+    const run = state.runs[sessionId];
+    if (!run) return state;
+    return {
+      runs: { ...state.runs, [sessionId]: { ...run, rag } },
     };
   });
 }
@@ -186,6 +227,7 @@ async function runGeneration(
   let raw = '';
   let displayed = '';
   let thinkingMs: number | undefined;
+  let rag: RetrievalInfo | undefined;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   const thinkStart = Date.now();
 
@@ -215,6 +257,51 @@ async function runGeneration(
     const config = await loadPromptConfig();
     rules = parseDisplacements(config.wordDisplacements);
     seed = Math.floor(Math.random() * 0x7fffffff);
+
+    const memorySettings = character
+      ? loadMemorySettings(character.id)
+      : undefined;
+    const memoryConfig = memorySettings
+      ? getMemoryConfig(memorySettings, config)
+      : null;
+    const memoryScope =
+      memoryConfig?.enabled && character && !qc && !groupChat
+        ? memoryScopeId(memoryConfig.scope, character.id, sessionId)
+        : null;
+    const wantsRetrieval =
+      !qc && !groupChat && (!!memoryScope || (lorebooks?.length ?? 0) > 0);
+    setRunPhase(sessionId, wantsRetrieval ? 'rag' : 'generating');
+    const ragStart = performance.now();
+    const memoryResults: string[] = [];
+    let memoryContext: string | undefined;
+    if (memoryScope && character) {
+      const priorMessages = historyWithoutLatestUserTurn(messages, userText);
+      try {
+        const memory = await buildMemoryContext({
+          scopeId: memoryScope,
+          sessionId,
+          priorLastMessageId: priorMessages[priorMessages.length - 1]?.id,
+          userText,
+          settings: memorySettings!,
+          config,
+          continueMode: request.continueMode,
+        });
+        memoryContext = memory.block;
+        memoryResults.push(...memory.results);
+      } catch (e) {
+        console.warn('Memory retrieval failed:', e);
+      }
+    }
+
+    const onRetrieval = (info: RetrievalInfo) => {
+      if (!wantsRetrieval) return;
+      rag = {
+        ms: Math.round(performance.now() - ragStart),
+        results: [...memoryResults, ...info.results],
+      };
+      setRunRag(sessionId, rag);
+      setRunPhase(sessionId, 'generating');
+    };
 
     let result;
     if (groupChat && replyCharacter) {
@@ -251,6 +338,8 @@ async function runGeneration(
         controller,
         request.continueMode,
         quickCharacters,
+        memoryContext,
+        onRetrieval,
       );
     } else {
       throw new Error('No character selected for generation.');
@@ -263,8 +352,9 @@ async function runGeneration(
       );
     }
 
+    const replyMessageId = request.replaceMessageId ?? generateId();
     const assistantUpdatedAt = Date.now();
-    const requestInfo = serializeRequest(result.request);
+    const requestInfo = serializeRequest(result.request, rag);
     if (thinkingMs == null) {
       const split = splitThinking(content);
       if (split.hasThinking && !split.open) {
@@ -285,7 +375,7 @@ async function runGeneration(
       updateSessionTimestamp(sessionId, assistantUpdatedAt);
     } else {
       const assistantMessage: ChatMessage = {
-        id: generateId(),
+        id: replyMessageId,
         role: 'assistant',
         content,
         timestamp: assistantUpdatedAt,
@@ -322,6 +412,25 @@ async function runGeneration(
       }
     }
 
+    if (memoryScope && character && memorySettings) {
+      queueMemoryPass({
+        sessionId,
+        characterName: character.name,
+        scopeId: memoryScope,
+        messages: [
+          ...messages,
+          {
+            id: replyMessageId,
+            role: 'assistant',
+            content,
+            timestamp: assistantUpdatedAt,
+          },
+        ],
+        settings: memorySettings,
+        config,
+      }).catch(e => console.warn('Memory pass failed:', e));
+    }
+
     bumpRevision(sessionId);
   } catch (e: unknown) {
     if (flushTimer) {
@@ -333,7 +442,7 @@ async function runGeneration(
       const partial = displayed;
       const cancelledRequest = (e as Error & { request?: RawRequest }).request;
       const cancelRequestInfo = cancelledRequest
-        ? serializeRequest(cancelledRequest)
+        ? serializeRequest(cancelledRequest, rag)
         : undefined;
       const partialSplit = splitThinking(partial);
       const cancelledThinkingMs =
@@ -413,6 +522,7 @@ export const useGenerationStore = create<GenerationStore>((set, get) => ({
           icon: target?.icon,
           startedAt: Date.now(),
           content: '',
+          phase: 'generating',
           replaceMessageId: request.replaceMessageId,
         },
       },

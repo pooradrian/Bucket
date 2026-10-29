@@ -28,6 +28,7 @@ import {
 } from './toolCommands';
 import { dbCommand, DB_HELP_TEXT } from './dbCommands';
 import { embedCommand, ragCommand } from './ragCommands';
+import { memCommand, MEMORY_HELP_TEXT } from './memoryCommands';
 import { MIN_SIMILARITY } from '../RAGHandler';
 
 const GENERAL_HELP = [
@@ -72,6 +73,7 @@ const GENERAL_HELP = [
   'RAG / Embeddings:',
   '  embed [text]                      Test the embeddings endpoint',
   '  rag <id> <query>                  Rank lorebook entries vs query',
+  '  mem [sub]                         Long-term memory tools (mem help)',
   '',
   'Theme & Settings:',
   '  settings                          Show current app settings',
@@ -128,6 +130,7 @@ export const COMMANDS: Record<string, CommandHandler> = {
   lorebook: lorebookCommand,
   embed: embedCommand,
   rag: ragCommand,
+  mem: memCommand,
   test: testCommand,
   api: apiCommand,
   tiktoken: tiktokenCommand,
@@ -171,6 +174,8 @@ export async function executeDebuggerCommand(
         io.log('info', LOREBOOK_HELP);
       } else if (sub === 'rag' || sub === 'embed') {
         io.log('info', RAG_HELP);
+      } else if (sub === 'mem' || sub === 'memory') {
+        io.log('info', MEMORY_HELP_TEXT);
       } else {
         io.log('info', GENERAL_HELP);
       }

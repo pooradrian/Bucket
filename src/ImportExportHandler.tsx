@@ -110,6 +110,9 @@ export default function ImportExportHandler({
         if (imported.folders.length > 0) {
           message += `, ${imported.folders.length} folders`;
         }
+        if (imported.memories > 0) {
+          message += `, ${imported.memories} memories`;
+        }
         if (imported.settings) {
           message += ', and settings';
         }

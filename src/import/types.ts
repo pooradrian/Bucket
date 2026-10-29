@@ -18,6 +18,7 @@ export interface BukImportResult {
   groups: GroupChat[];
   folders: Folder[];
   skippedCharacters: string[];
+  memories: number;
 }
 
 export interface ImportResult {

@@ -63,6 +63,7 @@ export interface AppSettings extends ThemePreset {
   showCharacterIcons: boolean;
   showGroupCharNames: 'avatar' | 'both' | 'name';
   showThinking: boolean;
+  showRag: boolean;
   forceItalic: boolean;
   themeMode: 'dark' | 'light';
   debugLogging: boolean;
@@ -116,6 +117,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showCharacterIcons: true,
   showGroupCharNames: 'both',
   showThinking: true,
+  showRag: true,
   forceItalic: false,
   themeMode: 'dark',
   dynamicIcon: false,
@@ -223,6 +225,9 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   if ('showThinking' in saved) {
     result.showThinking =
       saved.showThinking === true || saved.showThinking === 'true';
+  }
+  if ('showRag' in saved) {
+    result.showRag = saved.showRag === true || saved.showRag === 'true';
   }
   result.forceItalic =
     saved.forceItalic === true || saved.forceItalic === 'true';

@@ -27,6 +27,7 @@ import {
   useGenerationStore,
 } from './GenerationEngine';
 import { logEvent } from './EventLogger';
+import type { RetrievalInfo } from './PromptHandler';
 
 export interface ReplyVariant {
   id: string;
@@ -130,6 +131,8 @@ export function useChat({
   sending: boolean;
   isStreaming: boolean;
   streamingContent: string;
+  streamingPhase: 'rag' | 'generating';
+  streamingRag: RetrievalInfo | null;
   selectedMessageId: string | null;
   setSelectedMessageId: (id: string | null) => void;
   editingMessageId: string | null;
@@ -247,6 +250,8 @@ export function useChat({
     needsSync;
   const isStreaming = !!run;
   const streamingContent = run?.content ?? '';
+  const streamingPhase = run?.phase ?? 'generating';
+  const streamingRag = run?.rag ?? null;
   const replacingMessageId = run?.replaceMessageId ?? null;
   const error = storedError || null;
 
@@ -1139,6 +1144,8 @@ export function useChat({
     sending,
     isStreaming,
     streamingContent,
+    streamingPhase,
+    streamingRag,
     selectedMessageId,
     setSelectedMessageId,
     editingMessageId,
