@@ -354,7 +354,10 @@ async function runGeneration(
 
     const replyMessageId = request.replaceMessageId ?? generateId();
     const assistantUpdatedAt = Date.now();
-    const requestInfo = serializeRequest(result.request, rag);
+    const requestInfo = serializeRequest(
+      result.request,
+      rag ?? (result as { retrieval?: RetrievalInfo }).retrieval,
+    );
     if (thinkingMs == null) {
       const split = splitThinking(content);
       if (split.hasThinking && !split.open) {
