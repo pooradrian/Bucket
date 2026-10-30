@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -10,7 +10,7 @@ import {
 import {
   deleteMemoryFromDB,
   generateId,
-  getAllMemoryListingsFromDB,
+  getAllMemoriesFromDB,
   getSessionById,
   saveMemoryToDB,
   updateMemoryInDB,
@@ -18,6 +18,7 @@ import {
 import type { SessionSummary } from '../Database';
 import {
   DEFAULT_MEMORY_SETTINGS,
+  groupMemoriesByChat,
   loadMemorySettings,
   memoryScopeId,
   MemorySettings,
@@ -46,8 +47,6 @@ interface BackfillTarget {
   messages: ChatMessage[];
 }
 
-type MemoryListing = StoredMemory & { scopeLabel: string };
-
 export default function MemoryTab({
   character,
   sessions,
@@ -59,7 +58,7 @@ export default function MemoryTab({
     loadMemorySettings(character.id),
   );
   const [config, setConfig] = useState<PromptConfig | null>(null);
-  const [memories, setMemories] = useState<MemoryListing[]>([]);
+  const [memories, setMemories] = useState<StoredMemory[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [newMemory, setNewMemory] = useState('');
@@ -83,7 +82,7 @@ export default function MemoryTab({
   const refresh = useCallback(async () => {
     const sessionIds = new Set(sessions.map(session => session.id));
     try {
-      const rows = await getAllMemoryListingsFromDB();
+      const rows = await getAllMemoriesFromDB();
       setMemories(
         rows.filter(row => {
           if (row.scopeId === `character:${character.id}`) return true;
@@ -136,12 +135,18 @@ export default function MemoryTab({
     activeSessionId ?? '',
   );
 
-  const scopeLabel = (scopeId: string) => {
-    if (scopeId === `character:${character.id}`) return 'Character';
-    const id = scopeId.slice('session:'.length);
-    const session = sessions.find(item => item.id === id);
-    return session?.name || 'Chat';
-  };
+  const groups = useMemo(() => {
+    const sessionById = new Map(sessions.map(session => [session.id, session]));
+    const title = (sessionId: string) => {
+      const session = sessionById.get(sessionId);
+      if (session) return session.name || 'Untitled chat';
+      return sessionId ? 'Deleted chat' : 'No chat';
+    };
+    return groupMemoriesByChat(memories, sessions).map(group => ({
+      ...group,
+      title: title(group.sessionId),
+    }));
+  }, [memories, sessions]);
 
   const startBackfill = async (sessionId: string, scopeId: string) => {
     setPickerOpen(false);
@@ -177,6 +182,10 @@ export default function MemoryTab({
   const addMemory = async () => {
     const text = newMemory.trim();
     if (!text) return;
+    if (settings.scope === 'session' && !activeSessionId) {
+      Alert.alert('No chat open', 'Open a chat before adding a memory.');
+      return;
+    }
     const scopeId =
       settings.scope === 'session'
         ? activeScopeId
@@ -386,8 +395,9 @@ export default function MemoryTab({
 
         <SectionHeader title={`Stored memories (${memories.length})`} />
         <MutedNote>
-          Memories are encrypted with the same key as chat messages. Editing
-          text re-embeds it on the next reply.
+          Memories are encrypted with the same key as chat messages and grouped
+          by the chat they came from. Editing text re-embeds it on the next
+          reply.
         </MutedNote>
         <TextInput
           style={st.settingsInput}
@@ -417,66 +427,85 @@ export default function MemoryTab({
             after you backfill a chat.
           </Text>
         )}
-        {memories.map(memory => (
-          <View key={memory.id} style={st.settingsLorebookItem}>
-            <View style={st.settingsLorebookItemInfo}>
-              {editingId === memory.id ? (
-                <TextInput
-                  style={st.settingsInput}
-                  value={draft}
-                  onChangeText={setDraft}
-                  multiline
-                  autoFocus
-                />
-              ) : (
-                <Text style={st.settingsLorebookItemName}>{memory.text}</Text>
-              )}
-              <Text style={st.settingsLorebookItemCount}>
-                {scopeLabel(memory.scopeId)} ·{' '}
-                {new Date(memory.createdAt).toLocaleDateString()}
-                {memory.pinned ? ' · pinned' : ''}
-                {memory.vector.length === 0 ? ' · not indexed' : ''}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 14, marginTop: 8 }}>
-                {editingId === memory.id ? (
-                  <>
-                    <TouchableOpacity onPress={saveEdit}>
-                      <Text style={{ color: accent, fontSize: 12 }}>save</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setEditingId(null);
-                        setDraft('');
-                      }}
-                    >
-                      <Text style={st.settingsDefaultText}>cancel</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setEditingId(memory.id);
-                        setDraft(memory.text);
-                      }}
-                    >
-                      <Text style={{ color: accent, fontSize: 12 }}>edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => togglePin(memory)}>
-                      <Text style={st.settingsDefaultText}>
-                        {memory.pinned ? 'unpin' : 'pin'}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
+        {groups.map(group => (
+          <View key={group.sessionId || 'none'}>
+            <SectionHeader
+              title={`${group.title} (${group.memories.length})${
+                group.sessionId === activeSessionId ? ' · open now' : ''
+              }`}
+            />
+            {group.memories.map(memory => (
+              <View key={memory.id} style={st.settingsLorebookItem}>
+                <View style={st.settingsLorebookItemInfo}>
+                  {editingId === memory.id ? (
+                    <TextInput
+                      style={st.settingsInput}
+                      value={draft}
+                      onChangeText={setDraft}
+                      multiline
+                      autoFocus
+                    />
+                  ) : (
+                    <Text style={st.settingsLorebookItemName}>
+                      {memory.text}
+                    </Text>
+                  )}
+                  <Text style={st.settingsLorebookItemCount}>
+                    {memory.scopeId.startsWith('session:')
+                      ? 'this chat'
+                      : 'all chats'}{' '}
+                    · {new Date(memory.createdAt).toLocaleDateString()}
+                    {memory.pinned ? ' · pinned' : ''}
+                    {memory.vector.length === 0 ? ' · not indexed' : ''}
+                  </Text>
+                  <View
+                    style={{ flexDirection: 'row', gap: 14, marginTop: 8 }}
+                  >
+                    {editingId === memory.id ? (
+                      <>
+                        <TouchableOpacity onPress={saveEdit}>
+                          <Text style={{ color: accent, fontSize: 12 }}>
+                            save
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditingId(null);
+                            setDraft('');
+                          }}
+                        >
+                          <Text style={st.settingsDefaultText}>cancel</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditingId(memory.id);
+                            setDraft(memory.text);
+                          }}
+                        >
+                          <Text style={{ color: accent, fontSize: 12 }}>
+                            edit
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => togglePin(memory)}>
+                          <Text style={st.settingsDefaultText}>
+                            {memory.pinned ? 'unpin' : 'pin'}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => remove(memory.id)}
+                  style={st.settingsLorebookRemoveBtn}
+                >
+                  <Text style={st.settingsLorebookRemoveBtnText}>Delete</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => remove(memory.id)}
-              style={st.settingsLorebookRemoveBtn}
-            >
-              <Text style={st.settingsLorebookRemoveBtnText}>Delete</Text>
-            </TouchableOpacity>
+            ))}
           </View>
         ))}
       </ScrollView>
