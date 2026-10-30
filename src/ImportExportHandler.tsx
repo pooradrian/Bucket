@@ -38,6 +38,11 @@ import {
   parseLorebook,
 } from './RAGHandler';
 import { logEvent } from './EventLogger';
+import {
+  installRuntimeFromPackage,
+  readRuntimePackage,
+  runtimePackageWarning,
+} from './EmbeddingRuntime';
 
 interface ImportExportHandlerProps {
   bottomInset: number;
@@ -93,6 +98,40 @@ export default function ImportExportHandler({
       const format = await detectImportFormat(file.uri, file.name || '');
 
       if (format === 'buk') {
+        const runtimePackage = await readRuntimePackage(file.uri);
+        if (runtimePackage) {
+          const install = await new Promise<boolean>(resolve => {
+            Alert.alert(
+              'Runtime module',
+              runtimePackageWarning(runtimePackage),
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                  onPress: () => resolve(false),
+                },
+                {
+                  text: 'Install',
+                  style: 'destructive',
+                  onPress: () => resolve(true),
+                },
+              ],
+              { cancelable: false },
+            );
+          });
+          if (!install) return;
+          const installed = await installRuntimeFromPackage(file.uri);
+          logEvent('embedding_runtime_installed', {
+            version: installed.version,
+            source: 'buk',
+          });
+          Alert.alert(
+            'Runtime installed',
+            'On-device embeddings are ready to use.',
+          );
+          return;
+        }
+
         const imported = await importBuk(file.uri);
         let message = `Imported ${imported.characters.length} characters`;
         if (imported.lorebooks.length > 0) {
@@ -478,8 +517,8 @@ export default function ImportExportHandler({
           {importing ? 'Importing...' : 'Import'}
         </Text>
         <Text style={st.cardDescription}>
-          Supports Character Card V1, V2, .buk, Perchance exports, and .txt
-          lorebooks
+          Supports Character Card V1, V2, .buk (saves and runtime modules),
+          Perchance exports, and .txt lorebooks
         </Text>
       </TouchableOpacity>
 

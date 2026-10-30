@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
+import { pick, types } from '@react-native-documents/picker';
 import { useTheme } from '../ThemeContext';
 import { logEvent } from '../EventLogger';
 import { SectionHeader, MutedNote } from './ui';
 import {
+  exportRuntimePackage,
   installRuntime,
+  installRuntimeFromPackage,
   isRuntimeInstalled,
+  readRuntimePackage,
   removeRuntime,
+  runtimePackageName,
+  runtimePackageWarning,
 } from '../EmbeddingRuntime';
+import { saveToDisk } from '../import/saveToDisk';
 import {
   deleteModel,
   formatBytes,
@@ -74,6 +81,78 @@ export default function OnDeviceEmbeddings({
       setProgress('');
     }
   }, [refresh]);
+
+  const handleInstallFromFile = useCallback(async () => {
+    let picked;
+    try {
+      picked = await pick({ type: [types.allFiles] });
+    } catch (e: unknown) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as { code: string }).code === 'OPERATION_CANCELED'
+      ) {
+        return;
+      }
+      Alert.alert('On-device runtime', message(e));
+      return;
+    }
+    const file = picked?.[0];
+    if (!file) return;
+    const runtimePackage = await readRuntimePackage(file.uri);
+    if (!runtimePackage) {
+      Alert.alert(
+        'On-device runtime',
+        'That file is not an embedding runtime package.',
+      );
+      return;
+    }
+    const install = await new Promise<boolean>(resolve => {
+      Alert.alert(
+        'Runtime module',
+        runtimePackageWarning(runtimePackage),
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Install', style: 'destructive', onPress: () => resolve(true) },
+        ],
+        { cancelable: false },
+      );
+    });
+    if (!install) return;
+
+    setBusy('runtime-file');
+    setProgress('');
+    try {
+      const installed = await installRuntimeFromPackage(file.uri);
+      setRuntimeReady(true);
+      logEvent('embedding_runtime_installed', {
+        version: installed.version,
+        source: 'file',
+      });
+    } catch (e) {
+      Alert.alert('On-device runtime', message(e));
+      await refresh();
+    } finally {
+      setBusy('');
+    }
+  }, [refresh]);
+
+  const handleSaveRuntime = useCallback(async () => {
+    setBusy('export');
+    try {
+      const path = await exportRuntimePackage();
+      await saveToDisk(path, 'application/octet-stream', runtimePackageName());
+      logEvent('embedding_runtime_exported', { version: 1 });
+    } catch (e: unknown) {
+      const msg = message(e);
+      if (msg !== 'User did not share') {
+        Alert.alert('On-device runtime', msg);
+      }
+    } finally {
+      setBusy('');
+    }
+  }, []);
 
   const handleRemoveRuntime = useCallback(() => {
     Alert.alert(
@@ -175,39 +254,75 @@ export default function OnDeviceEmbeddings({
       </MutedNote>
 
       {runtimeReady === false && (
-        <TouchableOpacity
-          style={st.card}
-          onPress={handleInstall}
-          disabled={busy !== ''}
-        >
-          <Text style={st.cardTitle}>
-            {busy === 'runtime'
-              ? `Downloading… ${progress}`
-              : `Install runtime (~${RUNTIME_DOWNLOAD_MB} MB)`}
-          </Text>
-          <Text style={st.cardDescription}>
-            Downloads the CPU inference libraries once, from the project's
-            GitHub releases
-          </Text>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            style={st.card}
+            onPress={handleInstall}
+            disabled={busy !== ''}
+          >
+            <Text style={st.cardTitle}>
+              {busy === 'runtime'
+                ? `Downloading… ${progress}`
+                : `Install runtime (~${RUNTIME_DOWNLOAD_MB} MB)`}
+            </Text>
+            <Text style={st.cardDescription}>
+              Downloads the CPU inference libraries once, from the project's
+              GitHub releases
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={st.card}
+            onPress={handleInstallFromFile}
+            disabled={busy !== ''}
+          >
+            <Text style={st.cardTitle}>
+              {busy === 'runtime-file'
+                ? 'Installing…'
+                : 'Install runtime from file'}
+            </Text>
+            <Text style={st.cardDescription}>
+              Pick a runtime .buk package from storage. It contains native code,
+              so only install packages you trust.
+            </Text>
+          </TouchableOpacity>
+        </>
       )}
 
       {runtimeReady === true && (
-        <View style={st.settingsLorebookItem}>
-          <View style={st.settingsLorebookItemInfo}>
-            <Text style={st.settingsLorebookItemName}>Runtime installed</Text>
-            <Text style={st.settingsLorebookItemCount}>
-              llama.cpp · CPU
-            </Text>
+        <>
+          <View style={st.settingsLorebookItem}>
+            <View style={st.settingsLorebookItemInfo}>
+              <Text style={st.settingsLorebookItemName}>Runtime installed</Text>
+              <Text style={st.settingsLorebookItemCount}>
+                llama.cpp · CPU
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleRemoveRuntime}
+              disabled={busy !== ''}
+              style={st.settingsLorebookRemoveBtn}
+            >
+              <Text style={st.settingsLorebookRemoveBtnText}>Remove</Text>
+            </TouchableOpacity>
           </View>
+
           <TouchableOpacity
-            onPress={handleRemoveRuntime}
+            style={st.card}
+            onPress={handleSaveRuntime}
             disabled={busy !== ''}
-            style={st.settingsLorebookRemoveBtn}
           >
-            <Text style={st.settingsLorebookRemoveBtnText}>Remove</Text>
+            <Text style={st.cardTitle}>
+              {busy === 'export'
+                ? 'Saving…'
+                : 'Save runtime to Downloads'}
+            </Text>
+            <Text style={st.cardDescription}>
+              Writes {runtimePackageName()} so you can install it on another
+              device
+            </Text>
           </TouchableOpacity>
-        </View>
+        </>
       )}
 
       {busy === 'test' && <ActivityIndicator color={accent} />}
