@@ -81,7 +81,7 @@ QUERIES: 3 to 5 short phrases the assistant may need to recall for its next repl
 
 FACTS: 0 to 4 durable facts learned from NEW MESSAGES. Each fact must be self-contained, written in the third person, name every person involved, and stay under 200 characters. Do not repeat anything under REMEMBERED, do not quote dialogue, do not speculate. Leave the list empty when there is nothing new.
 
-Reply in exactly this format and nothing else:
+Reply in exactly this format and nothing else. Do not copy the placeholder lines; write real entries in their place:
 QUERIES:
 - query
 FACTS:
@@ -91,7 +91,7 @@ const MEMORY_FACTS_PROMPT = `You extract long-term memory facts from a roleplay 
 
 Write 0 to 4 durable facts. Each fact must be self-contained, written in the third person, name every person involved, and stay under 200 characters. Do not repeat anything under REMEMBERED, do not quote dialogue, do not speculate. Facts worth keeping: identities, relationships, promises, possessions, injuries, locations, goals and unresolved events.
 
-Reply in exactly this format and nothing else:
+Reply in exactly this format and nothing else. Do not copy the placeholder line; write real facts in its place:
 FACTS:
 - fact`;
 
@@ -229,6 +229,17 @@ function cleanLine(line: string): string {
     .trim();
 }
 
+const MEMORY_PLACEHOLDER =
+  /^[<[(]?\s*(?:quer(?:y|ies)|facts?)\s*\d*\s*[>\])]?[:.]?$/i;
+
+function isMemoryPlaceholder(value: string): boolean {
+  return (
+    !value ||
+    value.toUpperCase() === 'NONE' ||
+    MEMORY_PLACEHOLDER.test(value)
+  );
+}
+
 export function parseMemoryOutput(
   raw: string,
   maxQueries: number,
@@ -239,32 +250,21 @@ export function parseMemoryOutput(
   let section: 'queries' | 'facts' | null = null;
 
   for (const rawLine of raw.split('\n')) {
-    const line = rawLine.trim();
+    const line = cleanLine(rawLine);
     if (!line) continue;
-    const upper = line.toUpperCase();
-    if (upper.startsWith('QUERIES')) {
-      section = 'queries';
-      const colon = line.indexOf(':');
-      if (colon >= 0) {
-        const rest = cleanLine(line.slice(colon + 1));
-        if (rest) queries.push(rest);
-      }
-      continue;
-    }
-    if (upper.startsWith('FACTS')) {
-      section = 'facts';
-      const colon = line.indexOf(':');
-      if (colon >= 0) {
-        const rest = cleanLine(line.slice(colon + 1));
-        if (rest) facts.push(rest);
+    const header = /^(queries|facts)(?:\s*:\s*|\s*$)(.*)$/i.exec(line);
+    if (header) {
+      section = header[1].toLowerCase() === 'queries' ? 'queries' : 'facts';
+      const rest = cleanLine(header[2]);
+      if (!isMemoryPlaceholder(rest)) {
+        (section === 'queries' ? queries : facts).push(rest);
       }
       continue;
     }
     if (!section) continue;
-    const value = cleanLine(line);
-    if (!value || value.toUpperCase() === 'NONE') continue;
-    if (section === 'queries') queries.push(value);
-    else facts.push(value);
+    if (isMemoryPlaceholder(line)) continue;
+    if (section === 'queries') queries.push(line);
+    else facts.push(line);
   }
 
   const finalize = (values: string[], max: number, cap: number) => {
