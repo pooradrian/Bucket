@@ -275,6 +275,27 @@ describe('groupMemoriesByChat', () => {
     expect(groups[2].memories.map(item => item.id)).toEqual(['orphan']);
   });
 
+  test('puts pinned memories first inside a chat', () => {
+    const groups = groupMemoriesByChat(
+      [
+        memory({ id: 'old', sourceSessionId: 's1', createdAt: 1 }),
+        memory({
+          id: 'pinnedOld',
+          sourceSessionId: 's1',
+          createdAt: 2,
+          pinned: true,
+        }),
+        memory({ id: 'new', sourceSessionId: 's1', createdAt: 3 }),
+      ],
+      [{ id: 's1', updatedAt: 5 }],
+    );
+    expect(groups[0].memories.map(item => item.id)).toEqual([
+      'pinnedOld',
+      'new',
+      'old',
+    ]);
+  });
+
   test('returns nothing for an empty list', () => {
     expect(groupMemoriesByChat([], [])).toEqual([]);
   });

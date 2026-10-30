@@ -433,7 +433,12 @@ export function groupMemoriesByChat(
   return [...buckets.entries()]
     .map(([sessionId, list]) => ({
       sessionId,
-      memories: list.slice().sort((a, b) => b.createdAt - a.createdAt),
+      memories: list
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(b.pinned) - Number(a.pinned) || b.createdAt - a.createdAt,
+        ),
     }))
     .sort(
       (a, b) => (order.get(b.sessionId) ?? -1) - (order.get(a.sessionId) ?? -1),
