@@ -44,6 +44,7 @@ import {
   estimateMemoryBackfill,
   formatMemoryMessages,
   getMemoryConfig,
+  groupMemoriesByChat,
   loadMemorySettings,
   memoryRagConfig,
   memoryScopeId,
@@ -233,6 +234,49 @@ describe('parseMemoryOutput', () => {
       queries: [],
       facts: [],
     });
+  });
+});
+
+describe('groupMemoriesByChat', () => {
+  test('splits memories by the chat they came from, newest chat first', () => {
+    const groups = groupMemoriesByChat(
+      [
+        memory({ id: 'a', sourceSessionId: 's1', createdAt: 1 }),
+        memory({ id: 'b', sourceSessionId: 's2', createdAt: 2 }),
+        memory({ id: 'c', sourceSessionId: 's1', createdAt: 3 }),
+        memory({ id: 'd', scopeId: 'session:s2', createdAt: 4 }),
+      ],
+      [
+        { id: 's1', updatedAt: 10 },
+        { id: 's2', updatedAt: 20 },
+      ],
+    );
+    expect(groups.map(group => group.sessionId)).toEqual(['s2', 's1']);
+    expect(groups[0].memories.map(item => item.id)).toEqual(['d', 'b']);
+    expect(groups[1].memories.map(item => item.id)).toEqual(['c', 'a']);
+  });
+
+  test('keeps chat-only memories with their own chat and unknown sources last', () => {
+    const groups = groupMemoriesByChat(
+      [
+        memory({ id: 'manual', sourceSessionId: '', createdAt: 1 }),
+        memory({ id: 'orphan', sourceSessionId: 'deleted', createdAt: 2 }),
+        memory({ id: 'live', sourceSessionId: 's1', createdAt: 3 }),
+        memory({ id: 'chatOnly', scopeId: 'session:s1', createdAt: 4 }),
+      ],
+      [{ id: 's1', updatedAt: 5 }],
+    );
+    expect(groups.map(group => group.sessionId)).toEqual(['s1', '', 'deleted']);
+    expect(groups[0].memories.map(item => item.id)).toEqual([
+      'chatOnly',
+      'live',
+    ]);
+    expect(groups[1].memories.map(item => item.id)).toEqual(['manual']);
+    expect(groups[2].memories.map(item => item.id)).toEqual(['orphan']);
+  });
+
+  test('returns nothing for an empty list', () => {
+    expect(groupMemoriesByChat([], [])).toEqual([]);
   });
 });
 

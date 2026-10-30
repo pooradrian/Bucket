@@ -411,6 +411,35 @@ export function buildMemoryInjection(texts: string[]): string {
   return `[Long-term Memory]\n${texts.map(text => `- ${text}`).join('\n')}`;
 }
 
+export interface MemoryChatGroup {
+  sessionId: string;
+  memories: StoredMemory[];
+}
+
+export function groupMemoriesByChat(
+  memories: StoredMemory[],
+  chats: Array<{ id: string; updatedAt: number }>,
+): MemoryChatGroup[] {
+  const order = new Map(chats.map(chat => [chat.id, chat.updatedAt]));
+  const buckets = new Map<string, StoredMemory[]>();
+  for (const memory of memories) {
+    const sessionId = memory.scopeId.startsWith('session:')
+      ? memory.scopeId.slice('session:'.length)
+      : memory.sourceSessionId;
+    const bucket = buckets.get(sessionId);
+    if (bucket) bucket.push(memory);
+    else buckets.set(sessionId, [memory]);
+  }
+  return [...buckets.entries()]
+    .map(([sessionId, list]) => ({
+      sessionId,
+      memories: list.slice().sort((a, b) => b.createdAt - a.createdAt),
+    }))
+    .sort(
+      (a, b) => (order.get(b.sessionId) ?? -1) - (order.get(a.sessionId) ?? -1),
+    );
+}
+
 interface CachedQueries {
   lastMessageId: string;
   queries: string[];
