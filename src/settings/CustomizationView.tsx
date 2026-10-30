@@ -248,6 +248,26 @@ export default function CustomizationView({
       />
 
       <BoolToggle
+        label={LABELS.showContextUsage}
+        note="Shows a small ring in the chat header that fills as the conversation approaches your history cutoff."
+        value={values.showContextUsage === 'true'}
+        accent={values.accentColor}
+        onChange={next =>
+          handleChange('showContextUsage', next ? 'true' : 'false')
+        }
+      />
+
+      <BoolToggle
+        label={LABELS.showContextPercent}
+        note="Also shows the filled percentage next to the ring."
+        value={values.showContextPercent === 'true'}
+        accent={values.accentColor}
+        onChange={next =>
+          handleChange('showContextPercent', next ? 'true' : 'false')
+        }
+      />
+
+      <BoolToggle
         label={LABELS.forceItalic}
         note="Skews *italic* text geometrically for fonts without an italic face."
         value={values.forceItalic === 'true'}

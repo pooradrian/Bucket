@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   BackHandler,
@@ -28,9 +28,10 @@ import {
   visibleContent,
 } from './thinking';
 import Carousel from './components/Carousel';
+import ContextRing from './components/ContextRing';
 import MemoryBackfillModal from './components/MemoryBackfillModal';
 import { formatRagDuration, parseRagInfo } from './ragInfo';
-import { loadPromptConfig } from './PromptHandler';
+import { loadPromptConfig, historyUsageRatio } from './PromptHandler';
 import type { PromptConfig, RetrievalInfo } from './PromptHandler';
 import { getKV, getMemoryCountFromDB, setKV } from './Database';
 import {
@@ -533,6 +534,10 @@ export default function ChatHandler({
   const groupCharDisplay = useAppStore(s => s.appSettings.showGroupCharNames);
   const accentColor = useAppStore(s => s.appSettings.accentColor);
   const bgSecondary = useAppStore(s => s.appSettings.bgSecondary);
+  const borderPrimary = useAppStore(s => s.appSettings.borderPrimary);
+  const showContextUsage = useAppStore(s => s.appSettings.showContextUsage);
+  const showContextPercent = useAppStore(s => s.appSettings.showContextPercent);
+  const promptConfigVersion = useAppStore(s => s.promptConfigVersion);
 
   const {
     session,
@@ -580,6 +585,36 @@ export default function ChatHandler({
     onSessionCreated,
     quickCharacters,
   });
+
+  const [contextCutoff, setContextCutoff] = useState<{
+    mode: 'tokens' | 'messages';
+    amount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadPromptConfig()
+      .then(config => {
+        if (cancelled) return;
+        setContextCutoff({
+          mode: config.historyCutoffMode,
+          amount: Number(config.historyCutoffAmount) || 20,
+        });
+      })
+      .catch(e => console.warn('Failed to load prompt config:', e));
+    return () => {
+      cancelled = true;
+    };
+  }, [promptConfigVersion]);
+
+  const contextUsage = useMemo(() => {
+    if (!contextCutoff || !session) return 0;
+    return historyUsageRatio(
+      session.messages,
+      contextCutoff.mode,
+      contextCutoff.amount,
+    );
+  }, [contextCutoff, session]);
 
   const [carouselMessageId, setCarouselMessageIdInner] = useState<
     string | null
@@ -1011,6 +1046,27 @@ export default function ChatHandler({
                 {activeCharacter?.name}
               </Text>
             </>
+          )}
+          {contextCutoff && (showContextUsage || showContextPercent) && (
+            <View style={st.contextUsage}>
+              {showContextPercent && (
+                <Text
+                  style={[
+                    st.contextUsageText,
+                    !showContextUsage && st.contextUsageTextOnly,
+                  ]}
+                >
+                  {Math.round(contextUsage * 100)}%
+                </Text>
+              )}
+              {showContextUsage && (
+                <ContextRing
+                  progress={contextUsage}
+                  accent={accentColor}
+                  track={borderPrimary}
+                />
+              )}
+            </View>
           )}
           <TouchableOpacity onPress={onHistoryPress} style={st.historyBtn}>
             <Text style={st.historyBtnIcon}>≡</Text>

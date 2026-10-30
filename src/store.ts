@@ -64,6 +64,8 @@ export interface AppSettings extends ThemePreset {
   showGroupCharNames: 'avatar' | 'both' | 'name';
   showThinking: boolean;
   showRag: boolean;
+  showContextUsage: boolean;
+  showContextPercent: boolean;
   forceItalic: boolean;
   themeMode: 'dark' | 'light';
   debugLogging: boolean;
@@ -118,6 +120,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   showGroupCharNames: 'both',
   showThinking: true,
   showRag: true,
+  showContextUsage: true,
+  showContextPercent: true,
   forceItalic: false,
   themeMode: 'dark',
   dynamicIcon: false,
@@ -228,6 +232,14 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   }
   if ('showRag' in saved) {
     result.showRag = saved.showRag === true || saved.showRag === 'true';
+  }
+  if ('showContextUsage' in saved) {
+    result.showContextUsage =
+      saved.showContextUsage === true || saved.showContextUsage === 'true';
+  }
+  if ('showContextPercent' in saved) {
+    result.showContextPercent =
+      saved.showContextPercent === true || saved.showContextPercent === 'true';
   }
   result.forceItalic =
     saved.forceItalic === true || saved.forceItalic === 'true';
