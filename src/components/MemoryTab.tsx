@@ -474,7 +474,11 @@ export default function MemoryTab({
                             setDraft('');
                           }}
                         >
-                          <Text style={st.settingsDefaultText}>cancel</Text>
+                          <Text
+                            style={{ color: st.textMuted.color, fontSize: 12 }}
+                          >
+                            cancel
+                          </Text>
                         </TouchableOpacity>
                       </>
                     ) : (
@@ -490,7 +494,9 @@ export default function MemoryTab({
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => togglePin(memory)}>
-                          <Text style={st.settingsDefaultText}>
+                          <Text
+                            style={{ color: st.textMuted.color, fontSize: 12 }}
+                          >
                             {memory.pinned ? 'unpin' : 'pin'}
                           </Text>
                         </TouchableOpacity>
