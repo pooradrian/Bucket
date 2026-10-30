@@ -312,7 +312,6 @@ export default function Carousel({
     (cur, prev) => {
       if (cur !== prev) runOnJS(setBelowSafe)(cur);
     },
-    [cardH, vh, setBelowSafe],
   );
 
   useEffect(() => {
@@ -742,14 +741,14 @@ export default function Carousel({
       top: vh / 2 + cardH / 2 + pullY.value + 12,
       opacity: open ? appear.value : 0,
     };
-  }, [cardH, vh]);
+  });
 
   const sideFadeStyle = useAnimatedStyle(() => {
     const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
     const open =
       vh - (vh / 2 + cardH / 2 + pullY.value - kbHalf) >= ACTION_STACK_H;
     return { opacity: open && appear.value >= 1 ? 0 : appear.value };
-  }, [cardH, vh]);
+  });
 
   const editStackStyle = useAnimatedStyle(() => {
     const kbHalf = Math.max(0, kbHeight.value - KB_LIFT_DOWN * 2) / 2;
@@ -759,7 +758,7 @@ export default function Carousel({
       top: vh / 2 + cardH / 2 + pullY.value - kbHalf + 12,
       opacity: open ? appear.value : 0,
     };
-  }, [cardH, vh]);
+  });
 
   const stageStyle = useAnimatedStyle(() => {
     // Zero shift while closed; ramps smoothly to "half the keyboard height,
