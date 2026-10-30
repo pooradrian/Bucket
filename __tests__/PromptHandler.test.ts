@@ -19,6 +19,7 @@ jest.mock('../src/Database', () => ({
 
 import {
   estimateTokens,
+  historyUsageRatio,
   buildPrompt,
   buildContinuePrompt,
   buildGroupPrompt,
@@ -637,6 +638,24 @@ describe('estimateTokens', () => {
   test('long text (>2000 chars) uses the length/4 heuristic', () => {
     const text = 'a'.repeat(5000);
     expect(estimateTokens(text)).toBe(Math.ceil(5000 / 4));
+  });
+});
+
+describe('historyUsageRatio', () => {
+  test('counts messages against a message cutoff', () => {
+    expect(historyUsageRatio(history, 'messages', 20)).toBe(history.length / 20);
+    expect(historyUsageRatio(history, 'messages', 2)).toBe(1);
+  });
+
+  test('counts estimated tokens against a token cutoff', () => {
+    const tokens = history.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+    expect(historyUsageRatio(history, 'tokens', tokens)).toBe(1);
+    expect(historyUsageRatio(history, 'tokens', tokens * 2)).toBeCloseTo(0.5);
+  });
+
+  test('never exceeds one and returns zero for a non-positive cutoff', () => {
+    expect(historyUsageRatio(history, 'messages', 0)).toBe(0);
+    expect(historyUsageRatio(history, 'tokens', 1)).toBe(1);
   });
 });
 

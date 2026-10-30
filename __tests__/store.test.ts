@@ -72,6 +72,19 @@ describe('parseSavedSettings', () => {
     expect(DEFAULT_APP_SETTINGS.forceItalic).toBe(false);
   });
 
+  test('defaults the context ring toggles on and coerces them', () => {
+    expect(DEFAULT_APP_SETTINGS.showContextUsage).toBe(true);
+    expect(DEFAULT_APP_SETTINGS.showContextPercent).toBe(true);
+    expect(parseSavedSettings({}).showContextUsage).toBe(true);
+    expect(parseSavedSettings({}).showContextPercent).toBe(true);
+    expect(
+      parseSavedSettings({ showContextUsage: 'false' }).showContextUsage,
+    ).toBe(false);
+    expect(
+      parseSavedSettings({ showContextPercent: false }).showContextPercent,
+    ).toBe(false);
+  });
+
   test('themeMode maps to light only for "light", dark otherwise', () => {
     expect(parseSavedSettings({ themeMode: 'light' }).themeMode).toBe('light');
     expect(parseSavedSettings({ themeMode: 'dark' }).themeMode).toBe('dark');

@@ -728,6 +728,21 @@ function sliceHistory(
   return sliced;
 }
 
+export function historyUsageRatio(
+  history: { content: string }[],
+  mode: 'tokens' | 'messages',
+  amount: number,
+): number {
+  if (amount <= 0) {
+    return 0;
+  }
+  const used =
+    mode === 'messages'
+      ? history.length
+      : history.reduce((sum, msg) => sum + estimateTokens(msg.content), 0);
+  return Math.min(1, used / amount);
+}
+
 export function historyWithoutLatestUserTurn(
   history: ChatMessage[],
   userMessage: string,

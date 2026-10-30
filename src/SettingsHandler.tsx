@@ -262,6 +262,7 @@ export default function SettingsHandler({
   const settingsView = viewStack[viewStack.length - 1];
 
   const [values, setValues] = useState<Settings>(() => toDraft(appSettings));
+  const valuesRef = useRef(values);
   const [promptValues, setPromptValues] = useState<PromptConfig>(
     DEFAULT_PROMPT_CONFIG,
   );
@@ -283,6 +284,7 @@ export default function SettingsHandler({
 
   useEffect(() => {
     const draft = toDraft(appSettings);
+    valuesRef.current = draft;
     setValues(draft);
     mountedRef.current = true;
   }, [appSettings]);
@@ -373,6 +375,8 @@ export default function SettingsHandler({
       converted.showCharacterIcons = draft.showCharacterIcons === 'true';
       converted.showThinking = draft.showThinking === 'true';
       converted.showRag = draft.showRag === 'true';
+      converted.showContextUsage = draft.showContextUsage === 'true';
+      converted.showContextPercent = draft.showContextPercent === 'true';
       converted.forceItalic = draft.forceItalic === 'true';
       converted.dynamicIcon = draft.dynamicIcon === 'true';
       onApply?.(converted as unknown as AppSettings);
@@ -382,11 +386,10 @@ export default function SettingsHandler({
 
   const handleChange = useCallback(
     (key: keyof Settings, text: string) => {
-      setValues(prev => {
-        const next = { ...prev, [key]: text };
-        applyThemeSettings(next);
-        return next;
-      });
+      const next = { ...valuesRef.current, [key]: text };
+      valuesRef.current = next;
+      setValues(next);
+      applyThemeSettings(next);
     },
     [applyThemeSettings],
   );

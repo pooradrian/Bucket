@@ -533,6 +533,19 @@ export function createStyles(s: AppSettings) {
       color: s.accentColor,
       fontSize: 16,
     },
+    contextUsage: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginRight: 8,
+    },
+    contextUsageText: {
+      color: s.textSecondary,
+      fontSize: 11,
+      marginRight: 6,
+    },
+    contextUsageTextOnly: {
+      marginRight: 0,
+    },
 
     // =========================================================================
     // ChatHandler — messages
