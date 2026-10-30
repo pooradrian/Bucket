@@ -194,6 +194,35 @@ describe('parseMemoryOutput', () => {
     expect(output.facts[0].length).toBe(300);
   });
 
+  test('drops the prompt template placeholders and bulleted headers', () => {
+    expect(parseMemoryOutput('QUERIES:\n- query\nFACTS:\n- fact', 5, 4)).toEqual(
+      { queries: [], facts: [] },
+    );
+    expect(
+      parseMemoryOutput(
+        [
+          'FACTS:',
+          '- fact',
+          '- FACTS:',
+          '- <fact>',
+          '- Facts about the keep are grim.',
+          '- Sir Aldric is dead.',
+        ].join('\n'),
+        5,
+        4,
+      ),
+    ).toEqual({
+      queries: [],
+      facts: ['Facts about the keep are grim.', 'Sir Aldric is dead.'],
+    });
+  });
+
+  test('treats a bulleted header with inline text as a header', () => {
+    expect(
+      parseMemoryOutput('- QUERIES: the sword\n- FACTS: The keep is north.', 5, 4),
+    ).toEqual({ queries: ['the sword'], facts: ['The keep is north.'] });
+  });
+
   test('returns nothing for an empty or unlabelled response', () => {
     expect(parseMemoryOutput('', 5, 4)).toEqual({ queries: [], facts: [] });
     expect(parseMemoryOutput('- stray line', 5, 4)).toEqual({
