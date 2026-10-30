@@ -9,6 +9,7 @@ import {
   isLoggingEnabled,
 } from '../EventLogger';
 import { CommandHandler } from './types';
+import { ensureLocalNetworkAccess } from '../LocalNetwork';
 
 export const testCommand: CommandHandler = async (rest, env, io) => {
   const verboseFlag = rest.includes('--verbose');
@@ -39,6 +40,12 @@ export const testCommand: CommandHandler = async (rest, env, io) => {
     .replace(/\/chat\/completions\/?$/, '')
     .replace(/\/v1\/?$/, '');
   io.log('info', `\nTesting connectivity to ${baseUrl} ...`);
+  try {
+    await ensureLocalNetworkAccess(baseUrl);
+  } catch (e: unknown) {
+    io.log('error', `FAIL: ${e instanceof Error ? e.message : String(e)}`);
+    return;
+  }
   try {
     const t0 = performance.now();
     const res = await axios.get(baseUrl, { timeout: 8000 });
@@ -123,6 +130,7 @@ export const apiCommand: CommandHandler = async (rest, env, io) => {
     body = rest.slice(bodyIdx + 1).join(' ');
   }
   io.log('info', `${method} ${url}${body ? '\nBody: ' + body : ''}`);
+  await ensureLocalNetworkAccess(url);
   const axiosOpts: AxiosRequestConfig = { method, url };
   if (body && method !== 'GET') {
     axiosOpts.headers = { 'Content-Type': 'application/json' };

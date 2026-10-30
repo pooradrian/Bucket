@@ -4,6 +4,7 @@ import {
   PromptConfig,
   TimingMetrics,
 } from './PromptHandler';
+import { ensureLocalNetworkAccess } from './LocalNetwork';
 
 export interface RawRequest {
   url: string;
@@ -277,6 +278,7 @@ export async function getEmbeddings(
   if (!url || url === '/embeddings') {
     throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
   }
+  await ensureLocalNetworkAccess(url);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -344,6 +346,7 @@ export async function getAIResponse(
     throw new Error('No API URL configured. Set apiUrl in Prompt Settings.');
   }
   const url = normalizeProviderUrl(configuredUrl);
+  await ensureLocalNetworkAccess(url);
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -401,6 +404,11 @@ export async function getAIResponse(
   const request: RawRequest = { url, body };
 
   const ctrl = controller || new AbortController();
+  if (ctrl.signal.aborted) {
+    const cancelErr = new Error('Request was cancelled');
+    (cancelErr as Error & { request?: RawRequest }).request = request;
+    throw cancelErr;
+  }
   const t0 = performance.now();
 
   if (isCatApiUrl(url)) {
