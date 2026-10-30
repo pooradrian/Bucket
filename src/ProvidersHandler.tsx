@@ -28,6 +28,7 @@ import {
 } from './SecureStore';
 import { useTheme } from './ThemeContext';
 import { normalizeProviderUrl, isPlainHttpUrl } from './Endpoint';
+import { ensureLocalNetworkAccess } from './LocalNetwork';
 
 interface ProvidersHandlerProps {
   activeProviderId: string;
@@ -102,6 +103,7 @@ export default function ProvidersHandler({
       saveProviders(updated);
       setEditingUrlId(null);
       refreshProviders();
+      ensureLocalNetworkAccess(trimmed).catch(() => {});
     },
     [editUrlText, refreshProviders],
   );
@@ -258,6 +260,7 @@ function AddProviderModal({
     const providers = getProviders();
     providers.push({ id, name: trimmedName, url: trimmedUrl });
     saveProviders(providers);
+    ensureLocalNetworkAccess(trimmedUrl).catch(() => {});
     if (trimmedKey) {
       await setProviderKey(id, trimmedKey);
     }

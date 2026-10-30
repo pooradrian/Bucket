@@ -34,7 +34,7 @@ jobs:
         run: |
           SDKMANAGER=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          "$SDKMANAGER" "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
 
       - name: Decode release keystore
         if: env.KEYSTORE_B64 != ''
