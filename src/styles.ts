@@ -628,8 +628,9 @@ export function createStyles(s: AppSettings) {
     },
     actionRow: {
       flexDirection: 'row',
+      flexWrap: 'nowrap',
       marginTop: 4,
-      gap: 4,
+      gap: 8,
     },
     actionRowUser: {
       alignSelf: 'flex-end',
@@ -638,8 +639,11 @@ export function createStyles(s: AppSettings) {
       alignSelf: 'flex-start',
     },
     actionBtn: {
-      paddingVertical: 5,
-      paddingHorizontal: 10,
+      flexShrink: 0,
+      minHeight: 40,
+      justifyContent: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 12,
       borderRadius: s.inputRadius,
       borderWidth: 1,
       borderColor: s.accentColor,
@@ -648,6 +652,10 @@ export function createStyles(s: AppSettings) {
       color: s.accentColor,
       fontSize: 12,
       fontWeight: '500',
+    },
+    actionBtnConfirm: {
+      backgroundColor: s.dangerColor,
+      borderColor: s.dangerColor,
     },
     actionBtnTextDelete: {
       color: s.dangerColor,

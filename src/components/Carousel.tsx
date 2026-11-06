@@ -535,7 +535,24 @@ export default function Carousel({
     }
   }, [onFresh, message.id]);
 
+  const [armed, setArmed] = useState<'one' | 'all' | null>(null);
+
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 3000);
+    return () => clearTimeout(t);
+  }, [armed]);
+
+  useEffect(() => {
+    setArmed(null);
+  }, [cIndex, message.id]);
+
   const handleDelete = useCallback(async () => {
+    if (armed !== 'one') {
+      setArmed('one');
+      return;
+    }
+    setArmed(null);
     const item = items[cIndex];
     if (!item) return;
     if (items.length <= 1) {
@@ -547,11 +564,16 @@ export default function Carousel({
     const replacementKey = remaining[replacementIdx]?.key ?? null;
     if (replacementKey) focusKeyRef.current = replacementKey;
     await onDeleteEntry(message.id, item.key);
-  }, [items, cIndex, onDeleteMessage, onDeleteEntry, message]);
+  }, [armed, items, cIndex, onDeleteMessage, onDeleteEntry, message]);
 
   const handleDeleteAll = useCallback(() => {
+    if (armed !== 'all') {
+      setArmed('all');
+      return;
+    }
+    setArmed(null);
     onDeleteMessage(message);
-  }, [onDeleteMessage, message]);
+  }, [armed, onDeleteMessage, message]);
 
   const canPrev = cIndex > 0;
   const canNext = cIndex < count - 1;
@@ -629,9 +651,16 @@ export default function Carousel({
               disabled={!jsonText || streamingThis}
             />
             <ActionButton
-              label="Delete"
-              onPress={handleDelete}
+              label={
+                armed === 'all'
+                  ? 'Confirm all'
+                  : armed === 'one'
+                    ? 'Confirm'
+                    : 'Delete'
+              }
+              onPress={armed === 'all' ? handleDeleteAll : handleDelete}
               onLongPress={handleDeleteAll}
+              filled={!!armed}
               color={colors.danger}
               disabled={streamingThis}
             />
@@ -659,6 +688,7 @@ export default function Carousel({
       jsonText,
       handleDelete,
       handleDeleteAll,
+      armed,
     ],
   );
 
@@ -865,9 +895,16 @@ export default function Carousel({
               disabled={!jsonText || streamingThis}
             />
             <ActionButton
-              label="Delete"
-              onPress={handleDelete}
+              label={
+                armed === 'all'
+                  ? 'Confirm all'
+                  : armed === 'one'
+                    ? 'Confirm'
+                    : 'Delete'
+              }
+              onPress={armed === 'all' ? handleDeleteAll : handleDelete}
               onLongPress={handleDeleteAll}
+              filled={!!armed}
               color={colors.danger}
               disabled={streamingThis}
             />
@@ -1100,8 +1137,8 @@ function CarouselCard({
   const cardRag =
     item.live && colors.showRag
       ? liveStreamText != null
-        ? liveRag ?? null
-        : item.rag ?? null
+        ? (liveRag ?? null)
+        : (item.rag ?? null)
       : null;
   const [ragExpanded, setRagExpanded] = useState(false);
   const thought = splitThinking(displayContent);
@@ -1372,7 +1409,17 @@ function CarouselCard({
             />
           </View>
           {actions ? (
-            <View pointerEvents="box-none" style={styles.clusterActions}>
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.clusterActions,
+                {
+                  left: (cardW - SCREEN_W) / 2,
+                  right: undefined,
+                  width: SCREEN_W,
+                },
+              ]}
+            >
               {actions}
             </View>
           ) : null}
@@ -1414,7 +1461,9 @@ function ActionButton({
   onLongPress,
   color,
   disabled,
+  filled,
 }: {
+  filled?: boolean;
   label: string;
   onPress: () => void;
   onLongPress?: () => void;
@@ -1430,10 +1479,16 @@ function ActionButton({
       style={[
         styles.actionBtn,
         { borderColor: color },
+        filled && { backgroundColor: color },
         disabled && { opacity: 0.4 },
       ]}
     >
-      <Text style={[styles.actionBtnText, { color }]}>{label}</Text>
+      <Text
+        numberOfLines={1}
+        style={[styles.actionBtnText, { color: filled ? '#fff' : color }]}
+      >
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -1601,6 +1656,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionBtn: {
+    flexShrink: 0,
+    minHeight: 40,
+    justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,

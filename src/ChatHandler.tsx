@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Animated,
   BackHandler,
@@ -226,6 +232,18 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   const showRagBlock = !!rag && showRag && !isUser && !isEditing;
   const [ragExpanded, setRagExpanded] = useState(false);
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  useEffect(() => {
+    if (!confirmingDelete) {
+      return;
+    }
+    if (!isSelected) {
+      setConfirmingDelete(false);
+      return;
+    }
+    const t = setTimeout(() => setConfirmingDelete(false), 3000);
+    return () => clearTimeout(t);
+  }, [confirmingDelete, isSelected]);
   const [thinkElapsed, setThinkElapsed] = useState(0);
   const openSinceRef = useRef(0);
 
@@ -486,20 +504,40 @@ const MessageBubble = React.memo(function MessageBubbleInner({
                   onPress={() => onEdit(item)}
                   style={st.actionBtn}
                 >
-                  <Text style={st.actionBtnText}>Edit</Text>
+                  <Text style={st.actionBtnText} numberOfLines={1}>
+                    Edit
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => onCopy(item)}
                   style={st.actionBtn}
                 >
-                  <Text style={st.actionBtnText}>Copy</Text>
+                  <Text style={st.actionBtnText} numberOfLines={1}>
+                    Copy
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => onDelete(item)}
-                  style={st.actionBtn}
+                  onPress={() => {
+                    if (confirmingDelete) {
+                      onDelete(item);
+                    } else {
+                      setConfirmingDelete(true);
+                    }
+                  }}
+                  style={[
+                    st.actionBtn,
+                    confirmingDelete && st.actionBtnConfirm,
+                  ]}
                 >
-                  <Text style={[st.actionBtnText, st.actionBtnTextDelete]}>
-                    Delete
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      st.actionBtnText,
+                      st.actionBtnTextDelete,
+                      confirmingDelete && { color: '#fff' },
+                    ]}
+                  >
+                    {confirmingDelete ? 'Confirm' : 'Delete'}
                   </Text>
                 </TouchableOpacity>
                 {isLastAssistant && (
@@ -508,7 +546,9 @@ const MessageBubble = React.memo(function MessageBubbleInner({
                     disabled={sending}
                     style={[st.actionBtn, sending && st.actionBtnDisabled]}
                   >
-                    <Text style={st.actionBtnText}>Regen</Text>
+                    <Text style={st.actionBtnText} numberOfLines={1}>
+                      Regen
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
