@@ -18,6 +18,7 @@ class MainApplication : Application(), ReactApplication {
           add(SysStatsPackage())
           add(IconModulePackage())
           add(NotificationModulePackage())
+          add(AudioRecorderPackage())
         },
     )
   }

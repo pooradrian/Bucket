@@ -8,6 +8,13 @@ import {
   lorebookExportName,
 } from '../RAGHandler';
 import { ChatSession } from '../useChat';
+import {
+  Attachment,
+  attachmentLabel,
+  deleteAttachmentFiles,
+  loadAttachmentBase64,
+  saveAttachment,
+} from '../Attachments';
 import { DEFAULT_PROMPT_CONFIG } from '../PromptHandler';
 import { DEFAULT_APP_SETTINGS, Folder, GroupChat } from '../store';
 import {
@@ -105,6 +112,63 @@ interface BukFolder {
   id: string;
   name: string;
   characterIds: string[];
+}
+
+const ATTACHMENT_KINDS = new Set(['image', 'audio', 'file']);
+
+/**
+ * Re-saves a session's attachments from the zip under fresh ids (so deleting
+ * one copy never removes another's files). Attachments whose bytes are not in
+ * the backup (older exports) are dropped; a message left with nothing but its
+ * auto label is dropped too.
+ */
+async function restoreSessionAttachments(
+  zip: JSZip,
+  session: ChatSession,
+  saved: Attachment[],
+): Promise<void> {
+  const messages: ChatSession['messages'] = [];
+  for (const msg of session.messages) {
+    if (!Array.isArray(msg.attachments) || msg.attachments.length === 0) {
+      messages.push(msg);
+      continue;
+    }
+    const original = msg.attachments;
+    const kept: Attachment[] = [];
+    for (const att of original) {
+      if (
+        !att ||
+        typeof att.id !== 'string' ||
+        typeof att.name !== 'string' ||
+        !ATTACHMENT_KINDS.has(att.kind)
+      ) {
+        continue;
+      }
+      const file = zip.file(`attachments/${att.id}`);
+      if (!file) continue;
+      try {
+        const base64 = await file.async('base64');
+        if (!base64) continue;
+        const copy = await saveAttachment({
+          kind: att.kind,
+          name: att.name,
+          mime: typeof att.mime === 'string' ? att.mime : '',
+          base64,
+          durationMs:
+            typeof att.durationMs === 'number' ? att.durationMs : undefined,
+        });
+        saved.push(copy);
+        kept.push(copy);
+      } catch (e) {
+        console.warn(`Skipped attachment ${att.name}:`, e);
+      }
+    }
+    if (kept.length === 0 && msg.content === attachmentLabel(original)) {
+      continue;
+    }
+    messages.push({ ...msg, attachments: kept.length ? kept : undefined });
+  }
+  session.messages = messages;
 }
 
 export async function importBuk(fileUri: string): Promise<BukImportResult> {
@@ -530,11 +594,14 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     if (existingSessionIds.has(session.id)) {
       continue;
     }
+    const savedAttachments: Attachment[] = [];
     try {
+      await restoreSessionAttachments(zip, session, savedAttachments);
       await createSession(session);
       importedSessions.push(session);
     } catch (e) {
       console.warn('Failed to create session:', e);
+      await deleteAttachmentFiles(savedAttachments);
     }
   }
   result.sessions = importedSessions;
@@ -786,6 +853,7 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
   }
 
   const exportedSessionIds = new Set<string>();
+  const bundledAttachmentIds = new Set<string>();
   const exportedQcIds = new Set<string>();
   const qcIconsToBundle: { id: string; icon: string }[] = [];
   if (options.includeChats) {
@@ -804,6 +872,21 @@ export async function exportBuk(options: ExportOptions): Promise<string> {
           JSON.stringify(payload, null, 2),
         );
         exportedSessionIds.add(session.id);
+        // Attachment bytes travel decrypted (the key is device-local) and are
+        // re-encrypted on import.
+        for (const msg of session.messages) {
+          for (const att of msg.attachments ?? []) {
+            if (bundledAttachmentIds.has(att.id)) continue;
+            try {
+              const data = await loadAttachmentBase64(att.id);
+              if (!data) continue;
+              zip.file(`attachments/${att.id}`, data, { base64: true });
+              bundledAttachmentIds.add(att.id);
+            } catch (e) {
+              console.warn(`Skipped attachment ${att.name}:`, e);
+            }
+          }
+        }
         for (const qc of quickCharacters) {
           exportedQcIds.add(qc.id);
           if (qc.icon) qcIconsToBundle.push({ id: qc.id, icon: qc.icon });

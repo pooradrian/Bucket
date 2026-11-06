@@ -31,11 +31,12 @@ import { initDB } from '../src/Database';
 const conn = () => (globalThis as any).__bucketTestConn;
 
 test('v18 migration creates the memories table and its scope index', () => {
+  conn().exec('CREATE TABLE chat_messages (id TEXT PRIMARY KEY)');
   conn().exec('PRAGMA user_version = 17');
 
   initDB();
 
-  expect(conn().prepare('PRAGMA user_version').all()[0].user_version).toBe(18);
+  expect(conn().prepare('PRAGMA user_version').all()[0].user_version).toBe(19);
   const columns = conn()
     .prepare('PRAGMA table_info(memories)')
     .all()

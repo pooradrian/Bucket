@@ -14,6 +14,7 @@ import {
   getProviders,
 } from './SecureStore';
 import { getAIResponse, RawRequest } from './Endpoint';
+import type { Attachment } from './Attachments';
 import { encodingForModel } from 'js-tiktoken';
 
 const PROMPT_CONFIG_KEY = 'promptConfig';
@@ -21,6 +22,8 @@ const PROMPT_CONFIG_KEY = 'promptConfig';
 export interface ChatMessageObject {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  /** Expanded into content parts by the endpoint layer; never sent as-is. */
+  attachments?: Attachment[];
 }
 
 export interface TimingMetrics {
@@ -759,6 +762,44 @@ export function historyWithoutLatestUserTurn(
   return history;
 }
 
+function userHistoryMessage(msg: ChatMessage): ChatMessageObject {
+  return {
+    role: 'user',
+    content: msg.content,
+    ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
+  };
+}
+
+/**
+ * The builders receive the latest user turn as plain text. Re-attach that
+ * turn's attachments (found on the untrimmed history) to the matching prompt
+ * message.
+ */
+export function withLatestAttachments(
+  messages: ChatMessageObject[],
+  fullHistory: ChatMessage[],
+  userMessage: string,
+): ChatMessageObject[] {
+  const last = fullHistory[fullHistory.length - 1];
+  if (
+    !userMessage ||
+    !last ||
+    last.role !== 'user' ||
+    last.content !== userMessage ||
+    !last.attachments?.length
+  ) {
+    return messages;
+  }
+  const idx = messages.length - 1;
+  const target = messages[idx];
+  if (target?.role !== 'user' || target.content !== userMessage) {
+    return messages;
+  }
+  const out = messages.slice();
+  out[idx] = { ...target, attachments: last.attachments };
+  return out;
+}
+
 export function buildPrompt(
   character: Character,
   userMessage: string,
@@ -802,7 +843,7 @@ export function buildPrompt(
 
   for (const msg of slicedHistory) {
     if (msg.role === 'user') {
-      messages.push({ role: 'user', content: msg.content });
+      messages.push(userHistoryMessage(msg));
     } else {
       messages.push({
         role: 'assistant',
@@ -863,7 +904,7 @@ export function buildGroupPrompt(
 
   for (const msg of slicedHistory) {
     if (msg.role === 'user') {
-      messages.push({ role: 'user', content: msg.content });
+      messages.push(userHistoryMessage(msg));
     } else {
       const charName = characters.find(c => c.id === msg.characterId)?.name;
       const prefixed = charName ? `[${charName}]: ${msg.content}` : msg.content;
@@ -918,7 +959,7 @@ export function buildContinuePrompt(
 
   for (const msg of slicedHistory) {
     if (msg.role === 'user') {
-      messages.push({ role: 'user', content: msg.content });
+      messages.push(userHistoryMessage(msg));
     } else {
       messages.push({
         role: 'assistant',
@@ -980,7 +1021,7 @@ export function buildGroupContinuePrompt(
 
   for (const msg of slicedHistory) {
     if (msg.role === 'user') {
-      messages.push({ role: 'user', content: msg.content });
+      messages.push(userHistoryMessage(msg));
     } else {
       const charName = characters.find(c => c.id === msg.characterId)?.name;
       const prefixed = charName ? `[${charName}]: ${msg.content}` : msg.content;
@@ -1008,6 +1049,7 @@ export async function sendToLLM(
   quickCharacters?: QuickCharacterFields[],
   memoryContext?: string,
   onRetrieval?: (info: RetrievalInfo) => void,
+  onUpload?: (fraction: number) => void,
 ): Promise<{
   content: string;
   request: RawRequest;
@@ -1018,6 +1060,7 @@ export async function sendToLLM(
   const buildStart = performance.now();
 
   const resolved = await resolveProvider(config);
+  const fullHistory = history;
   history = historyWithoutLatestUserTurn(history, userMessage);
 
   const retrievalStart = performance.now();
@@ -1078,7 +1121,7 @@ export async function sendToLLM(
   }
   onRetrieval?.(retrieval);
 
-  const messages = continueMode
+  const builtMessages = continueMode
     ? buildContinuePrompt(
         character,
         history,
@@ -1100,11 +1143,12 @@ export async function sendToLLM(
       );
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(
-    messages,
+    withLatestAttachments(builtMessages, fullHistory, userMessage),
     resolved,
     onToken,
     true,
     controller,
+    onUpload,
   );
   result.content = stripSpeakerNamePrefixes(result.content, [
     character.name,
@@ -1123,12 +1167,14 @@ export async function sendToGroupLLM(
   onToken?: (token: string) => void,
   controller?: AbortController,
   continueMode: boolean = false,
+  onUpload?: (fraction: number) => void,
 ): Promise<{ content: string; request: RawRequest; metrics: TimingMetrics }> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
+  const fullHistory = history;
   history = historyWithoutLatestUserTurn(history, userMessage);
 
-  const messages = continueMode
+  const builtMessages = continueMode
     ? buildGroupContinuePrompt(
         allCharacters,
         selectedCharacter,
@@ -1144,11 +1190,12 @@ export async function sendToGroupLLM(
       );
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(
-    messages,
+    withLatestAttachments(builtMessages, fullHistory, userMessage),
     resolved,
     onToken,
     true,
     controller,
+    onUpload,
   );
   result.content = stripSpeakerNamePrefixes(
     result.content,
@@ -1202,6 +1249,7 @@ export async function sendToQCLLM(
   controller?: AbortController,
   continueMode: boolean = false,
   quickCharacters?: QuickCharacterFields[],
+  onUpload?: (fraction: number) => void,
 ): Promise<{ content: string; request: RawRequest; metrics: TimingMetrics }> {
   const buildStart = performance.now();
   const resolved = await resolveProvider(config);
@@ -1216,11 +1264,12 @@ export async function sendToQCLLM(
   );
   const promptBuildMs = performance.now() - buildStart;
   const result = await getAIResponse(
-    messages,
+    withLatestAttachments(messages, history, userMessage),
     resolved,
     onToken,
     true,
     controller,
+    onUpload,
   );
   result.content = stripSpeakerNamePrefixes(result.content, [
     qc.name,

@@ -53,6 +53,12 @@ import {
 } from '../src/Database';
 import { exportBuk, importBuk } from '../src/import/bukImportExport';
 import type { ChatSession } from '../src/useChat';
+import {
+  Attachment,
+  attachmentLabel,
+  loadAttachmentBase64,
+  saveAttachment,
+} from '../src/Attachments';
 
 const db = () => initDB();
 
@@ -584,5 +590,84 @@ describe('import result only reports what was written', () => {
     expect(result.groups).toEqual([]);
     expect(result.quickCharacters).toEqual([]);
     expect(result.skippedCharacters).toEqual(['Alice']);
+  });
+});
+
+describe('attachments', () => {
+  const files = new Map<string, string>();
+
+  beforeEach(() => {
+    files.clear();
+    (RNFS.writeFile as jest.Mock).mockImplementation(
+      async (path: string, data: string) => {
+        files.set(path, data);
+      },
+    );
+    (RNFS.readFile as jest.Mock).mockImplementation(async (path: string) => {
+      if (!files.has(path)) throw new Error('ENOENT');
+      return files.get(path);
+    });
+  });
+
+  afterEach(() => {
+    (RNFS.writeFile as jest.Mock).mockReset().mockResolvedValue(undefined);
+    (RNFS.readFile as jest.Mock).mockReset().mockResolvedValue('');
+  });
+
+  test('attachment bytes ride in the bundle and come back under new ids', async () => {
+    const b64 = Buffer.from('PNGBYTES').toString('base64');
+    const att = await saveAttachment({
+      kind: 'image',
+      name: 'cat.png',
+      mime: 'image/png',
+      base64: b64,
+    });
+    const gone: Attachment = {
+      id: 'deadbeef',
+      kind: 'file',
+      name: 'lost.pdf',
+      mime: 'application/pdf',
+      size: 10,
+    };
+    await createSession({
+      id: 'sess-att',
+      characterId: charId,
+      messages: [
+        {
+          id: 'a1',
+          role: 'user',
+          content: 'look',
+          timestamp: 3000,
+          attachments: [att],
+        },
+        {
+          id: 'a2',
+          role: 'user',
+          content: attachmentLabel([gone]),
+          timestamp: 3100,
+          attachments: [gone],
+        },
+      ],
+      createdAt: 3000,
+      updatedAt: 3100,
+    });
+
+    await exportBundle([charId]);
+    const zip = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+    expect(await zip.file(`attachments/${att.id}`)!.async('base64')).toBe(b64);
+
+    clearAll();
+    files.clear();
+    await importBundle();
+
+    const imported = await getSessionById('sess-att');
+    expect(imported).not.toBeNull();
+    // The unrecoverable attachment-only message is dropped.
+    expect(imported!.messages.map(m => m.id)).toEqual(['a1']);
+    const restored = imported!.messages[0].attachments!;
+    expect(restored).toHaveLength(1);
+    expect(restored[0].name).toBe('cat.png');
+    expect(restored[0].id).not.toBe(att.id);
+    expect(await loadAttachmentBase64(restored[0].id)).toBe(b64);
   });
 });

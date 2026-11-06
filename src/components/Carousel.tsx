@@ -90,6 +90,7 @@ interface CarouselProps {
   streamingContent: string;
   streamingPhase: 'rag' | 'generating';
   streamingRag: RetrievalInfo | null;
+  streamingStatus?: string | null;
   replacingMessageId: string | null;
   onStop: () => void;
 }
@@ -158,6 +159,7 @@ export default function Carousel({
   streamingContent,
   streamingPhase,
   streamingRag,
+  streamingStatus,
   replacingMessageId,
   onStop,
 }: CarouselProps) {
@@ -725,6 +727,7 @@ export default function Carousel({
           actions={i === cIndex && cardH > 0 && !overflows ? actionsNode : null}
           liveStreamText={item.live ? liveStreamText : null}
           liveRag={item.live ? streamingRag : null}
+          liveStatus={item.live ? streamingStatus : null}
           livePhase={streamingPhase}
         />,
       );
@@ -754,6 +757,7 @@ export default function Carousel({
     theme.carouselAnimMs,
     cardH,
     streamingRag,
+    streamingStatus,
     streamingPhase,
   ]);
 
@@ -1026,6 +1030,7 @@ function CarouselCard({
   animMs,
   liveStreamText,
   liveRag,
+  liveStatus,
   livePhase,
 }: {
   item: CardItem;
@@ -1049,6 +1054,7 @@ function CarouselCard({
   animMs?: number;
   liveStreamText?: string | null;
   liveRag?: RetrievalInfo | null;
+  liveStatus?: string | null;
   livePhase?: 'rag' | 'generating';
 }) {
   const [cardW, setCardW] = useState(0);
@@ -1263,7 +1269,7 @@ function CarouselCard({
                     </>
                   ) : null}
                   {showTyping ? (
-                    livePhase === 'rag' && !cardRag ? (
+                    liveStatus || (livePhase === 'rag' && !cardRag) ? (
                       <Text
                         style={{
                           color: colors.textMuted,
@@ -1271,7 +1277,7 @@ function CarouselCard({
                           fontStyle: 'italic',
                         }}
                       >
-                        rag…
+                        {liveStatus ?? 'rag…'}
                       </Text>
                     ) : (
                       <TypingDots color={textColor} />

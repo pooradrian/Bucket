@@ -16,6 +16,7 @@ import {
   addMessage,
   deleteMessage,
   updateMessage,
+  updateMessageAttachments,
   updateMessageWithVariants,
   updateSessionTimestamp,
   generateId,
@@ -28,6 +29,11 @@ import {
 } from './GenerationEngine';
 import { logEvent } from './EventLogger';
 import type { RetrievalInfo } from './PromptHandler';
+import {
+  Attachment,
+  attachmentLabel,
+  deleteAttachmentFiles,
+} from './Attachments';
 
 export interface ReplyVariant {
   id: string;
@@ -48,6 +54,7 @@ export interface ChatMessage {
   variants?: ReplyVariant[];
   requestInfo?: string;
   thinkingMs?: number;
+  attachments?: Attachment[];
 }
 
 export interface ChatSession {
@@ -133,6 +140,7 @@ export function useChat({
   streamingContent: string;
   streamingPhase: 'rag' | 'generating';
   streamingRag: RetrievalInfo | null;
+  streamingStatus: string | null;
   selectedMessageId: string | null;
   setSelectedMessageId: (id: string | null) => void;
   editingMessageId: string | null;
@@ -148,7 +156,11 @@ export function useChat({
   messagesData: (ChatMessage & { id: string })[];
   replacingMessageId: string | null;
   variantIndexMap: Record<string, number>;
-  handleSend: (text: string) => Promise<void>;
+  handleSend: (
+    text: string,
+    attachments?: Attachment[],
+    onCommitted?: () => void,
+  ) => Promise<void>;
   handleContinue: (target?: {
     character?: Character | null;
     qc?: QuickCharacter | null;
@@ -160,6 +172,7 @@ export function useChat({
   handleEditCancel: () => void;
   handleCopyMessage: (msg: ChatMessage) => void;
   handleDeleteMessage: (msg: ChatMessage) => void;
+  handleDeleteAttachment: (messageId: string, attachmentId: string) => void;
   handleRegenerate: () => Promise<void>;
   handleSwitchVariant: (msgId: string, direction: 1 | -1) => Promise<void>;
   handleSelectVariant: (
@@ -254,6 +267,7 @@ export function useChat({
   const streamingContent = run?.content ?? '';
   const streamingPhase = run?.phase ?? 'generating';
   const streamingRag = run?.rag ?? null;
+  const streamingStatus = run?.status ?? null;
   const replacingMessageId = run?.replaceMessageId ?? null;
   const error = storedError || null;
 
@@ -532,8 +546,15 @@ export function useChat({
   );
 
   const handleSend = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
+    async (
+      text: string,
+      attachments: Attachment[] = [],
+      onCommitted?: () => void,
+    ) => {
+      // A message with only attachments still needs text: the prompt builders
+      // key the latest user turn off its content, and it reads fine to the model.
+      const trimmed =
+        text.trim() || (attachments.length ? attachmentLabel(attachments) : '');
       if (!trimmed || !session || sending) {
         return;
       }
@@ -548,6 +569,7 @@ export function useChat({
         role: 'user',
         content: trimmed,
         timestamp: Date.now(),
+        ...(attachments.length ? { attachments } : {}),
       };
 
       const withUser: ChatSession = {
@@ -562,6 +584,7 @@ export function useChat({
       }
       setSession(withUser);
       setInputText('');
+      onCommitted?.();
       logEvent('message_sent', {
         charCount: userMessage.content.length,
         sessionMsgCount: withUser.messages.length,
@@ -695,6 +718,46 @@ export function useChat({
       setSelectedMessageId(null);
     },
     [session],
+  );
+
+  const handleDeleteAttachment = useCallback(
+    (messageId: string, attachmentId: string) => {
+      if (!session) {
+        return;
+      }
+      const msg = session.messages.find(m => m.id === messageId);
+      const target = msg?.attachments?.find(a => a.id === attachmentId);
+      if (!msg || !msg.attachments || !target) {
+        return;
+      }
+      const remaining = msg.attachments.filter(a => a.id !== attachmentId);
+      // Attachment-only messages carry an auto label; keep it truthful, and
+      // drop the message once nothing is left of it.
+      const autoLabelled = msg.content === attachmentLabel(msg.attachments);
+      if (autoLabelled && remaining.length === 0) {
+        handleDeleteMessage(msg);
+        deleteAttachmentFiles([target]);
+        return;
+      }
+      const content = autoLabelled ? attachmentLabel(remaining) : msg.content;
+      setSession({
+        ...session,
+        messages: session.messages.map(m =>
+          m.id === messageId
+            ? {
+                ...m,
+                content,
+                attachments: remaining.length ? remaining : undefined,
+              }
+            : m,
+        ),
+      });
+      updateMessageAttachments(messageId, remaining, content).catch(e =>
+        console.warn('Failed to update attachments:', e),
+      );
+      deleteAttachmentFiles([target]);
+    },
+    [session, handleDeleteMessage],
   );
 
   const handleRegenerate = useCallback(async () => {
@@ -1172,6 +1235,7 @@ export function useChat({
     streamingContent,
     streamingPhase,
     streamingRag,
+    streamingStatus,
     selectedMessageId,
     setSelectedMessageId,
     editingMessageId,
@@ -1196,6 +1260,7 @@ export function useChat({
     handleEditCancel,
     handleCopyMessage,
     handleDeleteMessage,
+    handleDeleteAttachment,
     handleRegenerate,
     handleSwitchVariant,
     handleSelectVariant,

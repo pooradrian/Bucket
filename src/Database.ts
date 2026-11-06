@@ -3,9 +3,10 @@ import { ChatSession, ChatMessage, ReplyVariant } from './useChat';
 import { encrypt, decrypt } from './Crypto';
 import { LorebookEntry, LorebookState } from './RAGHandler';
 import type { StoredMemory } from './Memory';
+import { Attachment, deleteAttachmentFiles } from './Attachments';
 
 const DB_NAME = 'bucket';
-const CURRENT_VERSION = 18;
+const CURRENT_VERSION = 19;
 
 let db: NitroSQLiteConnection | null = null;
 
@@ -357,6 +358,15 @@ function migrate(conn: NitroSQLiteConnection, from: number, to: number) {
         );
       }
 
+      if (v === 19) {
+        addColumnIfMissing(
+          conn,
+          'chat_messages',
+          'attachments',
+          'TEXT DEFAULT ""',
+        );
+      }
+
       conn.execute(`PRAGMA user_version = ${v}`);
       conn.execute('COMMIT');
     } catch (e) {
@@ -411,9 +421,10 @@ function compactDatabase(): void {
 
 async function decryptMessages(
   messages: Array<
-    Omit<ChatMessage, 'variants' | 'requestInfo'> & {
+    Omit<ChatMessage, 'variants' | 'requestInfo' | 'attachments'> & {
       variants?: string;
       requestInfo?: string;
+      attachments?: string;
     }
   >,
 ): Promise<ChatMessage[]> {
@@ -423,8 +434,48 @@ async function decryptMessages(
       content: await decrypt(msg.content),
       variants: msg.variants ? await decryptVariants(msg.variants) : undefined,
       requestInfo: msg.requestInfo ? await decrypt(msg.requestInfo) : undefined,
+      attachments: msg.attachments
+        ? await decryptAttachments(msg.attachments)
+        : undefined,
     })),
   );
+}
+
+function collectAttachmentRows(where: string, params: unknown[]): string[] {
+  const res = initDB().execute(
+    `SELECT attachments FROM chat_messages WHERE attachments <> '' AND ${where}`,
+    params as never[],
+  );
+  return (res.results ?? []).map(r => r.attachments as string);
+}
+
+/** Best-effort removal of attachment files once their rows are gone. */
+function purgeAttachmentRows(rows: string[]): void {
+  if (rows.length === 0) return;
+  (async () => {
+    for (const raw of rows) {
+      await deleteAttachmentFiles(await decryptAttachments(raw));
+    }
+  })().catch(() => {});
+}
+
+async function encryptAttachments(
+  attachments: Attachment[] | undefined,
+): Promise<string> {
+  if (!attachments || attachments.length === 0) {
+    return '';
+  }
+  return encrypt(JSON.stringify(attachments));
+}
+
+async function decryptAttachments(raw: string): Promise<Attachment[]> {
+  try {
+    const parsed = JSON.parse(await decrypt(raw));
+    return Array.isArray(parsed) ? (parsed as Attachment[]) : [];
+  } catch (e) {
+    console.warn('Failed to decrypt message attachments:', e);
+    return [];
+  }
 }
 
 async function encryptVariants(variants: ReplyVariant[]): Promise<string> {
@@ -450,7 +501,7 @@ async function decryptVariants(raw: string): Promise<ReplyVariant[]> {
 
 async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
   const messagesResult = initDB().execute(
-    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms, character_id, speaker_name FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
+    'SELECT id, role, content, timestamp, variants, request_info, thinking_ms, character_id, speaker_name, attachments FROM chat_messages WHERE session_id = ? ORDER BY seq ASC, rowid ASC',
     [sessionId],
   );
   if (!messagesResult.results) {
@@ -467,6 +518,7 @@ async function loadSessionMessages(sessionId: string): Promise<ChatMessage[]> {
       thinkingMs: (msg.thinking_ms as number) || undefined,
       characterId: (msg.character_id as string) || undefined,
       speakerName: (msg.speaker_name as string) || undefined,
+      attachments: msg.attachments ? (msg.attachments as string) : undefined,
     })),
   );
 }
@@ -525,9 +577,10 @@ export async function createSession(session: ChatSession): Promise<void> {
       const encryptedRequest = msg.requestInfo
         ? await encrypt(msg.requestInfo)
         : '';
+      const encryptedAttachments = await encryptAttachments(msg.attachments);
       d.execute(
-        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name)
-         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?)`,
+        `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name, attachments)
+         VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?, ?)`,
         [
           msg.id,
           session.id,
@@ -540,6 +593,7 @@ export async function createSession(session: ChatSession): Promise<void> {
           msg.thinkingMs ?? 0,
           msg.characterId ?? '',
           msg.speakerName ?? '',
+          encryptedAttachments,
         ],
       );
     }
@@ -589,12 +643,13 @@ export async function addMessage(
   const encryptedRequest = message.requestInfo
     ? await encrypt(message.requestInfo)
     : '';
+  const encryptedAttachments = await encryptAttachments(message.attachments);
   const position = atStart
     ? 'COALESCE(MIN(seq), 1) - 1'
     : 'COALESCE(MAX(seq), 0) + 1';
   d.execute(
-    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name)
-     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?)`,
+    `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name, attachments)
+     VALUES (?, ?, ?, ?, ?, (SELECT ${position} FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?, ?)`,
     [
       message.id,
       sessionId,
@@ -607,6 +662,7 @@ export async function addMessage(
       message.thinkingMs ?? 0,
       message.characterId ?? '',
       message.speakerName ?? '',
+      encryptedAttachments,
     ],
   );
   searchCachePut(sessionId, message);
@@ -717,16 +773,17 @@ export function deleteSession(sessionId: string): void {
     'DELETE FROM quick_characters WHERE session_id = ? AND starred = 0',
     [sessionId],
   );
-  d.execute('DELETE FROM memories WHERE scope_id = ?', [`session:${sessionId}`]);
-  d.execute(
-    'DELETE FROM kv_store WHERE key IN (?, ?, ?)',
-    [
-      `memorySeq:${sessionId}`,
-      `memoryQueries:${sessionId}`,
-      `memoryBackfillAsked:${sessionId}`,
-    ],
-  );
+  d.execute('DELETE FROM memories WHERE scope_id = ?', [
+    `session:${sessionId}`,
+  ]);
+  d.execute('DELETE FROM kv_store WHERE key IN (?, ?, ?)', [
+    `memorySeq:${sessionId}`,
+    `memoryQueries:${sessionId}`,
+    `memoryBackfillAsked:${sessionId}`,
+  ]);
+  const orphaned = collectAttachmentRows('session_id = ?', [sessionId]);
   d.execute('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
+  purgeAttachmentRows(orphaned);
   for (const [id, entry] of searchCache) {
     if (entry.sessionId === sessionId) {
       searchCache.delete(id);
@@ -786,9 +843,27 @@ export async function updateMessageWithVariants(
   }
 }
 
+export async function updateMessageAttachments(
+  messageId: string,
+  attachments: Attachment[],
+  content: string,
+): Promise<void> {
+  const d = initDB();
+  d.execute(
+    'UPDATE chat_messages SET attachments = ?, content = ? WHERE id = ?',
+    [await encryptAttachments(attachments), await encrypt(content), messageId],
+  );
+  const cached = searchCache.get(messageId);
+  if (cached) {
+    cached.content = content;
+  }
+}
+
 export function deleteMessage(messageId: string): void {
   const d = initDB();
+  const orphaned = collectAttachmentRows('id = ?', [messageId]);
   d.execute('DELETE FROM chat_messages WHERE id = ?', [messageId]);
+  purgeAttachmentRows(orphaned);
   searchCache.delete(messageId);
 }
 
@@ -1135,7 +1210,9 @@ export async function updateMemoryInDB(
   if (patch.vector !== undefined) {
     sets.push('vector = ?');
     params.push(
-      patch.vector.length > 0 ? await encrypt(JSON.stringify(patch.vector)) : '',
+      patch.vector.length > 0
+        ? await encrypt(JSON.stringify(patch.vector))
+        : '',
     );
     sets.push('vector_key = ?');
     params.push(patch.vector.length > 0 ? patch.vectorKey || '' : '');
@@ -1364,12 +1441,17 @@ export function deleteCharacterFromDB(id: string): void {
           )`,
       [`character:${id}`, id],
     );
+    const orphaned = collectAttachmentRows(
+      "session_id IN (SELECT id FROM chat_sessions WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = ''))",
+      [id],
+    );
     d.execute(
       "DELETE FROM chat_sessions WHERE character_id = ? AND (group_chat_id IS NULL OR group_chat_id = '')",
       [id],
     );
     d.execute('DELETE FROM characters WHERE id = ?', [id]);
     d.execute('COMMIT');
+    purgeAttachmentRows(orphaned);
   } catch (e) {
     d.execute('ROLLBACK');
     throw e;
@@ -1619,10 +1701,15 @@ export function deleteGroupChatFromDB(id: string): void {
       'DELETE FROM quick_characters WHERE session_id IN (SELECT id FROM chat_sessions WHERE group_chat_id = ?)',
       [id],
     );
+    const orphaned = collectAttachmentRows(
+      'session_id IN (SELECT id FROM chat_sessions WHERE group_chat_id = ?)',
+      [id],
+    );
     d.execute('DELETE FROM chat_sessions WHERE group_chat_id = ?', [id]);
     d.execute('DELETE FROM group_chat_members WHERE group_chat_id = ?', [id]);
     d.execute('DELETE FROM group_chats WHERE id = ?', [id]);
     d.execute('COMMIT');
+    purgeAttachmentRows(orphaned);
   } catch (e) {
     d.execute('ROLLBACK');
     throw e;

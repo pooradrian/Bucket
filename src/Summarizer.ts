@@ -1,4 +1,5 @@
 import { ChatMessage, ChatSession } from './useChat';
+import { digestMessages, runWithMedia } from './Attachments';
 import {
   PromptConfig,
   ChatMessageObject,
@@ -38,7 +39,8 @@ async function summarizeMessages(
   config: SummarizationConfig,
   promptConfig: PromptConfig,
 ): Promise<string> {
-  const conversationText = messages
+  const digest = await digestMessages(messages);
+  const conversationText = digest.messages
     .map(m => {
       if (m.content.startsWith('[Summary]')) {
         return m.content.replace(/^\[Summary\]\s*/, '');
@@ -64,13 +66,16 @@ Keep the summary under 200 words. Be factual and neutral. Do not add commentary.
     },
   ];
 
-  const ctrl = new AbortController();
-  const result = await getAIResponse(
-    summaryPrompt,
-    { ...promptConfig, model: config.model },
-    undefined,
-    false,
-    ctrl,
+  const result = await runWithMedia(digest.media, media =>
+    getAIResponse(
+      media.length
+        ? [summaryPrompt[0], { ...summaryPrompt[1], attachments: media }]
+        : summaryPrompt,
+      { ...promptConfig, model: config.model },
+      undefined,
+      false,
+      new AbortController(),
+    ),
   );
 
   return result.content.trim();

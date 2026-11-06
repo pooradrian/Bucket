@@ -3,11 +3,7 @@ import type { Character } from './CharacterEditor';
 import { useAppStore } from './store';
 import type { GroupChat } from './store';
 import type { LorebookState } from './RAGHandler';
-import type {
-  ChatMessage,
-  QuickCharacter,
-  ReplyVariant,
-} from './useChat';
+import type { ChatMessage, QuickCharacter, ReplyVariant } from './useChat';
 import {
   loadPromptConfig,
   sendToGroupLLM,
@@ -73,6 +69,8 @@ export interface GenerationRun {
   content: string;
   thinkingMs?: number;
   phase: 'rag' | 'generating';
+  /** Transient label for the typing bubble, e.g. attachment upload progress. */
+  status?: string;
   rag?: RetrievalInfo;
   replaceMessageId?: string;
 }
@@ -104,10 +102,7 @@ function notifyCompletion(): void {
   }
 }
 
-function serializeRequest(
-  request: RawRequest,
-  rag?: RetrievalInfo,
-): string {
+function serializeRequest(request: RawRequest, rag?: RetrievalInfo): string {
   const strippedBody = { ...request.body };
   delete (strippedBody as Record<string, unknown>).stream;
   return JSON.stringify({
@@ -137,21 +132,35 @@ function setRunContent(
     return {
       runs: {
         ...state.runs,
-        [sessionId]: { ...run, content, thinkingMs: thinkingMs ?? run.thinkingMs },
+        [sessionId]: {
+          ...run,
+          content,
+          thinkingMs: thinkingMs ?? run.thinkingMs,
+        },
       },
     };
   });
 }
 
-function setRunPhase(
-  sessionId: string,
-  phase: GenerationRun['phase'],
-): void {
+function setRunPhase(sessionId: string, phase: GenerationRun['phase']): void {
   useGenerationStore.setState(state => {
     const run = state.runs[sessionId];
     if (!run || run.phase === phase) return state;
     return {
       runs: { ...state.runs, [sessionId]: { ...run, phase } },
+    };
+  });
+}
+
+function setRunStatus(sessionId: string, status: string | null): void {
+  useGenerationStore.setState(state => {
+    const run = state.runs[sessionId];
+    if (!run || (run.status ?? null) === status) return state;
+    return {
+      runs: {
+        ...state.runs,
+        [sessionId]: { ...run, status: status ?? undefined },
+      },
     };
   });
 }
@@ -246,7 +255,18 @@ async function runGeneration(
     setRunContent(sessionId, displayed, thinkingMs);
   };
 
+  const onUpload = (fraction: number) => {
+    if (raw) return;
+    setRunStatus(
+      sessionId,
+      fraction >= 1
+        ? null
+        : `uploading attachments… ${Math.round(fraction * 100)}%`,
+    );
+  };
+
   const onToken = (token: string) => {
+    if (!raw) setRunStatus(sessionId, null);
     raw += token;
     if (!flushTimer) {
       flushTimer = setTimeout(flush, STREAM_FLUSH_MS);
@@ -314,6 +334,7 @@ async function runGeneration(
         onToken,
         controller,
         request.continueMode,
+        onUpload,
       );
     } else if (qc && character) {
       result = await sendToQCLLM(
@@ -326,6 +347,7 @@ async function runGeneration(
         controller,
         request.continueMode,
         quickCharacters,
+        onUpload,
       );
     } else if (character) {
       result = await sendToLLM(
@@ -340,6 +362,7 @@ async function runGeneration(
         quickCharacters,
         memoryContext,
         onRetrieval,
+        onUpload,
       );
     } else {
       throw new Error('No character selected for generation.');
@@ -449,9 +472,7 @@ async function runGeneration(
         : undefined;
       const partialSplit = splitThinking(partial);
       const cancelledThinkingMs =
-        partialSplit.hasThinking && !partialSplit.open
-          ? thinkingMs
-          : undefined;
+        partialSplit.hasThinking && !partialSplit.open ? thinkingMs : undefined;
       try {
         if (request.replaceMessageId && partial.length > 0) {
           const cancelUpdatedAt = Date.now();

@@ -34,6 +34,15 @@ import {
   visibleContent,
 } from './thinking';
 import Carousel from './components/Carousel';
+import {
+  AttachMenu,
+  AttachmentList,
+  PendingAttachments,
+  RecordingBar,
+  useAttachmentComposer,
+} from './components/AttachmentUI';
+import { attachmentLabel } from './Attachments';
+import AttachmentViewer from './components/AttachmentViewer';
 import ContextRing from './components/ContextRing';
 import MemoryBackfillModal from './components/MemoryBackfillModal';
 import { formatRagDuration, parseRagInfo } from './ragInfo';
@@ -87,10 +96,12 @@ interface MessageBubbleProps {
   onEditingTextChange: (text: string) => void;
   onCopy: (msg: ChatMessage) => void;
   onDelete: (msg: ChatMessage) => void;
+  onOpenAttachments: (msgId: string, index: number) => void;
   onRegenerate: () => void;
   onRetry: () => void;
   livePhase?: 'rag' | 'generating';
   liveRag?: RetrievalInfo | null;
+  liveStatus?: string | null;
 }
 
 function RagHeader({
@@ -217,10 +228,12 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   onEditingTextChange,
   onCopy,
   onDelete,
+  onOpenAttachments,
   onRegenerate,
   onRetry,
   livePhase,
   liveRag,
+  liveStatus,
 }: MessageBubbleProps) {
   const forceItalic = useAppStore(s => s.appSettings.forceItalic);
   const showThinking = useAppStore(s => s.appSettings.showThinking);
@@ -232,6 +245,11 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   const isError = item.id === '__error__';
   const isTyping = item.id === '__typing__';
   const isEditing = editingMessageId === item.id;
+  // Sent with no text of its own: only the attachment bubble is shown.
+  const attachmentOnly =
+    isUser &&
+    !!item.attachments?.length &&
+    item.content === attachmentLabel(item.attachments);
   const thought = splitThinking(item.content);
   const showThoughtBlock =
     thought.hasThinking && (showThinking || !thought.answer);
@@ -311,7 +329,7 @@ const MessageBubble = React.memo(function MessageBubbleInner({
     return (
       <TypingIndicator
         st={st}
-        label={livePhase === 'rag' && !rag ? 'rag…' : undefined}
+        label={liveStatus ?? (livePhase === 'rag' && !rag ? 'rag…' : undefined)}
         rag={showRag ? rag : null}
       />
     );
@@ -326,11 +344,10 @@ const MessageBubble = React.memo(function MessageBubbleInner({
       style={[
         st.messageContainer,
         isUser ? st.messageContainerUser : st.messageContainerAssistant,
-        hidden && { opacity: 0 },
       ]}
     >
       {speaker ? (
-        <View style={st.messageSenderRow}>
+        <View style={[st.messageSenderRow, hidden && { opacity: 0 }]}>
           {showAvatar ? (
             speaker.icon ? (
               <Image
@@ -360,268 +377,307 @@ const MessageBubble = React.memo(function MessageBubbleInner({
           ) : null}
         </View>
       ) : null}
-      <TouchableOpacity
-        activeOpacity={0.8}
-        ref={ref => registerBubble(item.id, ref)}
-        onLayout={e =>
-          onBubbleLayout(
-            item.id,
-            e.nativeEvent.layout.width,
-            e.nativeEvent.layout.height,
-          )
-        }
-        onPress={() => {
-          if (isStreamingMsg || isEditing) {
-            return;
-          }
-          if (inlineMode) {
-            onSelect(isSelected ? null : item.id);
-          } else {
-            onOpenCarousel(item.id);
-          }
-        }}
-        onLongPress={() => {
-          if (!isStreamingMsg && !isEditing) {
-            onSelect(isSelected ? null : item.id);
-          }
-        }}
-        style={[st.bubble, isUser ? st.bubbleUser : st.bubbleAssistant]}
-      >
-        {showRagBlock && rag ? (
-          <RagHeader
-            rag={rag}
-            st={st}
-            expanded={ragExpanded}
-            onToggle={() => setRagExpanded(v => !v)}
+      {item.attachments?.length ? (
+        // Its own bubble, outside the touchable one, so the carousel's
+        // measured origin/size only ever covers the message text. Tapping
+        // anywhere on it opens the attachment viewer.
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => onOpenAttachments(item.id, 0)}
+          style={[
+            st.bubble,
+            st.bubbleUser,
+            { marginBottom: attachmentOnly ? 0 : 4 },
+          ]}
+        >
+          <AttachmentList
+            attachments={item.attachments}
+            textColor={st.bubbleTextUser.color as string}
+            onPressItem={index => onOpenAttachments(item.id, index)}
           />
-        ) : null}
-        {isEditing ? (
-          <>
-            <AutoGrowTextInput
-              style={[st.bubbleText, isUser && st.bubbleTextUser]}
-              minHeight={44}
-              value={editingText}
-              onChangeText={onEditingTextChange}
-              autoFocus
+          {attachmentOnly && !isStreamingMsg ? (
+            <Text style={[st.timestampText, st.timestampUser]}>
+              {new Date(item.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
+      ) : null}
+      {attachmentOnly ? null : (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          ref={ref => registerBubble(item.id, ref)}
+          onLayout={e =>
+            onBubbleLayout(
+              item.id,
+              e.nativeEvent.layout.width,
+              e.nativeEvent.layout.height,
+            )
+          }
+          onPress={() => {
+            if (isStreamingMsg || isEditing) {
+              return;
+            }
+            if (inlineMode) {
+              onSelect(isSelected ? null : item.id);
+            } else {
+              onOpenCarousel(item.id);
+            }
+          }}
+          onLongPress={() => {
+            if (!isStreamingMsg && !isEditing) {
+              onSelect(isSelected ? null : item.id);
+            }
+          }}
+          style={[
+            st.bubble,
+            isUser ? st.bubbleUser : st.bubbleAssistant,
+            // Only the text bubble is hidden while the carousel shows its copy;
+            // the attachment bubble above it stays put.
+            hidden && { opacity: 0 },
+          ]}
+        >
+          {showRagBlock && rag ? (
+            <RagHeader
+              rag={rag}
+              st={st}
+              expanded={ragExpanded}
+              onToggle={() => setRagExpanded(v => !v)}
             />
-            <View
-              style={[
-                st.actionRow,
-                isUser ? st.actionRowUser : st.actionRowAssistant,
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => onEditSave(item, editingText)}
-                style={st.actionBtn}
+          ) : null}
+          {isEditing ? (
+            <>
+              <AutoGrowTextInput
+                style={[st.bubbleText, isUser && st.bubbleTextUser]}
+                minHeight={44}
+                value={editingText}
+                onChangeText={onEditingTextChange}
+                autoFocus
+              />
+              <View
+                style={[
+                  st.actionRow,
+                  isUser ? st.actionRowUser : st.actionRowAssistant,
+                ]}
               >
-                <Text style={st.actionBtnText}>Save</Text>
+                <TouchableOpacity
+                  onPress={() => onEditSave(item, editingText)}
+                  style={st.actionBtn}
+                >
+                  <Text style={st.actionBtnText}>Save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onEditCancel} style={st.actionBtn}>
+                  <Text style={st.actionBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : showThoughtBlock ? (
+            <>
+              <TouchableOpacity
+                onPress={() => setThoughtExpanded(v => !v)}
+                onLongPress={() => {
+                  if (!isStreamingMsg && !isEditing) {
+                    onSelect(isSelected ? null : item.id);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={st.thinkingLabel}>
+                  {thought.open || thoughtExpanded ? '▾ ' : '▸ '}
+                  {thought.open
+                    ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
+                    : item.thinkingMs !== undefined
+                      ? `thought for ${formatThinkingDuration(item.thinkingMs)}`
+                      : 'thought'}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={onEditCancel} style={st.actionBtn}>
-                <Text style={st.actionBtnText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : showThoughtBlock ? (
-          <>
-            <TouchableOpacity
-              onPress={() => setThoughtExpanded(v => !v)}
-              onLongPress={() => {
-                if (!isStreamingMsg && !isEditing) {
-                  onSelect(isSelected ? null : item.id);
-                }
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={st.thinkingLabel}>
-                {thought.open || thoughtExpanded ? '▾ ' : '▸ '}
-                {thought.open
-                  ? `thinking… ${formatThinkingDuration(thinkElapsed)}`
-                  : item.thinkingMs !== undefined
-                    ? `thought for ${formatThinkingDuration(item.thinkingMs)}`
-                    : 'thought'}
-              </Text>
-            </TouchableOpacity>
-            {(thought.open || thoughtExpanded) &&
-              !!thought.thinking &&
-              showThinking && (
-                <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-                  <Text style={st.thinkingBody}>
-                    {renderFormattedText(
-                      thought.thinking,
-                      st.thinkingBody,
-                      forceItalic,
-                    )}
+              {(thought.open || thoughtExpanded) &&
+                !!thought.thinking &&
+                showThinking && (
+                  <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+                    <Text style={st.thinkingBody}>
+                      {renderFormattedText(
+                        thought.thinking,
+                        st.thinkingBody,
+                        forceItalic,
+                      )}
+                    </Text>
                   </Text>
+                )}
+              {!!thought.answer && (
+                <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
+                  {(thought.open || thoughtExpanded) &&
+                  !!thought.thinking &&
+                  showThinking
+                    ? '\n\n'
+                    : null}
+                  {renderFormattedText(
+                    thought.answer,
+                    st.bubbleText,
+                    forceItalic,
+                  )}
                 </Text>
               )}
-            {!!thought.answer && (
+            </>
+          ) : (
+            <>
               <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-                {(thought.open || thoughtExpanded) &&
-                !!thought.thinking &&
-                showThinking
-                  ? '\n\n'
-                  : null}
                 {renderFormattedText(
-                  thought.answer,
+                  visibleContent(item.content, showThinking),
                   st.bubbleText,
                   forceItalic,
                 )}
               </Text>
-            )}
-          </>
-        ) : (
-          <>
-            <Text style={[st.bubbleText, isUser && st.bubbleTextUser]}>
-              {renderFormattedText(
-                visibleContent(item.content, showThinking),
-                st.bubbleText,
-                forceItalic,
-              )}
-            </Text>
-            {!isStreamingMsg && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginTop: 4,
-                  justifyContent: 'space-between',
-                }}
-              >
-                <Text
-                  style={[
-                    st.timestampText,
-                    isUser ? st.timestampUser : st.timestampAssistant,
-                    { marginTop: 0, flexShrink: 1 },
-                  ]}
-                >
-                  {new Date(item.timestamp).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
-                {!isUser && item.variants && item.variants.length > 0 && (
-                  <Text
-                    style={[st.variantCounter, { marginTop: 0, marginLeft: 8 }]}
-                  >
-                    {(variantIndexMap[item.id] ?? item.variants.length) + 1}/
-                    {item.variants.length + 1}
-                  </Text>
-                )}
-              </View>
-            )}
-            {isSelected && !isStreamingMsg && (
-              <View
-                style={[
-                  st.actionRow,
-                  inlineMode && { flexWrap: 'wrap' },
-                  isUser ? st.actionRowUser : st.actionRowAssistant,
-                ]}
-              >
-                {inlineMode && variantCount > 0 && (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => onSwitchVariant(item.id, -1)}
-                      disabled={deckIndex <= 0}
-                      style={[
-                        st.actionBtn,
-                        deckIndex <= 0 && st.actionBtnDisabled,
-                      ]}
-                    >
-                      <Text style={st.actionBtnText}>‹</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => onSwitchVariant(item.id, 1)}
-                      disabled={deckIndex >= variantCount}
-                      style={[
-                        st.actionBtn,
-                        deckIndex >= variantCount && st.actionBtnDisabled,
-                      ]}
-                    >
-                      <Text style={st.actionBtnText}>›</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                <TouchableOpacity
-                  onPress={() => onEdit(item)}
-                  style={st.actionBtn}
-                >
-                  <Text style={st.actionBtnText} numberOfLines={1}>
-                    Edit
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => onCopy(item)}
-                  style={st.actionBtn}
-                >
-                  <Text style={st.actionBtnText} numberOfLines={1}>
-                    Copy
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (confirmingDelete) {
-                      if (inlineMode && variantCount > 0) {
-                        onDeleteEntry(item.id, 'live');
-                        setConfirmingDelete(false);
-                      } else {
-                        onDelete(item);
-                      }
-                    } else {
-                      setConfirmingDelete(true);
-                    }
+              {!isStreamingMsg && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginTop: 4,
+                    justifyContent: 'space-between',
                   }}
-                  style={[
-                    st.actionBtn,
-                    confirmingDelete && st.actionBtnConfirm,
-                  ]}
                 >
                   <Text
-                    numberOfLines={1}
                     style={[
-                      st.actionBtnText,
-                      st.actionBtnTextDelete,
-                      confirmingDelete && { color: '#fff' },
+                      st.timestampText,
+                      isUser ? st.timestampUser : st.timestampAssistant,
+                      { marginTop: 0, flexShrink: 1 },
                     ]}
                   >
-                    {confirmingDelete ? 'Confirm' : 'Delete'}
+                    {new Date(item.timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </Text>
-                </TouchableOpacity>
-                {inlineMode && (
-                  <>
-                    <TouchableOpacity
-                      onPress={() => onFork(item.id, 'live')}
-                      style={st.actionBtn}
+                  {!isUser && item.variants && item.variants.length > 0 && (
+                    <Text
+                      style={[
+                        st.variantCounter,
+                        { marginTop: 0, marginLeft: 8 },
+                      ]}
                     >
-                      <Text style={st.actionBtnText} numberOfLines={1}>
-                        Fork
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => onFresh(item.id)}
-                      style={st.actionBtn}
-                    >
-                      <Text style={st.actionBtnText} numberOfLines={1}>
-                        Fresh
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-                {isLastAssistant && (
+                      {(variantIndexMap[item.id] ?? item.variants.length) + 1}/
+                      {item.variants.length + 1}
+                    </Text>
+                  )}
+                </View>
+              )}
+              {isSelected && !isStreamingMsg && (
+                <View
+                  style={[
+                    st.actionRow,
+                    inlineMode && { flexWrap: 'wrap' },
+                    isUser ? st.actionRowUser : st.actionRowAssistant,
+                  ]}
+                >
+                  {inlineMode && variantCount > 0 && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => onSwitchVariant(item.id, -1)}
+                        disabled={deckIndex <= 0}
+                        style={[
+                          st.actionBtn,
+                          deckIndex <= 0 && st.actionBtnDisabled,
+                        ]}
+                      >
+                        <Text style={st.actionBtnText}>‹</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => onSwitchVariant(item.id, 1)}
+                        disabled={deckIndex >= variantCount}
+                        style={[
+                          st.actionBtn,
+                          deckIndex >= variantCount && st.actionBtnDisabled,
+                        ]}
+                      >
+                        <Text style={st.actionBtnText}>›</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
                   <TouchableOpacity
-                    onPress={onRegenerate}
-                    disabled={sending}
-                    style={[st.actionBtn, sending && st.actionBtnDisabled]}
+                    onPress={() => onEdit(item)}
+                    style={st.actionBtn}
                   >
                     <Text style={st.actionBtnText} numberOfLines={1}>
-                      Regen
+                      Edit
                     </Text>
                   </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </>
-        )}
-      </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => onCopy(item)}
+                    style={st.actionBtn}
+                  >
+                    <Text style={st.actionBtnText} numberOfLines={1}>
+                      Copy
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (confirmingDelete) {
+                        if (inlineMode && variantCount > 0) {
+                          onDeleteEntry(item.id, 'live');
+                          setConfirmingDelete(false);
+                        } else {
+                          onDelete(item);
+                        }
+                      } else {
+                        setConfirmingDelete(true);
+                      }
+                    }}
+                    style={[
+                      st.actionBtn,
+                      confirmingDelete && st.actionBtnConfirm,
+                    ]}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        st.actionBtnText,
+                        st.actionBtnTextDelete,
+                        confirmingDelete && { color: '#fff' },
+                      ]}
+                    >
+                      {confirmingDelete ? 'Confirm' : 'Delete'}
+                    </Text>
+                  </TouchableOpacity>
+                  {inlineMode && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => onFork(item.id, 'live')}
+                        style={st.actionBtn}
+                      >
+                        <Text style={st.actionBtnText} numberOfLines={1}>
+                          Fork
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => onFresh(item.id)}
+                        style={st.actionBtn}
+                      >
+                        <Text style={st.actionBtnText} numberOfLines={1}>
+                          Fresh
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  {isLastAssistant && (
+                    <TouchableOpacity
+                      onPress={onRegenerate}
+                      disabled={sending}
+                      style={[st.actionBtn, sending && st.actionBtnDisabled]}
+                    >
+                      <Text style={st.actionBtnText} numberOfLines={1}>
+                        Regen
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 });
@@ -636,6 +692,7 @@ export default function ChatHandler({
   bottomInset,
 }: ChatHandlerProps) {
   const st = useTheme();
+  const composer = useAttachmentComposer();
   const showCharacterIcons = useAppStore(s => s.appSettings.showCharacterIcons);
   const groupCharDisplay = useAppStore(s => s.appSettings.showGroupCharNames);
   const accentColor = useAppStore(s => s.appSettings.accentColor);
@@ -656,6 +713,7 @@ export default function ChatHandler({
     streamingContent,
     streamingPhase,
     streamingRag,
+    streamingStatus,
     selectedMessageId,
     setSelectedMessageId,
     editingMessageId,
@@ -680,6 +738,7 @@ export default function ChatHandler({
     handleEditCancel,
     handleCopyMessage,
     handleDeleteMessage,
+    handleDeleteAttachment,
     handleRegenerate,
     handleSelectVariant,
     handleStudioEditEntry,
@@ -773,9 +832,9 @@ export default function ChatHandler({
     }
     sendTapTimerRef.current = setTimeout(() => {
       sendTapTimerRef.current = null;
-      handleSend(inputText);
+      handleSend(inputText, composer.peek(), composer.take);
     }, DOUBLE_TAP_DELAY_MS);
-  }, [handleSend, handleContinue, inputText]);
+  }, [handleSend, handleContinue, inputText, composer]);
 
   useEffect(() => {
     return () => {
@@ -885,6 +944,18 @@ export default function ChatHandler({
     [bubbleRefs, bubbleLayouts],
   );
 
+  const [attachmentViewer, setAttachmentViewer] = useState<{
+    messageId: string;
+    index: number;
+  } | null>(null);
+  const openAttachmentViewer = useCallback(
+    (messageId: string, index: number) => {
+      setSelectedMessageId(null);
+      setAttachmentViewer({ messageId, index });
+    },
+    [setSelectedMessageId],
+  );
+
   const handleCarouselDelete = useCallback(
     (msg: ChatMessage) => {
       handleDeleteMessage(msg);
@@ -974,6 +1045,15 @@ export default function ChatHandler({
 
   const [showGoDown, setShowGoDown] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const dangerColor = useAppStore(s => s.appSettings.dangerColor);
+  const attachColors = {
+    accent: accentColor,
+    bg: bgSecondary,
+    border: borderPrimary,
+    text: st.bubbleText.color as string,
+    muted: st.textMuted.color as string,
+    danger: dangerColor,
+  };
 
   useEffect(() => {
     const showEvent =
@@ -1093,10 +1173,12 @@ export default function ChatHandler({
           onEditingTextChange={setEditingText}
           onCopy={handleCopyMessage}
           onDelete={handleDeleteMessage}
+          onOpenAttachments={openAttachmentViewer}
           onRegenerate={handleRegenerate}
           onRetry={handleRetryError}
           livePhase={streamingPhase}
           liveRag={streamingRag}
+          liveStatus={streamingStatus}
         />
       );
     },
@@ -1108,6 +1190,7 @@ export default function ChatHandler({
       replacingMessageId,
       streamingPhase,
       streamingRag,
+      streamingStatus,
       st,
       variantIndexMap,
       carouselMessageId,
@@ -1129,6 +1212,7 @@ export default function ChatHandler({
       handleBubbleLayout,
       handleCopyMessage,
       handleDeleteMessage,
+      openAttachmentViewer,
       handleRegenerate,
       handleRetryError,
       resolveSpeaker,
@@ -1441,6 +1525,22 @@ export default function ChatHandler({
           </View>
         )}
 
+        <AttachMenu
+          visible={composer.menuOpen && !composer.recording}
+          bottomOffset={bottomInset + 64}
+          onClose={() => composer.setMenuOpen(false)}
+          colors={attachColors}
+          onImage={() => composer.addImages('library')}
+          onCamera={() => composer.addImages('camera')}
+          onFile={composer.addFiles}
+          onVoice={composer.startRecording}
+        />
+        <PendingAttachments
+          items={composer.pending}
+          busy={composer.busy}
+          onRemove={composer.remove}
+          colors={attachColors}
+        />
         <View
           style={[
             st.inputBar,
@@ -1496,18 +1596,59 @@ export default function ChatHandler({
               )}
             </View>
           ) : null}
-          <AutoGrowTextInput
-            style={st.textInput}
-            minHeight={44}
-            maxHeight={120}
-            stretchMaxHeight={320}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Message..."
-            placeholderTextColor={st.textMuted.color}
-            editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
-          />
-          {isStreaming ? (
+          {composer.recording ? (
+            <RecordingBar
+              elapsed={composer.elapsed}
+              onCancel={composer.cancelRecording}
+              onStop={composer.stopRecording}
+              colors={attachColors}
+            />
+          ) : (
+            <>
+              <TouchableOpacity
+                onPress={() => composer.setMenuOpen(!composer.menuOpen)}
+                disabled={sending}
+                style={{
+                  width: st.sendBtn.width,
+                  height: st.sendBtn.height,
+                  borderRadius: st.sendBtn.borderRadius,
+                  backgroundColor: bgSecondary,
+                  borderWidth: 1,
+                  borderColor: composer.menuOpen ? accentColor : borderPrimary,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginRight: 8,
+                  opacity: sending ? 0.4 : 1,
+                }}
+              >
+                <Text
+                  style={{
+                    color: composer.menuOpen ? accentColor : st.textMuted.color,
+                    fontSize: 24,
+                    fontWeight: '600',
+                    lineHeight: 24,
+                    marginTop: -2,
+                  }}
+                >
+                  +
+                </Text>
+              </TouchableOpacity>
+              <AutoGrowTextInput
+                style={st.textInput}
+                minHeight={44}
+                maxHeight={120}
+                stretchMaxHeight={320}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Message..."
+                placeholderTextColor={st.textMuted.color}
+                editable={
+                  !sending && (!isGroupChat || !!selectedReplyCharacter)
+                }
+              />
+            </>
+          )}
+          {composer.recording ? null : isStreaming ? (
             <TouchableOpacity style={st.stopBtn} onPress={handleStop}>
               <View style={st.stopSquare} />
             </TouchableOpacity>
@@ -1515,17 +1656,43 @@ export default function ChatHandler({
             <TouchableOpacity
               style={[
                 st.sendBtn,
-                (sending || (isGroupChat && !selectedReplyCharacter)) &&
+                (sending ||
+                  composer.busy ||
+                  (isGroupChat && !selectedReplyCharacter)) &&
                   st.sendBtnDisabled,
               ]}
               onPress={handleSendPress}
-              disabled={sending || (isGroupChat && !selectedReplyCharacter)}
+              disabled={
+                sending ||
+                composer.busy ||
+                (isGroupChat && !selectedReplyCharacter)
+              }
             >
               <Text style={st.sendBtnText}>›</Text>
             </TouchableOpacity>
           )}
         </View>
       </KeyboardAvoidingView>
+      {attachmentViewer &&
+        (() => {
+          const viewed = session?.messages.find(
+            m => m.id === attachmentViewer.messageId,
+          );
+          if (!viewed?.attachments?.length) {
+            // Last attachment (or the message) is gone.
+            setTimeout(() => setAttachmentViewer(null), 0);
+            return null;
+          }
+          return (
+            <AttachmentViewer
+              attachments={viewed.attachments}
+              startIndex={attachmentViewer.index}
+              colors={attachColors}
+              onClose={() => setAttachmentViewer(null)}
+              onDelete={id => handleDeleteAttachment(viewed.id, id)}
+            />
+          );
+        })()}
       {carouselMessage && (
         <Carousel
           message={carouselMessage}
@@ -1546,6 +1713,7 @@ export default function ChatHandler({
           streamingContent={streamingContent}
           streamingPhase={streamingPhase}
           streamingRag={streamingRag}
+          streamingStatus={streamingStatus}
           replacingMessageId={replacingMessageId}
           onStop={handleStop}
         />

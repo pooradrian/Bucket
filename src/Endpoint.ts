@@ -5,6 +5,7 @@ import {
   TimingMetrics,
 } from './PromptHandler';
 import { ensureLocalNetworkAccess } from './LocalNetwork';
+import { expandMessages } from './Attachments';
 
 export interface RawRequest {
   url: string;
@@ -104,6 +105,7 @@ function streamWithXHR(
   body: object,
   onToken: (token: string) => void,
   controller: AbortController,
+  onUpload?: (fraction: number) => void,
 ): Promise<{ content: string; ttfbMs: number }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -235,6 +237,12 @@ function streamWithXHR(
       xhr.abort();
     });
 
+    if (onUpload) {
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable && e.total > 0) onUpload(e.loaded / e.total);
+      };
+    }
+
     startTime = performance.now();
     xhr.send(JSON.stringify(body));
   });
@@ -340,6 +348,7 @@ export async function getAIResponse(
   onToken?: (token: string) => void,
   streaming: boolean = true,
   controller?: AbortController,
+  onUpload?: (fraction: number) => void,
 ): Promise<{ content: string; request: RawRequest; metrics: TimingMetrics }> {
   const configuredUrl = config.apiUrl?.trim();
   if (!configuredUrl) {
@@ -371,9 +380,18 @@ export async function getAIResponse(
     topPNum >= 0 &&
     topPNum <= 1;
 
+  // Attachment payloads only ride along in `sendBody`; `body` (what gets
+  // stored and shown in the request viewer) keeps placeholders instead.
+  const hasAttachments = messages.some(m => m.attachments?.length);
+  if (hasAttachments) onUpload?.(0);
+  const expanded = hasAttachments ? await expandMessages(messages) : null;
+  const plainMessages = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
   const body: Record<string, unknown> = {
     model: config.model || 'gpt-4o',
-    messages,
+    messages: expanded ? expanded.display : plainMessages,
     stream: streaming,
   };
   if (hasTemp) {
@@ -400,6 +418,9 @@ export async function getAIResponse(
     }
     Object.assign(body, parsedExtra);
   }
+  const sendBody: Record<string, unknown> = expanded
+    ? { ...body, messages: expanded.api }
+    : body;
 
   const request: RawRequest = { url, body };
 
@@ -438,9 +459,10 @@ export async function getAIResponse(
       const result = await streamWithXHR(
         url,
         headers,
-        body,
+        sendBody,
         onToken ?? (() => {}),
         ctrl,
+        hasAttachments ? onUpload : undefined,
       );
       ttfbMs = result.ttfbMs;
       content = result.content;
@@ -449,7 +471,7 @@ export async function getAIResponse(
         method: 'POST',
         url,
         headers,
-        data: body,
+        data: sendBody,
         signal: ctrl.signal,
       });
       ttfbMs = performance.now() - t0;

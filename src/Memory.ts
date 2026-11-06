@@ -1,4 +1,5 @@
 import type { ChatMessage } from './useChat';
+import { Attachment, digestMessages, runWithMedia } from './Attachments';
 import type { ChatMessageObject, PromptConfig } from './PromptHandler';
 import { estimateTokens } from './PromptHandler';
 import { getAIResponse } from './Endpoint';
@@ -190,9 +191,7 @@ export function getMemoryConfig(
     maxResults: Math.round(clamp(num(settings.maxResults, 5), 1, 20)),
     minSimilarity,
     maxQueries: Math.round(clamp(num(settings.maxQueries, 4), 1, 8)),
-    everyNMessages: Math.round(
-      clamp(num(settings.everyNMessages, 6), 1, 100),
-    ),
+    everyNMessages: Math.round(clamp(num(settings.everyNMessages, 6), 1, 100)),
     maxStored: Math.round(clamp(num(settings.maxStored, 500), 10, 5000)),
     backfillChunk: Math.round(clamp(num(settings.backfillChunk, 40), 5, 200)),
   };
@@ -203,7 +202,9 @@ export function memoryScopeId(
   characterId: string,
   sessionId: string,
 ): string {
-  return scope === 'session' ? `session:${sessionId}` : `character:${characterId}`;
+  return scope === 'session'
+    ? `session:${sessionId}`
+    : `character:${characterId}`;
 }
 
 export function memoryRagConfig(config: PromptConfig): RAGConfig {
@@ -234,9 +235,7 @@ const MEMORY_PLACEHOLDER =
 
 function isMemoryPlaceholder(value: string): boolean {
   return (
-    !value ||
-    value.toUpperCase() === 'NONE' ||
-    MEMORY_PLACEHOLDER.test(value)
+    !value || value.toUpperCase() === 'NONE' || MEMORY_PLACEHOLDER.test(value)
   );
 }
 
@@ -302,7 +301,9 @@ export function formatMemoryMessages(
         )}`;
       }
       const body = truncate(content, 1200);
-      return message.role === 'user' ? `User: ${body}` : `${characterName}: ${body}`;
+      return message.role === 'user'
+        ? `User: ${body}`
+        : `${characterName}: ${body}`;
     })
     .join('\n\n');
 }
@@ -363,20 +364,27 @@ async function callMemoryModel(
   memoryConfig: MemoryConfig,
   controller: AbortController,
   timeoutMs: number,
+  media: Attachment[] = [],
 ): Promise<string> {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const result = await getAIResponse(
-      messages,
-      {
-        ...config,
-        model: memoryConfig.model,
-        temperature: '0.2',
-        topP: '',
-      },
-      undefined,
-      false,
-      controller,
+    const result = await runWithMedia(media, attached =>
+      getAIResponse(
+        attached.length
+          ? messages.map((m, i) =>
+              i === messages.length - 1 ? { ...m, attachments: attached } : m,
+            )
+          : messages,
+        {
+          ...config,
+          model: memoryConfig.model,
+          temperature: '0.2',
+          topP: '',
+        },
+        undefined,
+        false,
+        controller,
+      ),
     );
     return result.content;
   } finally {
@@ -521,8 +529,7 @@ export async function buildMemoryContext(input: {
   const ragConfig = memoryRagConfig(input.config);
   const key = embeddingKey(ragConfig, input.config);
   const memories = (await getMemoriesForScopeFromDB(input.scopeId)).filter(
-    memory =>
-      memory.vector.length > 0 && memory.vectorKey === key,
+    memory => memory.vector.length > 0 && memory.vectorKey === key,
   );
   if (memories.length === 0) {
     return empty;
@@ -556,7 +563,9 @@ async function storeFacts(
     return 0;
   }
   const existing = await getMemoriesForScopeFromDB(scopeId);
-  const seen = new Set(existing.map(memory => memory.text.trim().toLowerCase()));
+  const seen = new Set(
+    existing.map(memory => memory.text.trim().toLowerCase()),
+  );
   const unique = facts.filter(fact => {
     const key = fact.trim().toLowerCase();
     if (seen.has(key)) return false;
@@ -663,9 +672,7 @@ const passQueues = new Map<string, Promise<void>>();
 
 export function queueMemoryPass(input: MemoryPassInput): Promise<void> {
   const previous = passQueues.get(input.sessionId) ?? Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(() => runMemoryPass(input));
+  const next = previous.catch(() => {}).then(() => runMemoryPass(input));
   passQueues.set(
     input.sessionId,
     next.catch(() => {}),
@@ -710,9 +717,7 @@ export async function runMemoryPass(input: MemoryPassInput): Promise<void> {
   }
 
   const recent = messages.slice(-MEMORY_RECENT_MESSAGES);
-  const factsChunk = factsDue
-    ? pending.slice(-MEMORY_PASS_MAX_MESSAGES)
-    : [];
+  const factsChunk = factsDue ? pending.slice(-MEMORY_PASS_MAX_MESSAGES) : [];
   const existing = await getMemoriesForScopeFromDB(input.scopeId);
   const remembered = existing
     .slice()
@@ -721,23 +726,27 @@ export async function runMemoryPass(input: MemoryPassInput): Promise<void> {
     .map(memory => memory.text);
 
   const controller = new AbortController();
+  const union = [...recent];
+  for (const m of factsChunk) {
+    if (!union.some(u => u.id === m.id)) union.push(m);
+  }
+  const digest = await digestMessages(union);
+  const digested = new Map(digest.messages.map(m => [m.id, m]));
+  const pick = (list: ChatMessage[]) => list.map(m => digested.get(m.id) ?? m);
   const raw = await callMemoryModel(
     buildMemoryPassMessages({
       characterName: input.characterName,
-      recent,
-      pending: factsChunk,
+      recent: pick(recent),
+      pending: pick(factsChunk),
       remembered,
     }),
     input.config,
     memoryConfig,
     controller,
     60000,
+    digest.media,
   );
-  const output = parseMemoryOutput(
-    raw,
-    memoryConfig.maxQueries,
-    4,
-  );
+  const output = parseMemoryOutput(raw, memoryConfig.maxQueries, 4);
   if (output.queries.length > 0) {
     setKV(
       `memoryQueries:${input.sessionId}`,
@@ -814,16 +823,18 @@ export async function runMemoryBackfill(
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MEMORY_REMEMBERED_LIMIT)
       .map(memory => memory.text);
+    const digest = await digestMessages(chunk);
     const raw = await callMemoryModel(
       buildBackfillMessages({
         characterName: input.characterName,
-        messages: chunk,
+        messages: digest.messages,
         remembered,
       }),
       input.config,
       memoryConfig,
       controller,
       120000,
+      digest.media,
     );
     calls++;
     const output = parseMemoryOutput(raw, 0, 4);
