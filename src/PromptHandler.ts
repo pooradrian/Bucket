@@ -1012,7 +1012,8 @@ export async function sendToLLM(
   content: string;
   request: RawRequest;
   metrics: TimingMetrics;
-  retrieval: RetrievalInfo;
+  /** Absent when no lorebook retrieval ran for this reply. */
+  retrieval?: RetrievalInfo;
 }> {
   const buildStart = performance.now();
 
@@ -1021,6 +1022,7 @@ export async function sendToLLM(
 
   const retrievalStart = performance.now();
   let retrieval: RetrievalInfo = { ms: 0, results: [] };
+  let retrievalRan = false;
   let lorebookContext: string | undefined;
   if (lorebooks && lorebooks.length > 0) {
     const combinedEntries: { id: number; text: string }[] = [];
@@ -1067,6 +1069,7 @@ export async function sendToLLM(
       } catch (e) {
         console.warn('Lorebook retrieval failed:', e);
       }
+      retrievalRan = true;
       retrieval = {
         ms: Math.round(performance.now() - retrievalStart),
         results: relevant,
@@ -1108,7 +1111,7 @@ export async function sendToLLM(
     ...(quickCharacters ?? []).map(q => q.name),
   ]);
   result.metrics.promptBuildMs = promptBuildMs;
-  return { ...result, retrieval };
+  return { ...result, retrieval: retrievalRan ? retrieval : undefined };
 }
 
 export async function sendToGroupLLM(
