@@ -155,6 +155,8 @@ export function useChat({
   }) => Promise<void>;
   handleEditMessage: (msg: ChatMessage) => void;
   handleEditSave: (msg: ChatMessage, newText: string) => void;
+  handleInlineEditSave: (msg: ChatMessage, newText: string) => Promise<void>;
+  handleInlineFresh: (msgId: string) => Promise<void>;
   handleEditCancel: () => void;
   handleCopyMessage: (msg: ChatMessage) => void;
   handleDeleteMessage: (msg: ChatMessage) => void;
@@ -1068,6 +1070,30 @@ export function useChat({
     [session, handleDeleteMessage, commitVariantUpdate],
   );
 
+  const handleInlineEditSave = useCallback(
+    async (msg: ChatMessage, newText: string) => {
+      if (!newText.trim()) {
+        return;
+      }
+      await handleStudioEditEntry(msg.id, 'live', newText);
+      setEditingMessageId(null);
+      setEditingText('');
+    },
+    [handleStudioEditEntry],
+  );
+
+  const handleInlineFresh = useCallback(
+    async (msgId: string) => {
+      const newId = await handleStudioFresh(msgId);
+      if (newId) {
+        setSelectedMessageId(null);
+        setEditingMessageId(msgId);
+        setEditingText('');
+      }
+    },
+    [handleStudioFresh],
+  );
+
   const handleStop = useCallback(() => {
     const sessionId = sessionIdRef.current;
     if (sessionId) {
@@ -1165,6 +1191,8 @@ export function useChat({
     handleContinue,
     handleEditMessage,
     handleEditSave,
+    handleInlineEditSave,
+    handleInlineFresh,
     handleEditCancel,
     handleCopyMessage,
     handleDeleteMessage,

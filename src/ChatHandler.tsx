@@ -72,6 +72,11 @@ interface MessageBubbleProps {
   speaker?: { name: string; icon?: string } | null;
   onSelect: (id: string | null) => void;
   onOpenCarousel: (id: string) => void;
+  inlineMode: boolean;
+  onSwitchVariant: (msgId: string, direction: 1 | -1) => void;
+  onFork: (msgId: string, sourceKey: string) => void;
+  onFresh: (msgId: string) => void;
+  onDeleteEntry: (msgId: string, entryKey: string) => void;
   registerBubble: (id: string, ref: TouchableOpacityInstance | null) => void;
   onBubbleLayout: (id: string, width: number, height: number) => void;
   onEdit: (msg: ChatMessage) => void;
@@ -197,6 +202,11 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   speaker,
   onSelect,
   onOpenCarousel,
+  inlineMode,
+  onSwitchVariant,
+  onFork,
+  onFresh,
+  onDeleteEntry,
   registerBubble,
   onBubbleLayout,
   onEdit,
@@ -233,6 +243,8 @@ const MessageBubble = React.memo(function MessageBubbleInner({
   const [ragExpanded, setRagExpanded] = useState(false);
   const [thoughtExpanded, setThoughtExpanded] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const variantCount = item.variants?.length ?? 0;
+  const deckIndex = variantIndexMap[item.id] ?? variantCount;
   useEffect(() => {
     if (!confirmingDelete) {
       return;
@@ -359,7 +371,12 @@ const MessageBubble = React.memo(function MessageBubbleInner({
           )
         }
         onPress={() => {
-          if (!isStreamingMsg && !isEditing) {
+          if (isStreamingMsg || isEditing) {
+            return;
+          }
+          if (inlineMode) {
+            onSelect(isSelected ? null : item.id);
+          } else {
             onOpenCarousel(item.id);
           }
         }}
@@ -497,9 +514,34 @@ const MessageBubble = React.memo(function MessageBubbleInner({
               <View
                 style={[
                   st.actionRow,
+                  inlineMode && { flexWrap: 'wrap' },
                   isUser ? st.actionRowUser : st.actionRowAssistant,
                 ]}
               >
+                {inlineMode && variantCount > 0 && (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => onSwitchVariant(item.id, -1)}
+                      disabled={deckIndex <= 0}
+                      style={[
+                        st.actionBtn,
+                        deckIndex <= 0 && st.actionBtnDisabled,
+                      ]}
+                    >
+                      <Text style={st.actionBtnText}>‹</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => onSwitchVariant(item.id, 1)}
+                      disabled={deckIndex >= variantCount}
+                      style={[
+                        st.actionBtn,
+                        deckIndex >= variantCount && st.actionBtnDisabled,
+                      ]}
+                    >
+                      <Text style={st.actionBtnText}>›</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
                 <TouchableOpacity
                   onPress={() => onEdit(item)}
                   style={st.actionBtn}
@@ -519,7 +561,12 @@ const MessageBubble = React.memo(function MessageBubbleInner({
                 <TouchableOpacity
                   onPress={() => {
                     if (confirmingDelete) {
-                      onDelete(item);
+                      if (inlineMode && variantCount > 0) {
+                        onDeleteEntry(item.id, 'live');
+                        setConfirmingDelete(false);
+                      } else {
+                        onDelete(item);
+                      }
                     } else {
                       setConfirmingDelete(true);
                     }
@@ -540,6 +587,26 @@ const MessageBubble = React.memo(function MessageBubbleInner({
                     {confirmingDelete ? 'Confirm' : 'Delete'}
                   </Text>
                 </TouchableOpacity>
+                {inlineMode && (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => onFork(item.id, 'live')}
+                      style={st.actionBtn}
+                    >
+                      <Text style={st.actionBtnText} numberOfLines={1}>
+                        Fork
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => onFresh(item.id)}
+                      style={st.actionBtn}
+                    >
+                      <Text style={st.actionBtnText} numberOfLines={1}>
+                        Fresh
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
                 {isLastAssistant && (
                   <TouchableOpacity
                     onPress={onRegenerate}
@@ -575,6 +642,8 @@ export default function ChatHandler({
   const accentColor = useAppStore(s => s.appSettings.accentColor);
   const bgSecondary = useAppStore(s => s.appSettings.bgSecondary);
   const borderPrimary = useAppStore(s => s.appSettings.borderPrimary);
+  const inlineMode =
+    useAppStore(s => s.appSettings.messageEditMode) === 'inline';
   const showContextUsage = useAppStore(s => s.appSettings.showContextUsage);
   const showContextPercent = useAppStore(s => s.appSettings.showContextPercent);
   const promptConfigVersion = useAppStore(s => s.promptConfigVersion);
@@ -606,7 +675,9 @@ export default function ChatHandler({
     handleSend,
     handleContinue,
     handleEditMessage,
-    handleEditSave,
+    handleInlineEditSave,
+    handleInlineFresh,
+    handleSwitchVariant,
     handleEditCancel,
     handleCopyMessage,
     handleDeleteMessage,
@@ -1003,10 +1074,15 @@ export default function ChatHandler({
           speaker={resolveSpeaker(item)}
           onSelect={setSelectedMessageId}
           onOpenCarousel={openCarousel}
+          inlineMode={inlineMode}
+          onSwitchVariant={handleSwitchVariant}
+          onFork={handleStudioFork}
+          onFresh={handleInlineFresh}
+          onDeleteEntry={handleStudioDeleteEntry}
           registerBubble={registerBubble}
           onBubbleLayout={handleBubbleLayout}
           onEdit={handleEditMessage}
-          onEditSave={handleEditSave}
+          onEditSave={handleInlineEditSave}
           onEditCancel={handleEditCancel}
           editingMessageId={editingMessageId}
           editingText={editingText}
@@ -1033,7 +1109,12 @@ export default function ChatHandler({
       carouselMessageId,
       carouselReady,
       handleEditMessage,
-      handleEditSave,
+      handleInlineEditSave,
+      handleInlineFresh,
+      handleSwitchVariant,
+      handleStudioFork,
+      handleStudioDeleteEntry,
+      inlineMode,
       handleEditCancel,
       editingMessageId,
       editingText,

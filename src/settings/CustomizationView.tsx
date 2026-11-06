@@ -26,11 +26,7 @@ import {
 } from './ui';
 
 export type CustomizationSection =
-  | 'theme'
-  | 'colors'
-  | 'sizes'
-  | 'fonts'
-  | 'display';
+  'theme' | 'colors' | 'sizes' | 'fonts' | 'display';
 
 interface CustomizationViewProps {
   section: CustomizationSection;
@@ -136,7 +132,9 @@ export default function CustomizationView({
               ]}
               onPress={handleShareTheme}
             >
-              <Text style={[st.settingsToggleText, st.settingsToggleTextActive]}>
+              <Text
+                style={[st.settingsToggleText, st.settingsToggleTextActive]}
+              >
                 Share
               </Text>
             </TouchableOpacity>
@@ -273,6 +271,20 @@ export default function CustomizationView({
         value={values.forceItalic === 'true'}
         accent={values.accentColor}
         onChange={next => handleChange('forceItalic', next ? 'true' : 'false')}
+      />
+
+      <OptionRow
+        label={LABELS.messageEditMode}
+        note="Carousel opens a studio on tap with swipeable variants. Traditional edits in place: long-press a message for variant arrows, Edit, Fork, Fresh and Regen."
+        options={[
+          { value: 'carousel', label: 'Carousel' },
+          { value: 'inline', label: 'Traditional' },
+        ]}
+        value={appSettings.messageEditMode}
+        accent={values.accentColor}
+        onChange={messageEditMode =>
+          setAppSettings({ ...appSettings, messageEditMode })
+        }
       />
 
       <TextField

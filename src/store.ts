@@ -72,6 +72,7 @@ export interface AppSettings extends ThemePreset {
   notificationMode: 'off' | 'vibrate' | 'sound' | 'both';
   notificationSound: string;
   carouselAnimMs: number;
+  messageEditMode: 'carousel' | 'inline';
 }
 
 const SETTINGS_KEY = 'settings';
@@ -129,6 +130,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notificationMode: 'off',
   notificationSound: '',
   carouselAnimMs: 1000,
+  messageEditMode: 'carousel',
   dangerColor: '#cc3333',
 };
 
@@ -255,6 +257,8 @@ export function parseSavedSettings(raw: unknown): AppSettings {
       : 'off';
   result.notificationSound =
     typeof saved.notificationSound === 'string' ? saved.notificationSound : '';
+  result.messageEditMode =
+    saved.messageEditMode === 'inline' ? 'inline' : 'carousel';
   result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
 
   for (const key of THEME_COLOR_KEYS) {
