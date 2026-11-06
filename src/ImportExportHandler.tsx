@@ -46,10 +46,12 @@ import {
 
 interface ImportExportHandlerProps {
   bottomInset: number;
+  onOpenCrashBackups?: () => void;
 }
 
 export default function ImportExportHandler({
   bottomInset,
+  onOpenCrashBackups,
 }: ImportExportHandlerProps) {
   const st = useTheme();
   const {
@@ -532,6 +534,14 @@ export default function ImportExportHandler({
         </Text>
         <Text style={st.cardDescription}>
           Export as CC V1, CC V2, or .buk bundle
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={st.card} onPress={onOpenCrashBackups}>
+        <Text style={st.cardTitle}>Crash Backups</Text>
+        <Text style={st.cardDescription}>
+          Extra automatic backups saved after a crash, in case the crash prompt
+          export doesn't go through
         </Text>
       </TouchableOpacity>
 

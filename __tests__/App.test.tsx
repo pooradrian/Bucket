@@ -46,6 +46,7 @@ jest.mock('../src/CrashExport', () => ({
   clearPendingCrash: jest.fn(),
   reportRoadblock: jest.fn(),
   crashExport: jest.fn().mockResolvedValue(null),
+  autoCrashBackup: jest.fn().mockResolvedValue(undefined),
   getCrashLogText: jest.fn().mockResolvedValue(''),
 }));
 jest.mock('../src/Database', () => ({

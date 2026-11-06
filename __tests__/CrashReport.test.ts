@@ -6,6 +6,8 @@ jest.mock('react-native-fs', () => {
     readFile: jest.fn().mockRejectedValue(new Error('ENOENT')),
     writeFile: jest.fn().mockResolvedValue(undefined),
     unlink: jest.fn().mockResolvedValue(undefined),
+    moveFile: jest.fn().mockResolvedValue(undefined),
+    readDir: jest.fn().mockResolvedValue([]),
   };
   return { __esModule: true, default: fs, ...fs };
 });
@@ -200,6 +202,7 @@ describe('crashExport', () => {
     const path = await crashExport();
 
     expect(path).toBe('/tmp/cache/export/backup.buk');
+    expect(RNFS.moveFile).not.toHaveBeenCalled();
     expect(mockExportBuk).toHaveBeenCalledWith(
       expect.objectContaining({
         format: 'buk',
@@ -212,7 +215,7 @@ describe('crashExport', () => {
       }),
     );
     expect(mockSaveToDisk).toHaveBeenCalledWith(
-      '/tmp/cache/export/backup.buk',
+      path,
       'application/octet-stream',
       expect.stringMatching(/^CRASH-.*\.buk$/),
     );

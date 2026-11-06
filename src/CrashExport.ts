@@ -6,6 +6,11 @@ import {
   getAllGroupChatsFromDB,
   getAllFoldersFromDB,
 } from './Database';
+import {
+  listCrashBackups,
+  promptCrashBackupCleanup,
+  storeCrashBackup,
+} from './CrashBackups';
 import { exportBuk, saveToDisk } from './ImportExport';
 import {
   getEvents,
@@ -202,40 +207,83 @@ export async function getCrashLogText(report: CrashReport): Promise<string> {
   return formatCrashLog(report, log);
 }
 
-export async function crashExport(): Promise<string | null> {
+function crashBackupFilename(): string {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
+  return `CRASH-${dateStr}@${timeStr}.buk`;
+}
+
+/** Builds a full export (with crash log) in the cache; returns its path. */
+async function buildCrashExportFile(
+  report?: CrashReport | null,
+): Promise<string> {
+  const characters = await getAllCharactersFromDB();
+  const groups = await getAllGroupChatsFromDB();
+  const folders = getAllFoldersFromDB();
+  const crash = report === undefined ? await readPendingCrash() : report;
+
+  return exportBuk({
+    format: 'buk',
+    characterIds: characters.map(c => c.id),
+    groupIds: groups.map(g => g.id),
+    folderIds: folders.map(f => f.id),
+    includeSettings: true,
+    includeLorebooks: true,
+    includeChats: true,
+    extraFiles: crash
+      ? { 'Bucket/crash_log.txt': await getCrashLogText(crash) }
+      : undefined,
+  });
+}
+
+/**
+ * Exports everything into persistent crash backup storage and returns the
+ * stored path, or null on failure.
+ */
+export async function createCrashBackup(
+  report?: CrashReport | null,
+): Promise<string | null> {
   try {
-    const characters = await getAllCharactersFromDB();
-    const groups = await getAllGroupChatsFromDB();
-    const folders = getAllFoldersFromDB();
-    const report = await readPendingCrash();
+    const path = await buildCrashExportFile(report);
+    return await storeCrashBackup(path, crashBackupFilename());
+  } catch (e) {
+    console.warn('Crash backup failed:', e);
+    return null;
+  }
+}
 
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`;
-    const filename = `CRASH-${dateStr}@${timeStr}.buk`;
+/**
+ * Automatic backup run on the launch after a crash. Skips when a backup
+ * newer than the crash already exists (the app was killed before the prompt
+ * was dismissed), then asks to clean up if backups have bunched up.
+ */
+export async function autoCrashBackup(report: CrashReport): Promise<void> {
+  const crashedAt = Date.parse(report.timestamp);
+  const [latest] = await listCrashBackups();
+  const covered =
+    latest && !Number.isNaN(crashedAt) && latest.time >= crashedAt;
+  if (!covered) await createCrashBackup(report);
+  await promptCrashBackupCleanup();
+}
 
-    const path = await exportBuk({
-      format: 'buk',
-      characterIds: characters.map(c => c.id),
-      groupIds: groups.map(g => g.id),
-      folderIds: folders.map(f => f.id),
-      includeSettings: true,
-      includeLorebooks: true,
-      includeChats: true,
-      extraFiles: report
-        ? { 'Bucket/crash_log.txt': await getCrashLogText(report) }
-        : undefined,
-    });
-
+/**
+ * Manual full export (crash prompt / debugger). Builds a fresh export and
+ * hands it to the share dialog; independent of the automatic crash backups.
+ */
+export async function crashExport(
+  report?: CrashReport | null,
+): Promise<string | null> {
+  try {
+    const path = await buildCrashExportFile(report);
     try {
-      await saveToDisk(path, 'application/octet-stream', filename);
+      await saveToDisk(path, 'application/octet-stream', crashBackupFilename());
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg !== 'User did not share') {
         console.warn('Crash export save failed:', e);
       }
     }
-
     return path;
   } catch (e) {
     console.warn('Crash export failed:', e);

@@ -41,7 +41,7 @@ export default function CrashPrompt({ report, onDismiss }: CrashPromptProps) {
     if (exporting) return;
     setExporting(true);
     try {
-      const path = await crashExport();
+      const path = await crashExport(report);
       if (!path) {
         Alert.alert('Export failed', 'Could not create the backup.');
       }

@@ -7,6 +7,7 @@ import { useAppStore } from './store';
 import { ThemeProvider } from './ThemeContext';
 import {
   CrashReport,
+  autoCrashBackup,
   clearPendingCrash,
   installCrashExport,
   readPendingCrash,
@@ -94,6 +95,7 @@ export default function App() {
     (async () => {
       installCrashExport();
       let report = await readPendingCrash();
+      let startupFailed = false;
       try {
         initDB();
         const steps: Array<[string, () => Promise<boolean>]> = [
@@ -113,9 +115,13 @@ export default function App() {
         if (useAppStore.getState().appSettings.dynamicIcon)
           setIcon(useAppStore.getState().appSettings.themeMode);
       } catch (e) {
+        startupFailed = true;
         report = report ?? reportRoadblock(e, 'Startup');
       }
       if (report) setCrashReport(report);
+      if (report?.kind === 'crash' && !startupFailed) {
+        autoCrashBackup(report).catch(() => {});
+      }
       setLoaded(true);
     })();
   }, [

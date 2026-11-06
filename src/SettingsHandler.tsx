@@ -32,6 +32,7 @@ import PersonasView from './settings/PersonasView';
 import LorebooksView, { LorebooksSection } from './settings/LorebooksView';
 import ProvidersView, { ProvidersSection } from './settings/ProvidersView';
 import NotificationsView from './settings/NotificationsView';
+import CrashBackupsView from './settings/CrashBackupsView';
 import DeveloperView from './settings/DeveloperView';
 
 type SettingsView =
@@ -56,6 +57,7 @@ type SettingsView =
   | 'providersList'
   | 'providersModel'
   | 'importExport'
+  | 'crashBackups'
   | 'notifications'
   | 'developer';
 
@@ -81,6 +83,7 @@ const VIEW_TITLES: Record<SettingsView, string> = {
   providersList: 'API Providers',
   providersModel: 'Model & Sampling',
   importExport: 'Import / Export',
+  crashBackups: 'Crash Backups',
   notifications: 'Notifications',
   developer: 'Developer',
 };
@@ -461,7 +464,14 @@ export default function SettingsHandler({
           />
         );
       case 'importExport':
-        return <ImportExportHandler bottomInset={bottomInset} />;
+        return (
+          <ImportExportHandler
+            bottomInset={bottomInset}
+            onOpenCrashBackups={() => navigateTo('crashBackups')}
+          />
+        );
+      case 'crashBackups':
+        return <CrashBackupsView />;
       case 'notifications':
         return <NotificationsView accent={values.accentColor} />;
       case 'developer':
