@@ -1012,9 +1012,14 @@ export default function ChatHandler({
   }, [editingMessageId, flatListRef]);
 
   useEffect(() => {
-    if (isStreaming && scrollOffsetRef.current <= 120) {
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-    }
+    if (!isStreaming || scrollOffsetRef.current > 120) return;
+    // Non-animated: re-issuing an animated scroll on every token restarts the
+    // scroller each time and stalls on newer Android; wait a frame so the
+    // grown content has been laid out before pinning to the bottom.
+    const raf = requestAnimationFrame(() => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [streamingContent, isStreaming, flatListRef]);
 
   const resolveSpeaker = useCallback(
