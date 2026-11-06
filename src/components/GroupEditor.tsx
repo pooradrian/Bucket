@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AutoGrowTextInput from './AutoGrowTextInput';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -136,17 +137,13 @@ export default function GroupEditor({
 
               <View style={st.groupEditorField}>
                 <Text style={st.groupEditorLabel}>Description (optional)</Text>
-                <TextInput
-                  style={[
-                    st.groupEditorInput,
-                    { minHeight: 60, textAlignVertical: 'top' },
-                  ]}
+                <AutoGrowTextInput
+                  minHeight={60}
+                  style={st.groupEditorInput}
                   value={groupDescription}
                   onChangeText={setGroupDescription}
                   placeholder="What is this group about?"
                   placeholderTextColor={st.textMuted.color}
-                  multiline
-                  numberOfLines={2}
                 />
               </View>
 

@@ -39,6 +39,7 @@ export const SETTINGS_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
   'notificationSound',
   'carouselAnimMs',
   'messageEditMode',
+  'textBoxMode',
 ];
 
 export function toDraft(s: AppSettings): Settings {
@@ -85,6 +86,7 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   notificationSound: 'Notification sound',
   carouselAnimMs: 'Carousel animation (ms)',
   messageEditMode: 'Message editing',
+  textBoxMode: 'Text boxes',
 };
 
 export const COLOR_KEYS: Exclude<keyof Settings, 'themeMode'>[] = [
@@ -130,6 +132,7 @@ export const NUMERIC_KEYS: Exclude<
   | 'debugLogging'
   | 'notificationSound'
   | 'messageEditMode'
+  | 'textBoxMode'
 >[] = [
   'cardRadius',
   'pillRadius',

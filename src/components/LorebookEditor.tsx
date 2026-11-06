@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AutoGrowTextInput from './AutoGrowTextInput';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -223,16 +224,13 @@ export default function LorebookEditor({
                       key={d.key}
                       style={{ flexDirection: 'row', marginBottom: 8 }}
                     >
-                      <TextInput
-                        style={[
-                          st.groupEditorInput,
-                          { flex: 1, minHeight: 44, textAlignVertical: 'top' },
-                        ]}
+                      <AutoGrowTextInput
+                        minHeight={44}
+                        style={[st.groupEditorInput, { flex: 1 }]}
                         value={d.text}
                         onChangeText={text => updateDraft(d.key, text)}
                         placeholder={`Fact ${i + 1}`}
                         placeholderTextColor={st.textMuted.color}
-                        multiline
                       />
                       <View
                         style={{
@@ -299,16 +297,13 @@ export default function LorebookEditor({
                 <Text style={st.groupEditorLabel}>
                   Bulk add (one fact per line)
                 </Text>
-                <TextInput
-                  style={[
-                    st.groupEditorInput,
-                    { minHeight: 60, textAlignVertical: 'top' },
-                  ]}
+                <AutoGrowTextInput
+                  minHeight={60}
+                  style={st.groupEditorInput}
                   value={bulk}
                   onChangeText={setBulk}
                   placeholder={'Elf capital is Sylvara\nDragons fear bells'}
                   placeholderTextColor={st.textMuted.color}
-                  multiline
                 />
                 <TouchableOpacity
                   onPress={handleAddBulk}

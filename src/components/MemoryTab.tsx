@@ -3,10 +3,10 @@ import {
   Alert,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AutoGrowTextInput from './AutoGrowTextInput';
 import {
   deleteMemoryFromDB,
   generateId,
@@ -399,13 +399,13 @@ export default function MemoryTab({
           by the chat they came from. Editing text re-embeds it on the next
           reply.
         </MutedNote>
-        <TextInput
+        <AutoGrowTextInput
+          minHeight={44}
           style={st.settingsInput}
           value={newMemory}
           onChangeText={setNewMemory}
           placeholder="Add a memory…"
           placeholderTextColor={st.textMuted.color}
-          multiline
         />
         <TouchableOpacity
           onPress={addMemory}
@@ -438,11 +438,11 @@ export default function MemoryTab({
               <View key={memory.id} style={st.settingsLorebookItem}>
                 <View style={st.settingsLorebookItemInfo}>
                   {editingId === memory.id ? (
-                    <TextInput
+                    <AutoGrowTextInput
+                      minHeight={44}
                       style={st.settingsInput}
                       value={draft}
                       onChangeText={setDraft}
-                      multiline
                       autoFocus
                     />
                   ) : (

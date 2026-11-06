@@ -73,6 +73,7 @@ export interface AppSettings extends ThemePreset {
   notificationSound: string;
   carouselAnimMs: number;
   messageEditMode: 'carousel' | 'inline';
+  textBoxMode: 'stretch' | 'scroll';
 }
 
 const SETTINGS_KEY = 'settings';
@@ -131,6 +132,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   notificationSound: '',
   carouselAnimMs: 1000,
   messageEditMode: 'carousel',
+  textBoxMode: 'stretch',
   dangerColor: '#cc3333',
 };
 
@@ -259,6 +261,7 @@ export function parseSavedSettings(raw: unknown): AppSettings {
     typeof saved.notificationSound === 'string' ? saved.notificationSound : '';
   result.messageEditMode =
     saved.messageEditMode === 'inline' ? 'inline' : 'carousel';
+  result.textBoxMode = saved.textBoxMode === 'scroll' ? 'scroll' : 'stretch';
   result.themeMode = saved.themeMode === 'light' ? 'light' : 'dark';
 
   for (const key of THEME_COLOR_KEYS) {

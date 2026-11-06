@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import AutoGrowTextInput from '../components/AutoGrowTextInput';
 import {
   Persona,
   PromptConfig,
@@ -111,7 +112,8 @@ export default function PersonasView({
                   placeholder="Persona name"
                   placeholderTextColor={st.textMuted.color}
                 />
-                <TextInput
+                <AutoGrowTextInput
+                  minHeight={80}
                   style={[
                     st.settingsInput,
                     st.settingsInputMultiline,

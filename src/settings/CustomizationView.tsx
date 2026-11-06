@@ -287,6 +287,18 @@ export default function CustomizationView({
         }
       />
 
+      <OptionRow
+        label={LABELS.textBoxMode}
+        note="Stretching boxes grow with your text, which suits short entries. Scrolling boxes stop at a fixed height and scroll inside, so long texts never take over the screen."
+        options={[
+          { value: 'stretch', label: 'Stretching' },
+          { value: 'scroll', label: 'Scrolling' },
+        ]}
+        value={appSettings.textBoxMode}
+        accent={values.accentColor}
+        onChange={textBoxMode => setAppSettings({ ...appSettings, textBoxMode })}
+      />
+
       <TextField
         label={LABELS.carouselAnimMs}
         note="How long the message studio carousel takes to appear."

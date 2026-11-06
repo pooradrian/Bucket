@@ -14,7 +14,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   ViewInstance,
@@ -36,6 +35,7 @@ import Animated, {
   SharedValue,
 } from 'react-native-reanimated';
 import { useAppStore } from '../store';
+import AutoGrowTextInput from './AutoGrowTextInput';
 import { ChatMessage, ReplyVariant } from '../useChat';
 import { renderFormattedText } from '../textFormat';
 import {
@@ -1202,7 +1202,8 @@ function CarouselCard({
           >
             <View style={styles.cardInner}>
               {editing ? (
-                <TextInput
+                <AutoGrowTextInput
+                  minHeight={60}
                   style={[
                     styles.cardInput,
                     {
@@ -1213,9 +1214,7 @@ function CarouselCard({
                   ]}
                   value={editDraft}
                   onChangeText={onEditDraftChange}
-                  multiline
                   autoFocus
-                  textAlignVertical="top"
                 />
               ) : (
                 <>

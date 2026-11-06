@@ -713,7 +713,6 @@ export function createStyles(s: AppSettings) {
       fontSize: s.fontSizeBody,
       color: s.textPrimary,
       marginRight: 8,
-      maxHeight: 120,
     },
     goDownBtn: {
       position: 'absolute',

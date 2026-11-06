@@ -17,7 +17,6 @@ import {
   Platform,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   TouchableOpacityInstance,
   View,
@@ -25,6 +24,7 @@ import {
 } from 'react-native';
 import { Character } from './CharacterEditor';
 import { useAppStore, GroupChat } from './store';
+import AutoGrowTextInput from './components/AutoGrowTextInput';
 import { useTheme } from './ThemeContext';
 import { useChat, ChatMessage, QuickCharacter } from './useChat';
 import { renderFormattedText } from './textFormat';
@@ -397,13 +397,12 @@ const MessageBubble = React.memo(function MessageBubbleInner({
         ) : null}
         {isEditing ? (
           <>
-            <TextInput
+            <AutoGrowTextInput
               style={[st.bubbleText, isUser && st.bubbleTextUser]}
+              minHeight={44}
               value={editingText}
               onChangeText={onEditingTextChange}
-              multiline
               autoFocus
-              textAlignVertical="top"
             />
             <View
               style={[
@@ -1497,15 +1496,16 @@ export default function ChatHandler({
               )}
             </View>
           ) : null}
-          <TextInput
+          <AutoGrowTextInput
             style={st.textInput}
+            minHeight={44}
+            maxHeight={120}
+            stretchMaxHeight={320}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Message..."
             placeholderTextColor={st.textMuted.color}
             editable={!sending && (!isGroupChat || !!selectedReplyCharacter)}
-            multiline
-            textAlignVertical="top"
           />
           {isStreaming ? (
             <TouchableOpacity style={st.stopBtn} onPress={handleStop}>
