@@ -51,11 +51,16 @@ function hexToBytes(hex: string): Uint8Array {
   return out;
 }
 
-async function getKey(): Promise<Uint8Array> {
-  if (cachedKey) {
-    return cachedKey;
-  }
+// In-flight key load shared by every concurrent caller.  Without it, parallel
+// encrypts on a fresh install would each see an empty keychain, each generate
+// their own random key, and all but the last stored one would be lost along
+// with everything encrypted under them.
+let keyPromise: Promise<Uint8Array> | null = null;
 
+async function loadKey(): Promise<Uint8Array> {
+  // getGenericPassword resolves `false` only when no entry exists; read
+  // failures (keystore/crypto errors) reject, so they propagate here and never
+  // fall through to generating a replacement key.
   const existing = await Keychain.getGenericPassword({
     service: KEYCHAIN_SERVICE,
   });
@@ -66,14 +71,38 @@ async function getKey(): Promise<Uint8Array> {
   } else {
     const bytes = globalThis.crypto.getRandomValues(new Uint8Array(KEY_LENGTH));
     rawKey = bytesToHex(bytes);
-    await Keychain.setGenericPassword('bucket', rawKey, {
+    const stored = await Keychain.setGenericPassword('bucket', rawKey, {
       service: KEYCHAIN_SERVICE,
       accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
+    if (!stored) {
+      // Never encrypt with a key that was not persisted.
+      throw new Error('Failed to store encryption key in keychain');
+    }
   }
 
-  cachedKey = hexToBytes(rawKey);
-  return cachedKey!;
+  return hexToBytes(rawKey);
+}
+
+function getKey(): Promise<Uint8Array> {
+  if (cachedKey) {
+    return Promise.resolve(cachedKey);
+  }
+  if (!keyPromise) {
+    keyPromise = loadKey().then(
+      key => {
+        cachedKey = key;
+        keyPromise = null;
+        return key;
+      },
+      err => {
+        // Clear so the next call retries instead of reusing a rejected promise.
+        keyPromise = null;
+        throw err;
+      },
+    );
+  }
+  return keyPromise;
 }
 
 export async function encrypt(plaintext: string): Promise<string> {
