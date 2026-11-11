@@ -427,18 +427,10 @@ export function updatePersona(
 export function deletePersona(config: PromptConfig, idx: number): PromptConfig {
   const personas = (config.personas ?? []).filter((_, i) => i !== idx);
   const deleted = config.personas?.[idx];
-  const activePersonaId =
-    deleted && config.activePersonaId === deleted.id
-      ? null
-      : config.activePersonaId;
-  return {
-    ...config,
-    personas,
-    activePersonaId,
-    userDescription: activePersonaId
-      ? config.userDescription
-      : (personas[0]?.description ?? ''),
-  };
+  if (deleted && config.activePersonaId === deleted.id) {
+    return { ...config, personas, activePersonaId: null, userDescription: '' };
+  }
+  return { ...config, personas };
 }
 
 export function activatePersona(
