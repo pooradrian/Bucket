@@ -415,10 +415,13 @@ export function updatePersona(
   patch: Partial<Pick<Persona, 'name' | 'description'>>,
 ): PromptConfig {
   const personas = [...(config.personas ?? [])];
-  if (personas[idx]) {
-    personas[idx] = { ...personas[idx], ...patch };
+  if (!personas[idx]) return config;
+  personas[idx] = { ...personas[idx], ...patch };
+  const next = { ...config, personas };
+  if (personas[idx].id === config.activePersonaId) {
+    next.userDescription = personas[idx].description;
   }
-  return { ...config, personas };
+  return next;
 }
 
 export function deletePersona(config: PromptConfig, idx: number): PromptConfig {
