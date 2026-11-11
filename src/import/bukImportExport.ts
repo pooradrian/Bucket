@@ -342,24 +342,24 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
         const session: ChatSession = parsed;
         const qcs = parsed.quickCharacters as
           Array<Partial<DBQuickCharacter>> | undefined;
-        const newCharId = origIdToNewId.get(session.characterId);
-        if (newCharId) {
-          session.characterId = newCharId;
-          if (session.lastReplyCharacterId) {
-            const mapped = origIdToNewId.get(session.lastReplyCharacterId);
-            if (mapped) session.lastReplyCharacterId = mapped;
+        // Group sessions have no characterId of their own, so speaker ids are
+        // remapped for every session. Ids that are not in the map (quick
+        // characters, members that were not exported) are left alone.
+        const remap = (id: string) => origIdToNewId.get(id) ?? id;
+        if (session.characterId) {
+          session.characterId = remap(session.characterId);
+        }
+        if (session.lastReplyCharacterId) {
+          session.lastReplyCharacterId = remap(session.lastReplyCharacterId);
+        }
+        for (const msg of session.messages) {
+          if (msg.characterId) {
+            msg.characterId = remap(msg.characterId);
           }
-          for (const msg of session.messages) {
-            if (msg.characterId) {
-              const mapped = origIdToNewId.get(msg.characterId);
-              if (mapped) msg.characterId = mapped;
-            }
-            if (msg.variants) {
-              for (const variant of msg.variants) {
-                if (variant.characterId) {
-                  const mapped = origIdToNewId.get(variant.characterId);
-                  if (mapped) variant.characterId = mapped;
-                }
+          if (msg.variants) {
+            for (const variant of msg.variants) {
+              if (variant.characterId) {
+                variant.characterId = remap(variant.characterId);
               }
             }
           }
