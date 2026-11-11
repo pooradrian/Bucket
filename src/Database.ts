@@ -1641,33 +1641,49 @@ export async function preserveSpeakerNames(
   name: string,
 ): Promise<void> {
   const d = initDB();
+  // Messages spoken live by the deleted speaker, plus messages whose variants
+  // may mention it (variants is plaintext JSON; only `content` is encrypted).
   const rows = d.execute(
-    'SELECT id, variants FROM chat_messages WHERE character_id = ?',
-    [deletedId],
+    "SELECT id, character_id, variants FROM chat_messages WHERE character_id = ? OR (variants <> '' AND instr(variants, ?) > 0)",
+    [deletedId, deletedId],
   );
   for (const row of rows.results ?? []) {
     const id = row.id as string;
+    const ownsMessage = ((row.character_id as string) || '') === deletedId;
     const rawVariants = (row.variants as string) || '';
+    let stamped: string | null = null;
     if (rawVariants) {
       try {
         const parsed = JSON.parse(rawVariants) as ReplyVariant[];
-        const stamped = JSON.stringify(
-          parsed.map(v => ({ ...v, speakerName: name })),
-        );
-        d.execute(
-          'UPDATE chat_messages SET speaker_name = ?, variants = ? WHERE id = ?',
-          [name, stamped, id],
-        );
+        let changed = false;
+        const next = parsed.map(v => {
+          const owner = v.characterId || (ownsMessage ? deletedId : '');
+          if (owner !== deletedId) {
+            return v;
+          }
+          changed = true;
+          return { ...v, speakerName: name };
+        });
+        if (changed) {
+          stamped = JSON.stringify(next);
+        }
       } catch (e) {
         console.warn('Failed to stamp deleted speaker variants:', e);
-        d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [
-          name,
-          id,
-        ]);
       }
-    } else {
+    }
+    if (ownsMessage && stamped !== null) {
+      d.execute(
+        'UPDATE chat_messages SET speaker_name = ?, variants = ? WHERE id = ?',
+        [name, stamped, id],
+      );
+    } else if (ownsMessage) {
       d.execute('UPDATE chat_messages SET speaker_name = ? WHERE id = ?', [
         name,
+        id,
+      ]);
+    } else if (stamped !== null) {
+      d.execute('UPDATE chat_messages SET variants = ? WHERE id = ?', [
+        stamped,
         id,
       ]);
     }
