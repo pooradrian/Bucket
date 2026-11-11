@@ -101,6 +101,54 @@ function makeVariantEntry(id: string, msg: ChatMessage): ReplyVariant {
   };
 }
 
+// Builds the message that results from making `entry` the live reply. Every
+// per-reply field follows the entry, so a reply by a since-deleted quick
+// character keeps its stamped name and a reply by anyone else loses it.
+function promoteToLive(
+  msg: ChatMessage,
+  entry: ReplyVariant,
+  variants: ReplyVariant[],
+): ChatMessage {
+  return {
+    ...msg,
+    content: entry.content,
+    timestamp: entry.timestamp,
+    characterId: entry.characterId ?? msg.characterId,
+    speakerName: entry.speakerName,
+    variants,
+    thinkingMs: entry.thinkingMs,
+  };
+}
+
+// The deck position of the live reply as recorded in the variant index map,
+// or the default (end of the deck) when the record is missing or no longer
+// fits the message as it currently is.
+function validDeckIndex(
+  msg: ChatMessage,
+  stored: number | undefined,
+): number {
+  const n = msg.variants?.length ?? 0;
+  return stored !== undefined &&
+    Number.isInteger(stored) &&
+    stored >= 0 &&
+    stored <= n
+    ? stored
+    : n;
+}
+
+type RetryRecord =
+  | { kind: 'send' }
+  | { kind: 'regenerate' }
+  | {
+      kind: 'continue';
+      target: { character?: Character | null; qc?: QuickCharacter | null };
+    };
+
+// What the latest request per session was, so "tap to retry" can repeat it.
+// Module-level on purpose: the error it answers lives in the generation store
+// and survives this hook unmounting while the request runs.
+const lastRequestBySession = new Map<string, RetryRecord>();
+
 export function reconcileSelectedQC(
   selected: QuickCharacter | null,
   list: QuickCharacter[],
@@ -208,9 +256,24 @@ export function useChat({
   const [selectedReplyCharacter, setSelectedReplyCharacter] =
     useState<Character | null>(null);
   const [selectedQC, setSelectedQC] = useState<QuickCharacter | null>(null);
-  const [variantIndexMap, setVariantIndexMap] = useState<
+  const [rawVariantIndexMap, setVariantIndexMap] = useState<
     Record<string, number>
   >({});
+  // Only entries that fit the message as it currently is are exposed: the
+  // session can be reloaded from the DB underneath the map (engine revisions,
+  // session switches), and a stale index past the end of the deck would crash
+  // variant switching and show an impossible counter.
+  const sessionMessages = session?.messages;
+  const variantIndexMap = useMemo(() => {
+    const valid: Record<string, number> = {};
+    for (const m of sessionMessages ?? []) {
+      const stored = rawVariantIndexMap[m.id];
+      if (stored !== undefined && validDeckIndex(m, stored) === stored) {
+        valid[m.id] = stored;
+      }
+    }
+    return valid;
+  }, [rawVariantIndexMap, sessionMessages]);
   const variantIndexMapRef = useRef(variantIndexMap);
   useEffect(() => {
     variantIndexMapRef.current = variantIndexMap;
@@ -227,14 +290,47 @@ export function useChat({
 
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // In-flight regenerates per session. The message is shown optimistically
+  // with the current reply archived as an extra variant; if no new reply
+  // comes of it, the message and its deck position are put back as they were.
+  const pendingRegenRef = useRef<
+    Record<
+      string,
+      {
+        original: ChatMessage;
+        prevIndex: number | undefined;
+        archivedId: string;
+      }
+    >
+  >({});
+  const regenWatchersRef = useRef<Set<() => void>>(new Set());
+
   useEffect(() => {
+    const watchers = regenWatchersRef.current;
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
         scrollTimeoutRef.current = null;
       }
+      watchers.forEach(unsub => unsub());
+      watchers.clear();
     };
   }, []);
+
+  const restoreVariantIndex = useCallback(
+    (msgId: string, prevIndex: number | undefined) => {
+      setVariantIndexMap(prev => {
+        const next = { ...prev };
+        if (prevIndex === undefined) {
+          delete next[msgId];
+        } else {
+          next[msgId] = prevIndex;
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const pendingCreationKeyRef = useRef<string | null>(null);
   // Sessions created in memory but not yet written to the DB. A session row is
@@ -459,6 +555,22 @@ export function useChat({
         if (fresh) {
           setSession(prev => (prev && prev.id === sessionId ? fresh : prev));
         }
+        // A finished regenerate that was cancelled before any text arrived
+        // wrote nothing, so the reload brought back the original message:
+        // put its deck position back too.
+        const pending = pendingRegenRef.current[sessionId];
+        if (pending && !useGenerationStore.getState().runs[sessionId]) {
+          delete pendingRegenRef.current[sessionId];
+          const freshMsg = fresh?.messages.find(
+            m => m.id === pending.original.id,
+          );
+          const produced = !!freshMsg?.variants?.some(
+            v => v.id === pending.archivedId,
+          );
+          if (!produced) {
+            restoreVariantIndex(pending.original.id, pending.prevIndex);
+          }
+        }
       } catch (e) {
         if (!cancelled) {
           failedRevisionRef.current[sessionId] = runRevision;
@@ -473,7 +585,7 @@ export function useChat({
     return () => {
       cancelled = true;
     };
-  }, [runRevision, session?.id]);
+  }, [runRevision, session?.id, restoreVariantIndex]);
 
   // Shared send/retry/regenerate entry point. The request itself runs in the
   // generation engine so it keeps streaming while this screen is unmounted;
@@ -495,7 +607,7 @@ export function useChat({
           qc?: QuickCharacter | null;
         };
       } = {},
-    ) => {
+    ): Promise<boolean> => {
       const targetReplyCharacter = opts.continueTarget
         ? (opts.continueTarget.character ?? null)
         : isGroupChat
@@ -505,10 +617,10 @@ export function useChat({
         ? (opts.continueTarget.qc ?? null)
         : selectedQC;
       if (isGroupChat && !targetReplyCharacter) {
-        return;
+        return false;
       }
       if (!isGroupChat && !targetQC && !activeCharacter) {
-        return;
+        return false;
       }
       setSendingLocal(true);
       try {
@@ -529,6 +641,7 @@ export function useChat({
           existingVariants: opts.existingVariants,
           setLastReplyCharacter: opts.setLastReplyCharacter,
         });
+        return true;
       } finally {
         setSendingLocal(false);
       }
@@ -597,6 +710,7 @@ export function useChat({
         50,
       );
 
+      lastRequestBySession.set(startSessionId, { kind: 'send' });
       await runLLMRequest(startSessionId, withUser.messages, trimmed, {
         setLastReplyCharacter: true,
         summarize: true,
@@ -643,6 +757,10 @@ export function useChat({
         isQC: !!continueTarget.qc,
       });
 
+      lastRequestBySession.set(startSessionId, {
+        kind: 'continue',
+        target: continueTarget,
+      });
       await runLLMRequest(startSessionId, session.messages, '', {
         setLastReplyCharacter: true,
         continueMode: true,
@@ -792,30 +910,88 @@ export function useChat({
     };
     const existingVariants = [...(lastMsg.variants ?? []), archivedVariant];
 
+    // Nothing is written to the DB here: the engine stores the archived
+    // variant together with the new reply (and bumps the session timestamp),
+    // so a regenerate that produces nothing leaves the DB untouched.
+    pendingRegenRef.current[startSessionId] = {
+      original: lastMsg,
+      prevIndex: variantIndexMapRef.current[lastMsg.id],
+      archivedId: archivedVariant.id,
+    };
+    const rollback = () => {
+      const pending = pendingRegenRef.current[startSessionId];
+      if (!pending || pending.archivedId !== archivedVariant.id) {
+        return;
+      }
+      delete pendingRegenRef.current[startSessionId];
+      updateSessionIfCurrent(startSessionId, prev => ({
+        ...prev,
+        messages: prev.messages.map(m =>
+          m.id === lastMsg.id ? pending.original : m,
+        ),
+      }));
+      restoreVariantIndex(lastMsg.id, pending.prevIndex);
+    };
+
     updateSessionIfCurrent(startSessionId, prev => ({
       ...prev,
       messages: prev.messages.map(m =>
         m.id === lastMsg.id ? { ...m, variants: existingVariants } : m,
       ),
-      updatedAt: Date.now(),
     }));
-    updateSessionTimestamp(startSessionId, Date.now());
     setSelectedMessageId(null);
     setVariantIndexMap(prev => ({
       ...prev,
       [lastMsg.id]: existingVariants.length,
     }));
 
-    await runLLMRequest(startSessionId, baseMessages, lastUserMsg.content, {
-      replaceMessageId: lastMsg.id,
-      existingVariants,
-    });
+    lastRequestBySession.set(startSessionId, { kind: 'regenerate' });
+    let started = false;
+    try {
+      started = await runLLMRequest(
+        startSessionId,
+        baseMessages,
+        lastUserMsg.content,
+        {
+          replaceMessageId: lastMsg.id,
+          existingVariants,
+        },
+      );
+    } finally {
+      if (!started) {
+        rollback();
+      }
+    }
+    if (!started) {
+      return;
+    }
+
+    // A failed request writes nothing and does not trigger a reload, so undo
+    // the optimistic variant here. Success and cancels bump the session
+    // revision; the reload effect settles those.
+    const onEngineChange = (state: ReturnType<
+      typeof useGenerationStore.getState
+    >) => {
+      if (state.runs[startSessionId]) {
+        return;
+      }
+      unsubscribe();
+      regenWatchersRef.current.delete(unsubscribe);
+      if (state.errors[startSessionId]) {
+        rollback();
+      }
+    };
+    const unsubscribe = useGenerationStore.subscribe(onEngineChange);
+    regenWatchersRef.current.add(unsubscribe);
+    onEngineChange(useGenerationStore.getState());
+
     logEvent('message_regenerated', { sessionMsgCount: baseMessages.length });
   }, [
     session,
     sending,
     ensureSessionPersisted,
     updateSessionIfCurrent,
+    restoreVariantIndex,
     runLLMRequest,
   ]);
 
@@ -869,7 +1045,7 @@ export function useChat({
         return;
       }
       const n = msg.variants.length;
-      const currentIdx = variantIndexMapRef.current[msgId] ?? n;
+      const currentIdx = validDeckIndex(msg, variantIndexMapRef.current[msgId]);
       const newIdx = currentIdx + direction;
       if (newIdx < 0 || newIdx > n) {
         return;
@@ -877,26 +1053,12 @@ export function useChat({
 
       const oldEntry = makeVariantEntry(generateId(), msg);
 
-      let newContent: ReplyVariant;
-      let newVariants: ReplyVariant[];
-      if (newIdx < currentIdx) {
-        newContent = msg.variants[newIdx];
-        newVariants = [...msg.variants];
-        newVariants.splice(newIdx, 1, oldEntry);
-      } else {
-        newContent = msg.variants[newIdx - 1];
-        newVariants = [...msg.variants];
-        newVariants.splice(newIdx - 1, 1, oldEntry);
-      }
+      const slot = newIdx < currentIdx ? newIdx : newIdx - 1;
+      const newContent = msg.variants[slot];
+      const newVariants = [...msg.variants];
+      newVariants.splice(slot, 1, oldEntry);
 
-      const updatedMsg: ChatMessage = {
-        ...msg,
-        content: newContent.content,
-        timestamp: newContent.timestamp,
-        characterId: newContent.characterId ?? msg.characterId,
-        variants: newVariants,
-        thinkingMs: newContent.thinkingMs,
-      };
+      const updatedMsg = promoteToLive(msg, newContent, newVariants);
       await commitVariantUpdate(session, msgId, updatedMsg, newIdx);
     },
     [session, commitVariantUpdate],
@@ -933,14 +1095,7 @@ export function useChat({
       const newVariants = [...msg.variants];
       newVariants.splice(variantIdx, 1, oldEntry);
 
-      const updatedMsg: ChatMessage = {
-        ...msg,
-        content: newContent.content,
-        timestamp: newContent.timestamp,
-        characterId: newContent.characterId ?? msg.characterId,
-        variants: newVariants,
-        thinkingMs: newContent.thinkingMs,
-      };
+      const updatedMsg = promoteToLive(msg, newContent, newVariants);
       await commitVariantUpdate(session, msgId, updatedMsg, clamped);
     },
     [session, commitVariantUpdate],
@@ -1002,41 +1157,22 @@ export function useChat({
       if (!msg) {
         return null;
       }
-      const sourceVariant =
-        sourceKey === 'live'
-          ? null
-          : (msg.variants ?? []).find(v => v.id === sourceKey);
-      const sourceContent =
-        sourceKey === 'live'
-          ? msg.content
-          : (sourceVariant?.content ?? msg.content);
-      const sourceCharId =
-        sourceKey === 'live'
-          ? msg.characterId
-          : (sourceVariant?.characterId ?? msg.characterId);
-      const sourceThinkingMs =
-        sourceKey === 'live'
-          ? msg.thinkingMs
-          : (sourceVariant?.thinkingMs ?? msg.thinkingMs);
+      // The fork is a copy of one whole entry, so all of its per-reply fields
+      // (speaker, thinking time) come from that entry and never from the live
+      // reply. An unknown key falls back to copying the live reply.
+      const source =
+        (sourceKey === 'live'
+          ? undefined
+          : (msg.variants ?? []).find(v => v.id === sourceKey)) ??
+        makeVariantEntry('live', msg);
       const newVariant: ReplyVariant = {
+        ...source,
         id: generateId(),
-        content: sourceContent,
         timestamp: Date.now(),
-        ...(sourceCharId ? { characterId: sourceCharId } : {}),
-        ...(sourceThinkingMs !== undefined
-          ? { thinkingMs: sourceThinkingMs }
-          : {}),
       };
       const oldEntry = makeVariantEntry(generateId(), msg);
       const newVariants = [...(msg.variants ?? []), oldEntry];
-      const updatedMsg: ChatMessage = {
-        ...msg,
-        content: newVariant.content,
-        timestamp: newVariant.timestamp,
-        characterId: newVariant.characterId ?? msg.characterId,
-        variants: newVariants,
-        thinkingMs: newVariant.thinkingMs,
-      };
+      const updatedMsg = promoteToLive(msg, newVariant, newVariants);
       await commitVariantUpdate(
         session,
         msgId,
@@ -1096,26 +1232,19 @@ export function useChat({
       }
       let updatedMsg: ChatMessage;
       if (entryKey === 'live') {
-        const liveEntry: ReplyVariant = {
-          id: 'live',
-          content: msg.content,
-          timestamp: msg.timestamp,
-        };
-        const deck = [...(msg.variants ?? []), liveEntry].sort(
-          (a, b) => a.timestamp - b.timestamp,
-        );
+        const deck = [
+          ...(msg.variants ?? []),
+          makeVariantEntry('live', msg),
+        ].sort((a, b) => a.timestamp - b.timestamp);
         const livePos = deck.findIndex(d => d.id === 'live');
         const remaining = deck.filter(d => d.id !== 'live');
         const promoteIdx = Math.min(livePos, remaining.length - 1);
         const promoted = remaining[promoteIdx];
-        updatedMsg = {
-          ...msg,
-          content: promoted.content,
-          timestamp: promoted.timestamp,
-          characterId: promoted.characterId ?? msg.characterId,
-          variants: remaining.filter(v => v.id !== promoted.id),
-          thinkingMs: promoted.thinkingMs,
-        };
+        updatedMsg = promoteToLive(
+          msg,
+          promoted,
+          remaining.filter(v => v.id !== promoted.id),
+        );
       } else {
         updatedMsg = {
           ...msg,
@@ -1168,16 +1297,44 @@ export function useChat({
     if (!session || sending) {
       return;
     }
-    const lastUserMsg = [...session.messages]
-      .reverse()
-      .find(m => m.role === 'user');
-    if (!lastUserMsg) {
+    // Repeat the request that failed. Without a record (e.g. the app was
+    // restarted) the chat's shape decides: a failed send leaves the user turn
+    // last, so that is resent; an assistant reply last can only mean a failed
+    // regenerate or continue, and regenerating is the safe guess because the
+    // current reply stays in the deck as a variant.
+    const record = lastRequestBySession.get(session.id);
+    if (record?.kind === 'continue') {
+      await handleContinue(record.target);
+      return;
+    }
+    const lastMsg = session.messages[session.messages.length - 1];
+    if (!lastMsg) {
+      return;
+    }
+    if (lastMsg.role === 'assistant') {
+      await handleRegenerate();
+      return;
+    }
+    if (isGroupChat && !selectedReplyCharacter) {
       return;
     }
 
     await ensureSessionPersisted(session);
-    await runLLMRequest(session.id, session.messages, lastUserMsg.content);
-  }, [session, sending, ensureSessionPersisted, runLLMRequest]);
+    lastRequestBySession.set(session.id, { kind: 'send' });
+    await runLLMRequest(session.id, session.messages, lastMsg.content, {
+      setLastReplyCharacter: true,
+      summarize: true,
+    });
+  }, [
+    session,
+    sending,
+    isGroupChat,
+    selectedReplyCharacter,
+    handleContinue,
+    handleRegenerate,
+    ensureSessionPersisted,
+    runLLMRequest,
+  ]);
 
   const messagesData = useMemo(() => {
     const base = [...(session?.messages ?? [])].reverse();
