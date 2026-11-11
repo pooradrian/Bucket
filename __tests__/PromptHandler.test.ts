@@ -23,6 +23,7 @@ import {
   buildPrompt,
   buildContinuePrompt,
   buildGroupPrompt,
+  buildGroupContinuePrompt,
   buildQuickCharacterPrompt,
   historyWithoutLatestUserTurn,
   stripSpeakerNamePrefixes,
@@ -643,12 +644,17 @@ describe('estimateTokens', () => {
 
 describe('historyUsageRatio', () => {
   test('counts messages against a message cutoff', () => {
-    expect(historyUsageRatio(history, 'messages', 20)).toBe(history.length / 20);
+    expect(historyUsageRatio(history, 'messages', 20)).toBe(
+      history.length / 20,
+    );
     expect(historyUsageRatio(history, 'messages', 2)).toBe(1);
   });
 
   test('counts estimated tokens against a token cutoff', () => {
-    const tokens = history.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+    const tokens = history.reduce(
+      (sum, m) => sum + estimateTokens(m.content),
+      0,
+    );
     expect(historyUsageRatio(history, 'tokens', tokens)).toBe(1);
     expect(historyUsageRatio(history, 'tokens', tokens * 2)).toBeCloseTo(0.5);
   });
@@ -800,7 +806,45 @@ describe('persona helpers', () => {
     const next = deletePersona(base, 0);
     expect(next.personas.map(p => p.id)).toEqual(['b']);
     expect(next.activePersonaId).toBeNull();
-    expect(next.userDescription).toBe('desc b');
+    expect(next.userDescription).toBe('');
+  });
+
+  test('deletePersona leaves a hand-written description alone when none is active', () => {
+    const cfg = {
+      ...base,
+      activePersonaId: null,
+      userDescription: 'typed by hand',
+    };
+    const next = deletePersona(cfg, 0);
+    expect(next.activePersonaId).toBeNull();
+    expect(next.userDescription).toBe('typed by hand');
+    expect(deletePersona(cfg, 1).userDescription).toBe('typed by hand');
+  });
+
+  test('deleting the active persona does not leak another persona into the prompt', () => {
+    const next = deletePersona(base, 0);
+    const system = buildPrompt(char, 'hi', [], {
+      ...next,
+      prefix: 'Desc: $USRDESC$',
+    })[0].content;
+    expect(system).not.toContain('desc a');
+    expect(system).not.toContain('desc b');
+  });
+
+  test('updatePersona on the active persona syncs userDescription', () => {
+    const next = updatePersona(base, 0, { description: 'edited a' });
+    expect(next.personas[0].description).toBe('edited a');
+    expect(next.userDescription).toBe('edited a');
+    const system = buildPrompt(char, 'hi', [], {
+      ...next,
+      prefix: 'Desc: $USRDESC$',
+    })[0].content;
+    expect(system).toContain('edited a');
+  });
+
+  test('updatePersona on an inactive persona leaves userDescription alone', () => {
+    const next = updatePersona(base, 1, { description: 'edited b' });
+    expect(next.userDescription).toBe('desc a');
   });
 
   test('deletePersona keeps activePersonaId when an inactive one is removed', () => {
@@ -820,6 +864,58 @@ describe('persona helpers', () => {
   test('activatePersona is a no-op for an out-of-range index', () => {
     const next = activatePersona(base, 99);
     expect(next).toEqual(base);
+  });
+});
+
+describe('group prompts with a departed speaker', () => {
+  const ada = { ...char, id: '2', name: 'Ada' };
+  const groupHistory: ChatMessage[] = [
+    { id: '1', role: 'user', content: 'u1', timestamp: 1 },
+    {
+      id: '2',
+      role: 'assistant',
+      content: 'old line',
+      timestamp: 2,
+      characterId: 'gone',
+      speakerName: 'Zed',
+    },
+    {
+      id: '3',
+      role: 'assistant',
+      content: 'bob line',
+      timestamp: 3,
+      characterId: '1',
+      speakerName: 'Stale',
+    },
+  ];
+  const assistantLines = (msgs: { role: string; content: string }[]) =>
+    msgs.filter(m => m.role === 'assistant').map(m => m.content);
+
+  test('buildGroupPrompt falls back to the stored speakerName', () => {
+    const msgs = buildGroupPrompt(
+      [char, ada],
+      char,
+      'hi',
+      groupHistory,
+      DEFAULT_PROMPT_CONFIG,
+    );
+    expect(assistantLines(msgs)).toEqual([
+      '[Zed]: old line',
+      '[Bob]: bob line',
+    ]);
+  });
+
+  test('buildGroupContinuePrompt falls back to the stored speakerName', () => {
+    const msgs = buildGroupContinuePrompt(
+      [char, ada],
+      char,
+      groupHistory,
+      DEFAULT_PROMPT_CONFIG,
+    );
+    expect(assistantLines(msgs)).toEqual([
+      '[Zed]: old line',
+      '[Bob]: bob line',
+    ]);
   });
 });
 
@@ -866,7 +962,10 @@ describe('model preset helpers', () => {
 
   test('detachModelPreset clears the active preset on manual edits', () => {
     const attached = { ...base, activeModelPresetId: 'p1' };
-    const next = detachModelPreset(attached, { temperature: '0.9', topP: '0.4' });
+    const next = detachModelPreset(attached, {
+      temperature: '0.9',
+      topP: '0.4',
+    });
     expect(next.temperature).toBe('0.9');
     expect(next.topP).toBe('0.4');
     expect(next.activeModelPresetId).toBeNull();
