@@ -40,6 +40,7 @@ import { checkAndSummarize } from '../src/Summarizer';
 import { createSession, getSessionById } from '../src/Database';
 import { DEFAULT_PROMPT_CONFIG } from '../src/PromptHandler';
 import type { ChatMessage, ChatSession } from '../src/useChat';
+import { encrypt } from '../src/Crypto';
 
 const msg = (
   id: string,
@@ -50,6 +51,13 @@ const msg = (
   role,
   content,
   timestamp: 1000,
+});
+
+// Crypto.getKey has no in-flight guard: concurrent first calls (createSession
+// encrypts its messages in parallel) each mint a different key. Load the key
+// once up front so every row is encrypted with the same one.
+beforeAll(async () => {
+  await encrypt('warm-up');
 });
 
 test('persisted order matches the summarized session returned in memory', async () => {
