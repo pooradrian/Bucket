@@ -5,6 +5,7 @@ import { keepLocalCopy, pick, types } from '@react-native-documents/picker';
 import {
   Attachment,
   MAX_ATTACHMENT_BYTES,
+  deleteAttachmentFiles,
   formatBytes,
   kindForMime,
   saveAttachment,
@@ -40,16 +41,21 @@ export async function pickImages(
     throw new Error(result.errorMessage || result.errorCode);
   }
   const out: Attachment[] = [];
-  for (const asset of result.assets ?? []) {
-    if (!asset.base64) continue;
-    out.push(
-      await saveAttachment({
-        kind: 'image',
-        name: asset.fileName || 'image.jpg',
-        mime: asset.type || 'image/jpeg',
-        base64: asset.base64,
-      }),
-    );
+  try {
+    for (const asset of result.assets ?? []) {
+      if (!asset.base64) continue;
+      out.push(
+        await saveAttachment({
+          kind: 'image',
+          name: asset.fileName || 'image.jpg',
+          mime: asset.type || 'image/jpeg',
+          base64: asset.base64,
+        }),
+      );
+    }
+  } catch (e) {
+    await deleteAttachmentFiles(out);
+    throw e;
   }
   return out;
 }
@@ -63,37 +69,42 @@ export async function pickFiles(): Promise<Attachment[]> {
     throw e;
   }
   const out: Attachment[] = [];
-  for (const file of picked) {
-    const name = file.name || 'file';
-    if (file.size != null && file.size > MAX_ATTACHMENT_BYTES) {
-      throw new Error(
-        `${name} is ${formatBytes(file.size)}; the limit is ${formatBytes(
-          MAX_ATTACHMENT_BYTES,
-        )}.`,
-      );
+  try {
+    for (const file of picked) {
+      const name = file.name || 'file';
+      if (file.size != null && file.size > MAX_ATTACHMENT_BYTES) {
+        throw new Error(
+          `${name} is ${formatBytes(file.size)}; the limit is ${formatBytes(
+            MAX_ATTACHMENT_BYTES,
+          )}.`,
+        );
+      }
+      const copies = await keepLocalCopy({
+        destination: 'cachesDirectory',
+        files: [{ uri: file.uri, fileName: name }],
+      });
+      const copy = copies[0];
+      if (!copy || copy.status !== 'success') {
+        throw new Error(`Could not read ${name}.`);
+      }
+      try {
+        const base64 = await RNFS.readFile(copy.localUri, 'base64');
+        const mime = file.type || 'application/octet-stream';
+        out.push(
+          await saveAttachment({
+            kind: kindForMime(mime, name),
+            name,
+            mime,
+            base64,
+          }),
+        );
+      } finally {
+        await RNFS.unlink(copy.localUri).catch(() => {});
+      }
     }
-    const copies = await keepLocalCopy({
-      destination: 'cachesDirectory',
-      files: [{ uri: file.uri, fileName: name }],
-    });
-    const copy = copies[0];
-    if (!copy || copy.status !== 'success') {
-      throw new Error(`Could not read ${name}.`);
-    }
-    try {
-      const base64 = await RNFS.readFile(copy.localUri, 'base64');
-      const mime = file.type || 'application/octet-stream';
-      out.push(
-        await saveAttachment({
-          kind: kindForMime(mime, name),
-          name,
-          mime,
-          base64,
-        }),
-      );
-    } finally {
-      await RNFS.unlink(copy.localUri).catch(() => {});
-    }
+  } catch (e) {
+    await deleteAttachmentFiles(out);
+    throw e;
   }
   return out;
 }
