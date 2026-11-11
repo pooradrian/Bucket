@@ -901,7 +901,8 @@ export function buildGroupPrompt(
     if (msg.role === 'user') {
       messages.push(userHistoryMessage(msg));
     } else {
-      const charName = characters.find(c => c.id === msg.characterId)?.name;
+      const charName =
+        characters.find(c => c.id === msg.characterId)?.name ?? msg.speakerName;
       const prefixed = charName ? `[${charName}]: ${msg.content}` : msg.content;
       messages.push({ role: 'assistant', content: prefixed });
     }
@@ -1018,7 +1019,8 @@ export function buildGroupContinuePrompt(
     if (msg.role === 'user') {
       messages.push(userHistoryMessage(msg));
     } else {
-      const charName = characters.find(c => c.id === msg.characterId)?.name;
+      const charName =
+        characters.find(c => c.id === msg.characterId)?.name ?? msg.speakerName;
       const prefixed = charName ? `[${charName}]: ${msg.content}` : msg.content;
       messages.push({ role: 'assistant', content: prefixed });
     }
