@@ -589,9 +589,25 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
   }
   result.folders = importedFolders;
 
+  // Owners are only known now that characters and groups are saved. A session
+  // with no owner could never be opened (migration 17 deletes such rows), so
+  // it is left out, and its quick characters and memories with it.
+  const validGroupIds = new Set([
+    ...existingGroupIds,
+    ...importedGroups.map(group => group.id),
+  ]);
+  const hasOwner = (session: ChatSession) =>
+    session.groupChatId
+      ? validGroupIds.has(session.groupChatId)
+      : !!session.characterId && validCharIds.has(session.characterId);
+
   const importedSessions: ChatSession[] = [];
   for (const session of result.sessions) {
     if (existingSessionIds.has(session.id)) {
+      continue;
+    }
+    if (!hasOwner(session)) {
+      console.warn(`Skipped chat session ${session.id}: its owner is missing`);
       continue;
     }
     const savedAttachments: Attachment[] = [];
@@ -610,7 +626,7 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
     let scopeId = memory.scope;
     if (scopeId.startsWith('character:')) {
       const mapped = origIdToNewId.get(scopeId.slice('character:'.length));
-      if (!mapped) continue;
+      if (!mapped || !validCharIds.has(mapped)) continue;
       scopeId = `character:${mapped}`;
     } else if (scopeId.startsWith('session:')) {
       const sessionId = scopeId.slice('session:'.length);
@@ -647,6 +663,19 @@ export async function importBuk(fileUri: string): Promise<BukImportResult> {
       console.warn('Failed to import memory:', e);
     }
   }
+
+  // Same reachability rule as migration 17: a quick character is shown through
+  // its session, or, when starred, through its character. Anything else would
+  // be a row nothing can reach.
+  const reachableSessionIds = new Set([
+    ...existingSessionIds,
+    ...importedSessions.map(session => session.id),
+  ]);
+  result.quickCharacters = result.quickCharacters.filter(
+    qc =>
+      (!!qc.session_id && reachableSessionIds.has(qc.session_id)) ||
+      (!!qc.starred && !!qc.character_id && validCharIds.has(qc.character_id)),
+  );
 
   await restoreQuickCharacterIcons(zip, result.quickCharacters, existingQcIds);
 
