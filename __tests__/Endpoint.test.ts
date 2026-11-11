@@ -408,3 +408,126 @@ describe('top_p', () => {
     expect(JSON.parse(lastBody).top_p).toBeUndefined();
   });
 });
+
+// Delivers `progressSnapshots` as successive responseText values through
+// onprogress, then sets `finalText` and fires onload (with no onprogress
+// for the final bytes, as XHR does not guarantee one).
+let progressSnapshots: string[] = [];
+let finalText = '';
+
+class ScriptedXHR {
+  responseText = '';
+  status = 200;
+  onprogress: (() => void) | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  open() {}
+  setRequestHeader() {}
+  abort() {}
+  send() {
+    for (const snap of progressSnapshots) {
+      this.responseText = snap;
+      this.onprogress?.();
+    }
+    this.responseText = finalText;
+    this.onload?.();
+  }
+}
+
+describe('stream parsing', () => {
+  beforeEach(() => {
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = FakeXHR;
+    sseLines = [];
+    lastBody = '';
+    progressSnapshots = [];
+    finalText = '';
+  });
+
+  test('accepts data: lines without the space after the colon', async () => {
+    sseLines = [
+      'data:' + JSON.stringify({ choices: [{ delta: { content: 'no ' } }] }),
+      'data:' + JSON.stringify({ choices: [{ delta: { content: 'space' } }] }),
+      'data:[DONE]',
+      'data:' + JSON.stringify({ choices: [{ delta: { content: 'late' } }] }),
+    ];
+    const result = await getAIResponse(msg('x'), realConfig, undefined, true);
+    expect(result.content).toBe('no space');
+  });
+
+  test('parses a final event that has no trailing newline', async () => {
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = ScriptedXHR;
+    const full =
+      sse({ choices: [{ delta: { content: 'Hello' } }] }) +
+      '\n\n' +
+      sse({ choices: [{ delta: { content: ' world' } }] });
+    progressSnapshots = [full];
+    finalText = full;
+    const tokens: string[] = [];
+    const result = await getAIResponse(
+      msg('x'),
+      realConfig,
+      t => tokens.push(t),
+      true,
+    );
+    expect(result.content).toBe('Hello world');
+    expect(tokens.join('')).toBe('Hello world');
+  });
+
+  test('processes final bytes that only arrive at onload', async () => {
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = ScriptedXHR;
+    const first = sse({ choices: [{ delta: { content: 'one ' } }] }) + '\n\n';
+    progressSnapshots = [first];
+    finalText =
+      first +
+      sse({ choices: [{ delta: { reasoning: 'hm' } }] }) +
+      '\n\n' +
+      sse({ choices: [{ delta: { content: 'two' } }] }) +
+      '\n\ndata: [DONE]';
+    const result = await getAIResponse(msg('x'), realConfig, undefined, true);
+    expect(result.content).toBe('one <think>hm</think>two');
+  });
+
+  test('rejects with the provider message on an in-stream error event', async () => {
+    sseLines = [
+      ': OPENROUTER PROCESSING',
+      sse({ error: { message: 'Provider returned error', code: 502 } }),
+      'data: [DONE]',
+    ];
+    await expect(
+      getAIResponse(msg('x'), realConfig, undefined, true),
+    ).rejects.toThrow(
+      new Error('API error 502 in stream: Provider returned error'),
+    );
+  });
+
+  test('rejects on an error event after some content has streamed', async () => {
+    sseLines = [
+      sse({ choices: [{ delta: { content: 'partial' } }] }),
+      'data:' +
+        JSON.stringify({
+          error: { message: 'Rate limited' },
+          choices: [{ delta: { content: '' }, finish_reason: 'error' }],
+        }),
+      sse({ choices: [{ delta: { content: ' more' } }] }),
+    ];
+    const tokens: string[] = [];
+    await expect(
+      getAIResponse(msg('x'), realConfig, t => tokens.push(t), true),
+    ).rejects.toThrow(
+      new Error('API error in stream: Rate limited (the reply was cut off)'),
+    );
+    expect(tokens.join('')).toBe('partial');
+  });
+
+  test('non-2xx status still rejects with the body', async () => {
+    (global as { XMLHttpRequest?: unknown }).XMLHttpRequest = class extends (
+      ScriptedXHR
+    ) {
+      status = 401;
+    };
+    finalText = '{"error":{"message":"bad key"}}';
+    await expect(
+      getAIResponse(msg('x'), realConfig, undefined, true),
+    ).rejects.toThrow('API error 401: {"error":{"message":"bad key"}}');
+  });
+});

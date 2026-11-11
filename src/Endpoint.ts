@@ -165,6 +165,84 @@ function streamWithXHR(
       }
     }
 
+    // Several providers (OpenRouter among them) report failures inside a
+    // 200 stream as an event with a top-level `error` instead of choices.
+    // The "API error " prefix makes getAIResponse pass it through as-is.
+    function streamError(err: unknown): Error {
+      const obj =
+        err && typeof err === 'object'
+          ? (err as { message?: unknown; code?: unknown })
+          : undefined;
+      const message =
+        typeof err === 'string'
+          ? err
+          : typeof obj?.message === 'string' && obj.message
+            ? obj.message
+            : JSON.stringify(err);
+      const code =
+        typeof obj?.code === 'number' ||
+        (typeof obj?.code === 'string' && obj.code)
+          ? `${obj.code} `
+          : '';
+      const cutOff = content ? ' (the reply was cut off)' : '';
+      return new Error(`API error ${code}in stream: ${message}${cutOff}`);
+    }
+
+    function handleLine(line: string) {
+      const trimmed = line.trim();
+      // The space after "data:" is optional in SSE; some servers omit it.
+      if (!trimmed.startsWith('data:')) return;
+      const data = trimmed.slice(5).trimStart();
+
+      if (data === '[DONE]') {
+        // Stream is naturally complete — resolve without aborting.
+        // Calling xhr.abort() here risks re-entrant onload/onerror.
+        settle('resolve', { content, ttfbMs });
+        return;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        return; // skip malformed JSON lines
+      }
+      if (parsed?.error) {
+        settle('reject', streamError(parsed.error));
+        return;
+      }
+      const delta = parsed?.choices?.[0]?.delta;
+      const reasoning =
+        typeof delta?.reasoning_content === 'string'
+          ? delta.reasoning_content
+          : typeof delta?.reasoning === 'string'
+            ? delta.reasoning
+            : '';
+      if (reasoning) {
+        pushReasoning(reasoning);
+      }
+      if (typeof delta?.content === 'string' && delta.content) {
+        pushContent(delta.content);
+      }
+    }
+
+    // Consume whatever responseText holds beyond processedLen. With
+    // `final`, the trailing partial line (no newline yet) is processed
+    // too, since no later chunk will complete it.
+    function consume(final: boolean) {
+      const fullText = xhr.responseText || '';
+      if (fullText.length > processedLen) {
+        lineBuffer += fullText.slice(processedLen);
+        processedLen = fullText.length;
+      }
+      const lines = lineBuffer.split('\n');
+      lineBuffer = final ? '' : lines.pop() || '';
+      for (const line of lines) {
+        handleLine(line);
+        if (settled) return;
+      }
+    }
+
     xhr.open('POST', url, true);
     for (const [k, v] of Object.entries(headers)) {
       xhr.setRequestHeader(k, v);
@@ -172,51 +250,15 @@ function streamWithXHR(
 
     xhr.onprogress = () => {
       if (settled) return;
-      const fullText = xhr.responseText || '';
-      if (fullText.length <= processedLen) return;
-
-      const newText = fullText.slice(processedLen);
-      processedLen = fullText.length;
-      lineBuffer += newText;
-      const completeLines = lineBuffer.split('\n');
-      lineBuffer = completeLines.pop() || '';
-
-      for (const line of completeLines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-        const data = trimmed.slice(6);
-        if (data === '[DONE]') {
-          // Stream is naturally complete — resolve without aborting.
-          // Calling xhr.abort() here risks re-entrant onload/onerror.
-          settle('resolve', { content, ttfbMs });
-          return;
-        }
-
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta;
-          const reasoning =
-            typeof delta?.reasoning_content === 'string'
-              ? delta.reasoning_content
-              : typeof delta?.reasoning === 'string'
-                ? delta.reasoning
-                : '';
-          if (reasoning) {
-            pushReasoning(reasoning);
-          }
-          if (typeof delta?.content === 'string' && delta.content) {
-            pushContent(delta.content);
-          }
-        } catch {
-          // skip malformed JSON lines
-        }
-      }
+      consume(false);
     };
 
     xhr.onload = () => {
       if (settled) return;
       if (xhr.status >= 200 && xhr.status < 300) {
+        // onprogress is not guaranteed to fire for the final bytes, and
+        // the last event may lack a trailing newline.
+        consume(true);
         settle('resolve', { content, ttfbMs });
       } else {
         const errorText = xhr.responseText || '';
