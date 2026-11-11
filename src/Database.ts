@@ -1398,9 +1398,25 @@ export async function saveCharacterToDB(char: DBCharacter): Promise<void> {
     custom_fields: await encrypt(char.custom_fields || ''),
   };
   d.execute(
-    `INSERT OR REPLACE INTO characters
+    // A true upsert, not INSERT OR REPLACE: REPLACE deletes the old row first,
+    // which (with foreign_keys ON) cascades into group_chat_members and
+    // silently drops the character from every group chat.
+    `INSERT INTO characters
       (id, name, description, initial_message, writing_style, personality, scenario, example_messages, icon, lorebook_id, custom_fields, persona_id, folder_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       description = excluded.description,
+       initial_message = excluded.initial_message,
+       writing_style = excluded.writing_style,
+       personality = excluded.personality,
+       scenario = excluded.scenario,
+       example_messages = excluded.example_messages,
+       icon = excluded.icon,
+       lorebook_id = excluded.lorebook_id,
+       custom_fields = excluded.custom_fields,
+       persona_id = excluded.persona_id,
+       folder_id = excluded.folder_id`,
     [
       char.id,
       char.name,
