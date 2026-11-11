@@ -50,6 +50,8 @@ import {
   getAllSessionsForCharacter,
   getSessionById,
   deleteSession,
+  saveMemoryToDB,
+  getAllMemoriesFromDB,
 } from '../src/Database';
 import { exportBuk, importBuk } from '../src/import/bukImportExport';
 import type { ChatSession } from '../src/useChat';
@@ -74,6 +76,7 @@ function clearAll() {
     'lorebook_entries',
     'lorebooks',
     'kv_store',
+    'memories',
   ]) {
     db().execute(`DELETE FROM ${table}`);
   }
@@ -669,5 +672,311 @@ describe('attachments', () => {
     expect(restored[0].name).toBe('cat.png');
     expect(restored[0].id).not.toBe(att.id);
     expect(await loadAttachmentBase64(restored[0].id)).toBe(b64);
+  });
+});
+
+async function saveBob(id = 'char-2') {
+  await saveCharacterToDB({
+    id,
+    name: 'Bob',
+    description: '',
+    initial_message: '',
+    writing_style: '',
+    personality: '',
+    scenario: '',
+    example_messages: '',
+    icon: '',
+    lorebook_id: '',
+    custom_fields: '',
+    persona_id: '',
+    folder_id: '',
+  });
+}
+
+async function dropFromBundle(paths: string[]) {
+  const zip = await JSZip.loadAsync(Buffer.from(bundleBase64!, 'base64'));
+  for (const path of paths) {
+    expect(zip.file(path)).not.toBeNull();
+    zip.remove(path);
+  }
+  bundleBase64 = await zip.generateAsync({ type: 'base64' });
+}
+
+async function saveSessionMemory(scopeSessionId: string) {
+  await saveMemoryToDB({
+    id: `mem-${scopeSessionId}`,
+    scopeId: `session:${scopeSessionId}`,
+    text: `remembered in ${scopeSessionId}`,
+    vector: [],
+    vectorKey: '',
+    sourceSessionId: scopeSessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: 0,
+    pinned: false,
+  });
+}
+
+describe('speaker ids are remapped on import', () => {
+  test('group chat messages, variants and last reply point at the new characters', async () => {
+    await saveBob();
+    await saveGroupChatToDB({
+      id: 'group-1',
+      name: 'Gang',
+      description: '',
+      icon: '',
+      characterIds: [charId, 'char-2'],
+    });
+    await createSession({
+      id: 'sess-group',
+      characterId: '',
+      groupChatId: 'group-1',
+      lastReplyCharacterId: 'char-2',
+      messages: [
+        { id: 'g1', role: 'user', content: 'hi all', timestamp: 1000 },
+        {
+          id: 'g2',
+          role: 'assistant',
+          content: 'hi from alice',
+          timestamp: 2000,
+          characterId: charId,
+        },
+        {
+          id: 'g3',
+          role: 'assistant',
+          content: 'hi from bob',
+          timestamp: 3000,
+          characterId: 'char-2',
+          variants: [
+            {
+              id: 'v1',
+              content: 'alice cut in',
+              timestamp: 3000,
+              characterId: charId,
+            },
+            {
+              id: 'v2',
+              content: 'hi from bob',
+              timestamp: 3001,
+              characterId: 'char-2',
+            },
+          ],
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 3000,
+    });
+
+    await exportBundle([charId, 'char-2'], ['group-1']);
+    clearAll();
+    const result = await importBundle();
+    expect(result.groups.map(g => g.id)).toEqual(['group-1']);
+
+    const chars = await getAllCharactersFromDB();
+    const aliceId = chars.find(c => c.name === 'Alice')!.id;
+    const bobId = chars.find(c => c.name === 'Bob')!.id;
+    expect(aliceId).not.toBe(charId);
+    expect(bobId).not.toBe('char-2');
+
+    const session = await getSessionById('sess-group');
+    expect(session).not.toBeNull();
+    expect(session!.characterId).toBe('');
+    expect(session!.groupChatId).toBe('group-1');
+    expect(session!.lastReplyCharacterId).toBe(bobId);
+    expect(session!.messages.map(m => m.characterId || '')).toEqual([
+      '',
+      aliceId,
+      bobId,
+    ]);
+    expect(session!.messages[2].variants!.map(v => v.characterId)).toEqual([
+      aliceId,
+      bobId,
+    ]);
+  });
+
+  test('a solo chat keeps quick character speaker ids', async () => {
+    await createSession({
+      id: 'sess-qc',
+      characterId: charId,
+      lastReplyCharacterId: sessionQcId,
+      messages: [
+        { id: 'q1', role: 'user', content: 'hey', timestamp: 1000 },
+        {
+          id: 'q2',
+          role: 'assistant',
+          content: 'from the qc',
+          timestamp: 2000,
+          characterId: sessionQcId,
+          variants: [
+            {
+              id: 'qv1',
+              content: 'from the qc',
+              timestamp: 2000,
+              characterId: sessionQcId,
+            },
+            {
+              id: 'qv2',
+              content: 'from alice',
+              timestamp: 2001,
+              characterId: charId,
+            },
+          ],
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 2000,
+    });
+    await saveQuickCharacter({
+      id: sessionQcId,
+      session_id: 'sess-qc',
+      character_id: '',
+      name: 'Session QC',
+      description: '',
+      personality: '',
+      starred: 0,
+    });
+
+    await exportBundle([charId]);
+    clearAll();
+    await importBundle();
+
+    const [alice] = await getAllCharactersFromDB();
+    const session = await getSessionById('sess-qc');
+    expect(session!.characterId).toBe(alice.id);
+    expect(session!.lastReplyCharacterId).toBe(sessionQcId);
+    expect(session!.messages[1].characterId).toBe(sessionQcId);
+    expect(session!.messages[1].variants!.map(v => v.characterId)).toEqual([
+      sessionQcId,
+      alice.id,
+    ]);
+    const qcs = await getQuickCharactersForSession('sess-qc');
+    expect(qcs.map(q => q.id)).toEqual([sessionQcId]);
+  });
+});
+
+describe('sessions without an owner are not imported', () => {
+  test('a solo session whose character is absent is skipped with its quick characters and memories', async () => {
+    await saveSessionMemory(sessionId);
+    await exportBundle([charId]);
+    await dropFromBundle([`characters/${charId}.json`]);
+    clearAll();
+
+    const result = await importBundle();
+    expect(result.sessions).toEqual([]);
+    expect(result.quickCharacters).toEqual([]);
+    expect(result.memories).toBe(0);
+    expect(await getSessionById(sessionId)).toBeNull();
+    expect(await getQuickCharactersForSession(sessionId)).toEqual([]);
+    expect(await getAllMemoriesFromDB()).toEqual([]);
+  });
+
+  test('a solo session whose character already exists under the same id still imports', async () => {
+    await exportBundle([charId]);
+    await dropFromBundle([`characters/${charId}.json`]);
+    deleteSession(sessionId);
+
+    const result = await importBundle();
+    expect(result.sessions.map(s => s.id)).toEqual([sessionId]);
+    const session = await getSessionById(sessionId);
+    expect(session!.characterId).toBe(charId);
+  });
+
+  test('a group session whose group is skipped is not imported', async () => {
+    await saveBob();
+    await saveGroupChatToDB({
+      id: 'group-1',
+      name: 'Bobs',
+      description: '',
+      icon: '',
+      characterIds: ['char-2'],
+    });
+    await createSession({
+      id: 'sess-group',
+      characterId: '',
+      groupChatId: 'group-1',
+      lastReplyCharacterId: 'char-2',
+      messages: [
+        {
+          id: 'g1',
+          role: 'assistant',
+          content: 'only bob',
+          timestamp: 1000,
+          characterId: 'char-2',
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+    await saveQuickCharacter({
+      id: 'qc-group',
+      session_id: 'sess-group',
+      character_id: '',
+      name: 'Group QC',
+      description: '',
+      personality: '',
+      starred: 0,
+    });
+    await saveSessionMemory('sess-group');
+
+    // Bob is left out of the export, so the group has no valid members.
+    await exportBundle([charId], ['group-1']);
+    clearAll();
+
+    const result = await importBundle();
+    expect(result.groups).toEqual([]);
+    expect(result.sessions.map(s => s.id)).toEqual([sessionId]);
+    expect(await getSessionById('sess-group')).toBeNull();
+    expect(await getQuickCharactersForSession('sess-group')).toEqual([]);
+    expect(result.quickCharacters.map(q => q.id).sort()).toEqual(
+      [sessionQcId, starredQcId].sort(),
+    );
+    expect(result.memories).toBe(0);
+  });
+
+  test('a group session for a group that already exists still imports', async () => {
+    await saveGroupChatToDB({
+      id: 'group-1',
+      name: 'Gang',
+      description: '',
+      icon: '',
+      characterIds: [charId],
+    });
+    await createSession({
+      id: 'sess-group',
+      characterId: '',
+      groupChatId: 'group-1',
+      messages: [
+        {
+          id: 'g1',
+          role: 'assistant',
+          content: 'hi',
+          timestamp: 1000,
+          characterId: charId,
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    });
+
+    await exportBundle([charId], ['group-1']);
+    deleteSession('sess-group');
+
+    const result = await importBundle();
+    expect(result.groups).toEqual([]);
+    expect(result.sessions.map(s => s.id)).toEqual(['sess-group']);
+    const session = await getSessionById('sess-group');
+    expect(session!.messages[0].characterId).toBe(charId);
+  });
+
+  test('starred quick characters of a missing character are not imported', async () => {
+    deleteSession(sessionId);
+    await exportBundle([charId]);
+    await dropFromBundle([`characters/${charId}.json`]);
+    clearAll();
+
+    const result = await importBundle();
+    expect(result.quickCharacters).toEqual([]);
+    const rows = db().execute('SELECT id FROM quick_characters').results;
+    expect(rows).toEqual([]);
   });
 });
