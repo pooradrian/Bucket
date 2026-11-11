@@ -553,6 +553,31 @@ export async function getSessionForCharacter(
 export async function createSession(session: ChatSession): Promise<void> {
   const d = initDB();
 
+  // Encrypt everything before opening the transaction: the connection is
+  // shared, so awaiting while BEGIN is open would let unrelated calls land
+  // inside (or collide with) this transaction.
+  // Sequential on purpose: Crypto.getKey() is not single-flight, so parallel
+  // first-time encrypts could each mint a different key.
+  const rows: (string | number)[][] = [];
+  for (const msg of session.messages) {
+    rows.push([
+      msg.id,
+      session.id,
+      msg.role,
+      await encrypt(msg.content),
+      msg.timestamp,
+      session.id,
+      msg.variants && msg.variants.length > 0
+        ? await encryptVariants(msg.variants)
+        : '',
+      msg.requestInfo ? await encrypt(msg.requestInfo) : '',
+      msg.thinkingMs ?? 0,
+      msg.characterId ?? '',
+      msg.speakerName ?? '',
+      await encryptAttachments(msg.attachments),
+    ]);
+  }
+
   d.execute('BEGIN');
   try {
     d.execute(
@@ -568,33 +593,11 @@ export async function createSession(session: ChatSession): Promise<void> {
       ],
     );
 
-    for (const msg of session.messages) {
-      const encryptedContent = await encrypt(msg.content);
-      const encryptedVariants =
-        msg.variants && msg.variants.length > 0
-          ? await encryptVariants(msg.variants)
-          : '';
-      const encryptedRequest = msg.requestInfo
-        ? await encrypt(msg.requestInfo)
-        : '';
-      const encryptedAttachments = await encryptAttachments(msg.attachments);
+    for (const params of rows) {
       d.execute(
         `INSERT INTO chat_messages (id, session_id, role, content, timestamp, seq, variants, request_info, thinking_ms, character_id, speaker_name, attachments)
          VALUES (?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) + 1 FROM chat_messages WHERE session_id = ?), ?, ?, ?, ?, ?, ?)`,
-        [
-          msg.id,
-          session.id,
-          msg.role,
-          encryptedContent,
-          msg.timestamp,
-          session.id,
-          encryptedVariants,
-          encryptedRequest,
-          msg.thinkingMs ?? 0,
-          msg.characterId ?? '',
-          msg.speakerName ?? '',
-          encryptedAttachments,
-        ],
+        params,
       );
     }
     d.execute('COMMIT');
