@@ -121,6 +121,40 @@ function bumpRevision(sessionId: string): void {
   }));
 }
 
+/**
+ * Sessions written straight to the DB for a character (e.g. by the msg.add
+ * debugger command). An open chat still showing an unsaved, in-memory session
+ * for that character switches to it instead of hiding it.
+ */
+export const useExternalSessions = create<{
+  byCharacter: Record<string, string>;
+}>(() => ({ byCharacter: {} }));
+
+export function notifySessionCreated(
+  characterId: string,
+  sessionId: string,
+): void {
+  useExternalSessions.setState(s => ({
+    byCharacter: { ...s.byCharacter, [characterId]: sessionId },
+  }));
+}
+
+export function clearExternalSession(characterId: string): void {
+  useExternalSessions.setState(s => {
+    const rest = { ...s.byCharacter };
+    delete rest[characterId];
+    return { byCharacter: rest };
+  });
+}
+
+/**
+ * Tells an open chat for this session that its messages changed in the DB
+ * (outside a generation run) so it reloads them.
+ */
+export function notifySessionChanged(sessionId: string): void {
+  bumpRevision(sessionId);
+}
+
 function setRunContent(
   sessionId: string,
   content: string,

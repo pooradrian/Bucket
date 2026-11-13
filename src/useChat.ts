@@ -26,6 +26,8 @@ import {
   startGeneration,
   stopGeneration,
   useGenerationStore,
+  useExternalSessions,
+  clearExternalSession,
 } from './GenerationEngine';
 import { logEvent } from './EventLogger';
 import type { RetrievalInfo } from './PromptHandler';
@@ -123,10 +125,7 @@ function promoteToLive(
 // The deck position of the live reply as recorded in the variant index map,
 // or the default (end of the deck) when the record is missing or no longer
 // fits the message as it currently is.
-function validDeckIndex(
-  msg: ChatMessage,
-  stored: number | undefined,
-): number {
+function validDeckIndex(msg: ChatMessage, stored: number | undefined): number {
   const n = msg.variants?.length ?? 0;
   return stored !== undefined &&
     Number.isInteger(stored) &&
@@ -523,6 +522,28 @@ export function useChat({
   useEffect(() => {
     setSelectedQC(null);
   }, [activeSessionId]);
+
+  // A session created outside this screen (msg.add debugger command) replaces
+  // an unsaved in-memory one for the same character, so its messages show up
+  // without reopening the chat.
+  const externalSessionId = useExternalSessions(s =>
+    !isGroupChat && activeCharacter
+      ? s.byCharacter[activeCharacter.id]
+      : undefined,
+  );
+  useEffect(() => {
+    if (!externalSessionId || !activeCharacter || sendingLocal) return;
+    clearExternalSession(activeCharacter.id);
+    if (session && unpersistedRef.current.has(session.id)) {
+      onSessionCreated(externalSessionId);
+    }
+  }, [
+    externalSessionId,
+    activeCharacter,
+    session,
+    sendingLocal,
+    onSessionCreated,
+  ]);
 
   useEffect(() => {
     const reconciled = reconcileSelectedQC(selectedQC, quickCharacters);
@@ -969,9 +990,9 @@ export function useChat({
     // A failed request writes nothing and does not trigger a reload, so undo
     // the optimistic variant here. Success and cancels bump the session
     // revision; the reload effect settles those.
-    const onEngineChange = (state: ReturnType<
-      typeof useGenerationStore.getState
-    >) => {
+    const onEngineChange = (
+      state: ReturnType<typeof useGenerationStore.getState>,
+    ) => {
       if (state.runs[startSessionId]) {
         return;
       }

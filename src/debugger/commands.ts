@@ -46,6 +46,7 @@ import {
   folderDeleteCommand,
   GROUP_HELP,
 } from './groupCommands';
+import { msgAddCommand, MSG_HELP } from './msgCommands';
 import { embedCommand, ragCommand } from './ragCommands';
 import { memCommand, MEMORY_HELP_TEXT } from './memoryCommands';
 import { MIN_SIMILARITY } from '../RAGHandler';
@@ -66,6 +67,7 @@ const GENERAL_HELP = [
   '  prompt <id|name> <message>        Build prompt and show messages array',
   '  send <id|name> <message>          Build prompt and send to LLM',
   '  history <id|name>                 Show chat history',
+  '  msg.add <char> <user|assistant> <text>  Add a chat message (help msg)',
   '  char.new <name> [--field value]   Create a character (help char)',
   '  char.set <id|name> <field> <val>  Change a character field',
   '  char.delete <id|exact name>       Delete a character',
@@ -149,6 +151,7 @@ export const COMMANDS: Record<string, CommandHandler> = {
   prompt: promptCommand,
   send: sendCommand,
   history: historyCommand,
+  'msg.add': msgAddCommand,
   'char.new': charNewCommand,
   'char.set': charSetCommand,
   'char.delete': charDeleteCommand,
@@ -216,6 +219,8 @@ export async function executeDebuggerCommand(
         io.log('info', CHAR_EDIT_HELP);
       } else if (sub === 'group' || sub === 'groups' || sub === 'folder') {
         io.log('info', GROUP_HELP);
+      } else if (sub === 'msg') {
+        io.log('info', MSG_HELP);
       } else if (sub === 'settings') {
         io.log('info', SETTINGS_HELP);
       } else if (sub === 'mem' || sub === 'memory') {

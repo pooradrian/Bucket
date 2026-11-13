@@ -17,6 +17,8 @@ jest.mock('../src/GenerationEngine', () => {
     useGenerationStore: store,
     startGeneration: jest.fn(),
     stopGeneration: jest.fn(),
+    useExternalSessions: create(() => ({ byCharacter: {} })),
+    clearExternalSession: jest.fn(),
   };
 });
 
