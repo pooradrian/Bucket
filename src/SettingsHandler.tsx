@@ -22,7 +22,7 @@ import {
   getThemePreset,
   AppSettings,
 } from './store';
-import { Settings, toDraft, fromDraft } from './settingsDraft';
+import { Settings, toDraft, fromDraft, NUMERIC_KEYS } from './settingsDraft';
 import { useTheme } from './ThemeContext';
 import CustomizationView, {
   CustomizationSection,
@@ -252,6 +252,8 @@ interface SettingsHandlerProps {
   bottomInset: number;
 }
 
+const NUMBER_APPLY_DELAY_MS = 400;
+
 export default function SettingsHandler({
   onApply,
   onOpenDebugger,
@@ -383,14 +385,45 @@ export default function SettingsHandler({
     [onApply],
   );
 
+  // Number fields apply once typing pauses: applying every keystroke would
+  // briefly set e.g. font size 2 on the way to 26. Everything else (and any
+  // pending number) applies immediately.
+  const numberApplyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const applyThemeSettingsRef = useRef(applyThemeSettings);
+  applyThemeSettingsRef.current = applyThemeSettings;
+
   const handleChange = useCallback(
     (key: keyof Settings, text: string) => {
       const next = { ...valuesRef.current, [key]: text };
       valuesRef.current = next;
       setValues(next);
-      applyThemeSettings(next);
+      if (numberApplyTimerRef.current) {
+        clearTimeout(numberApplyTimerRef.current);
+        numberApplyTimerRef.current = null;
+      }
+      if ((NUMERIC_KEYS as readonly string[]).includes(key)) {
+        numberApplyTimerRef.current = setTimeout(() => {
+          numberApplyTimerRef.current = null;
+          applyThemeSettingsRef.current(valuesRef.current);
+        }, NUMBER_APPLY_DELAY_MS);
+      } else {
+        applyThemeSettings(next);
+      }
     },
     [applyThemeSettings],
+  );
+
+  useEffect(
+    () => () => {
+      if (numberApplyTimerRef.current) {
+        clearTimeout(numberApplyTimerRef.current);
+        numberApplyTimerRef.current = null;
+        applyThemeSettingsRef.current(valuesRef.current);
+      }
+    },
+    [],
   );
 
   const navigateTo = useCallback((view: SettingsView) => {
