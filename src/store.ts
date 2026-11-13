@@ -176,6 +176,12 @@ interface AppStore {
   toggleDebugLogging: () => void;
 }
 
+/** Replaces the item with the same id in place, or appends it. */
+export function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
+  const i = list.findIndex(x => x.id === item.id);
+  return i === -1 ? [...list, item] : list.map((x, j) => (j === i ? item : x));
+}
+
 /** Message bubble max width as a fraction of the chat content area. */
 export function bubbleWidthFraction(s: Pick<AppSettings, 'bubbleMaxWidth'>) {
   const pct = Number.isFinite(s.bubbleMaxWidth) ? s.bubbleMaxWidth : 72;
@@ -356,12 +362,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
   saveCharacter: async char => {
-    const { characters } = get();
-    const exists = characters.findIndex(c => c.id === char.id);
-    const updated =
-      exists !== -1
-        ? characters.map((c, i) => (i === exists ? char : c))
-        : [...characters, char];
+    const exists = get().characters.findIndex(c => c.id === char.id);
     try {
       await saveCharacterToDB({
         id: char.id,
@@ -378,7 +379,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
         persona_id: char.personaId || '',
         folder_id: char.folderId || '',
       });
-      set({ characters: updated });
+      // Build the list from the state after the await: a list computed before
+      // it would drop anything another save added in the meantime.
+      set(s => ({ characters: upsertById(s.characters, char) }));
       logEvent('character_saved', {
         nameLen: char.name.length,
         descLen: char.description?.length || 0,
@@ -433,12 +436,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
   saveGroupChat: async group => {
-    const { groupChats } = get();
-    const exists = groupChats.findIndex(g => g.id === group.id);
-    const updated =
-      exists !== -1
-        ? groupChats.map((g, i) => (i === exists ? group : g))
-        : [...groupChats, group];
+    const exists = get().groupChats.findIndex(g => g.id === group.id);
     try {
       await saveGroupChatToDB({
         id: group.id,
@@ -447,7 +445,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         icon: group.icon || '',
         characterIds: group.characterIds,
       });
-      set({ groupChats: updated });
+      set(s => ({ groupChats: upsertById(s.groupChats, group) }));
       logEvent('group_saved', {
         nameLen: group.name.length,
         memberCount: group.characterIds.length,
