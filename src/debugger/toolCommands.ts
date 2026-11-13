@@ -389,34 +389,3 @@ export const encryptCommand: CommandHandler = async (rest, env, io) => {
     );
   }
 };
-
-export const settingsCommand: CommandHandler = (rest, env, io) => {
-  const s = env.appSettings;
-  io.log(
-    'output',
-    [
-      `Theme Mode:      ${s.themeMode}`,
-      `BG Primary:      ${s.bgPrimary}`,
-      `BG Secondary:    ${s.bgSecondary}`,
-      `BG Pill:         ${s.bgPill}`,
-      `Border:          ${s.borderPrimary}`,
-      `Text Primary:    ${s.textPrimary}`,
-      `Text Secondary:  ${s.textSecondary}`,
-      `Text Muted:      ${s.textMuted}`,
-      `Accent:          ${s.accentColor}`,
-      `User Bubble:     ${s.userBubbleBg}`,
-      `Card Radius:     ${s.cardRadius}`,
-      `Pill Radius:     ${s.pillRadius}`,
-      `Bubble Radius:   ${s.bubbleRadius}`,
-      `Msg Max Width:   ${s.bubbleMaxWidth}%`,
-      `Font Body:       ${s.fontSizeBody}`,
-      `Font Header:     ${s.fontSizeHeader}`,
-      `Font Tab:        ${s.fontSizeTab}`,
-      `Bottom Bar Pad:  ${s.bottomBarPad}`,
-      `Side Btn Size:   ${s.sideBtnSize}`,
-      `Input Radius:    ${s.inputRadius}`,
-      `Send Btn Size:   ${s.sendBtnSize}`,
-      `Show Char Icons: ${s.showCharacterIcons}`,
-    ].join('\n'),
-  );
-};

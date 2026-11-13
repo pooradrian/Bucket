@@ -24,8 +24,12 @@ import {
   unlockCommand,
   activityCommand,
   encryptCommand,
-  settingsCommand,
 } from './toolCommands';
+import {
+  settingsCommand,
+  settingsSetCommand,
+  SETTINGS_HELP,
+} from './settingsCommands';
 import { dbCommand, DB_HELP_TEXT } from './dbCommands';
 import { embedCommand, ragCommand } from './ragCommands';
 import { memCommand, MEMORY_HELP_TEXT } from './memoryCommands';
@@ -76,7 +80,8 @@ const GENERAL_HELP = [
   '  mem [sub]                         Long-term memory tools (mem help)',
   '',
   'Theme & Settings:',
-  '  settings                          Show current app settings',
+  '  settings [filter]                 List app settings (key = value)',
+  '  settings.set <key> <value>        Change a setting live (help settings)',
   '',
   'Tools:',
   '  unlock sysstats                   Toggle system stats overlay',
@@ -139,6 +144,7 @@ export const COMMANDS: Record<string, CommandHandler> = {
   activity: activityCommand,
   encrypt: encryptCommand,
   settings: settingsCommand,
+  'settings.set': settingsSetCommand,
   db: dbCommand,
 };
 
@@ -174,6 +180,8 @@ export async function executeDebuggerCommand(
         io.log('info', LOREBOOK_HELP);
       } else if (sub === 'rag' || sub === 'embed') {
         io.log('info', RAG_HELP);
+      } else if (sub === 'settings') {
+        io.log('info', SETTINGS_HELP);
       } else if (sub === 'mem' || sub === 'memory') {
         io.log('info', MEMORY_HELP_TEXT);
       } else {
