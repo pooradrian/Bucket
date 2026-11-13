@@ -37,6 +37,15 @@ import {
   charDeleteCommand,
   CHAR_EDIT_HELP,
 } from './charEditCommands';
+import {
+  groupsCommand,
+  groupNewCommand,
+  groupDeleteCommand,
+  foldersCommand,
+  folderNewCommand,
+  folderDeleteCommand,
+  GROUP_HELP,
+} from './groupCommands';
 import { embedCommand, ragCommand } from './ragCommands';
 import { memCommand, MEMORY_HELP_TEXT } from './memoryCommands';
 import { MIN_SIMILARITY } from '../RAGHandler';
@@ -60,6 +69,11 @@ const GENERAL_HELP = [
   '  char.new <name> [--field value]   Create a character (help char)',
   '  char.set <id|name> <field> <val>  Change a character field',
   '  char.delete <id|exact name>       Delete a character',
+  '  groups / folders                  List group chats / folders (help group)',
+  '  group.new <name> --members a,b    Create a group chat',
+  '  group.delete <id|exact name>      Delete a group chat',
+  '  folder.new <name>                 Create a folder',
+  '  folder.delete <id|exact name>     Delete a folder',
   '',
   'Providers & API:',
   '  providers                         List all API providers',
@@ -138,6 +152,12 @@ export const COMMANDS: Record<string, CommandHandler> = {
   'char.new': charNewCommand,
   'char.set': charSetCommand,
   'char.delete': charDeleteCommand,
+  groups: groupsCommand,
+  'group.new': groupNewCommand,
+  'group.delete': groupDeleteCommand,
+  folders: foldersCommand,
+  'folder.new': folderNewCommand,
+  'folder.delete': folderDeleteCommand,
   config: configCommand,
   'config.set': configSetCommand,
   storage: storageCommand,
@@ -194,6 +214,8 @@ export async function executeDebuggerCommand(
         io.log('info', RAG_HELP);
       } else if (sub === 'char' || sub === 'chars') {
         io.log('info', CHAR_EDIT_HELP);
+      } else if (sub === 'group' || sub === 'groups' || sub === 'folder') {
+        io.log('info', GROUP_HELP);
       } else if (sub === 'settings') {
         io.log('info', SETTINGS_HELP);
       } else if (sub === 'mem' || sub === 'memory') {
