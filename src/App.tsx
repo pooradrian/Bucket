@@ -132,6 +132,14 @@ export default function App() {
     loadLorebooks,
   ]);
 
+  useEffect(() => {
+    // Debug builds only: run debugger commands sent over adb (see
+    // src/UsbDebugBridge.ts). The __DEV__ guard keeps it out of release bundles.
+    if (__DEV__ && loaded) {
+      require('./UsbDebugBridge').startUsbDebugBridge();
+    }
+  }, [loaded]);
+
   const dismissCrash = useCallback(() => {
     setCrashReport(null);
     clearPendingCrash();

@@ -118,6 +118,11 @@ android {
         main {
             java.srcDirs += ["../../nitrogen/generated/android/kotlin"]
         }
+        // Debug-only code (USB debug bridge). Release gets a no-op stub from
+        // src/release; RN's debugOptimized build type shares the debug code.
+        debugOptimized {
+            java.srcDirs += ["src/debug/java"]
+        }
     }
     signingConfigs {
         debug {

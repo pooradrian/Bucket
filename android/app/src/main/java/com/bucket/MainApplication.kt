@@ -19,6 +19,7 @@ class MainApplication : Application(), ReactApplication {
           add(IconModulePackage())
           add(NotificationModulePackage())
           add(AudioRecorderPackage())
+          add(UsbDebugPackage())
         },
     )
   }
