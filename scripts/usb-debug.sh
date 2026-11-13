@@ -16,6 +16,11 @@ if [ $# -eq 0 ]; then
   exit 2
 fi
 
+# Gradle installs restart the adb server, which silently drops the Metro port
+# reverse and breaks Fast Refresh; re-assert it on every call (cheap, no-op if
+# already set).
+adb reverse tcp:8081 tcp:8081 >/dev/null 2>&1 || true
+
 cmd="$*"
 # Single-quote for the device shell: ' -> '\''
 quoted="'${cmd//\'/\'\\\'\'}'"
