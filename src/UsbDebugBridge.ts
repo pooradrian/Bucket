@@ -1,9 +1,4 @@
-import {
-  DeviceEventEmitter,
-  EmitterSubscription,
-  NativeModules,
-  ToastAndroid,
-} from 'react-native';
+import { DeviceEventEmitter, NativeModules, ToastAndroid } from 'react-native';
 import { useAppStore } from './store';
 import { executeDebuggerCommand } from './debugger/commands';
 import { DebuggerEnv, DebuggerIO, DebuggerLogType } from './debugger/types';
@@ -24,6 +19,7 @@ interface UsbDebugModuleType {
 }
 
 const TOAST_MAX = 120;
+const EVENT = 'UsbDebugCommand';
 
 export interface CommandResult {
   ok: boolean;
@@ -68,21 +64,17 @@ export function toastText(cmd: string, result: CommandResult): string {
   return msg.length > TOAST_MAX ? `${msg.slice(0, TOAST_MAX - 1)}…` : msg;
 }
 
-// Fast Refresh re-executes this module (and App's effect), so a module-level
-// "started" flag resets and every edit would add another listener — each USB
-// command then ran once per listener. Keep the one live subscription on
-// global and replace it instead.
-const g = global as typeof globalThis & {
-  __bucketUsbDebugSub?: EmitterSubscription;
-};
-
 export function startUsbDebugBridge(): void {
   const native = (NativeModules as { UsbDebugModule?: UsbDebugModuleType })
     .UsbDebugModule;
   if (!native) return;
-  g.__bucketUsbDebugSub?.remove();
-  g.__bucketUsbDebugSub = DeviceEventEmitter.addListener(
-    'UsbDebugCommand',
+  // Fast Refresh re-executes this module (and App's effect), so per-module
+  // state can't tell whether a listener already exists — every edit used to
+  // add one more and each USB command then ran once per listener. The event
+  // belongs to this bridge alone, so drop all listeners before adding ours.
+  DeviceEventEmitter.removeAllListeners(EVENT);
+  DeviceEventEmitter.addListener(
+    EVENT,
     async ({ id, cmd }: { id: number; cmd: string }) => {
       const result = await runHeadless(cmd);
       ToastAndroid.show(toastText(cmd, result), ToastAndroid.SHORT);
