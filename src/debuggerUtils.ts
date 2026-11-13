@@ -47,3 +47,31 @@ export function findCharacter(
     characters.find(c => c.name.toLowerCase().startsWith(query.toLowerCase()))
   );
 }
+
+/**
+ * Splits parsed args into positionals and `--flag value` pairs. A flag with no
+ * value (end of args or followed by another flag) is set to ''. Flag names are
+ * lowercased; repeated flags keep the last value.
+ */
+export function parseFlags(args: string[]): {
+  positional: string[];
+  flags: Record<string, string>;
+} {
+  const positional: string[] = [];
+  const flags: Record<string, string> = {};
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith('--') && a.length > 2) {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith('--')) {
+        flags[a.slice(2).toLowerCase()] = next;
+        i++;
+      } else {
+        flags[a.slice(2).toLowerCase()] = '';
+      }
+    } else {
+      positional.push(a);
+    }
+  }
+  return { positional, flags };
+}

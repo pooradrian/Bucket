@@ -1,4 +1,4 @@
-import { parseArgs, findCharacter } from '../src/debuggerUtils';
+import { parseArgs, findCharacter, parseFlags } from '../src/debuggerUtils';
 import { Character } from '../src/CharacterEditor';
 
 const char = (id: string, name: string): Character => ({
@@ -63,5 +63,30 @@ describe('findCharacter', () => {
 
   it('returns undefined when nothing matches', () => {
     expect(findCharacter(characters, 'zzz')).toBeUndefined();
+  });
+});
+
+describe('parseFlags', () => {
+  it('splits positionals from --flag value pairs', () => {
+    expect(
+      parseFlags([
+        'Mira',
+        'Vance',
+        '--desc',
+        'A detective',
+        '--Writing',
+        'Noir',
+      ]),
+    ).toEqual({
+      positional: ['Mira', 'Vance'],
+      flags: { desc: 'A detective', writing: 'Noir' },
+    });
+  });
+
+  it('gives valueless flags an empty string', () => {
+    expect(parseFlags(['--a', '--b', 'x', '--c'])).toEqual({
+      positional: [],
+      flags: { a: '', b: 'x', c: '' },
+    });
   });
 });

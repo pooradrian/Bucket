@@ -31,6 +31,12 @@ import {
   SETTINGS_HELP,
 } from './settingsCommands';
 import { dbCommand, DB_HELP_TEXT } from './dbCommands';
+import {
+  charNewCommand,
+  charSetCommand,
+  charDeleteCommand,
+  CHAR_EDIT_HELP,
+} from './charEditCommands';
 import { embedCommand, ragCommand } from './ragCommands';
 import { memCommand, MEMORY_HELP_TEXT } from './memoryCommands';
 import { MIN_SIMILARITY } from '../RAGHandler';
@@ -51,6 +57,9 @@ const GENERAL_HELP = [
   '  prompt <id|name> <message>        Build prompt and show messages array',
   '  send <id|name> <message>          Build prompt and send to LLM',
   '  history <id|name>                 Show chat history',
+  '  char.new <name> [--field value]   Create a character (help char)',
+  '  char.set <id|name> <field> <val>  Change a character field',
+  '  char.delete <id|exact name>       Delete a character',
   '',
   'Providers & API:',
   '  providers                         List all API providers',
@@ -126,6 +135,9 @@ export const COMMANDS: Record<string, CommandHandler> = {
   prompt: promptCommand,
   send: sendCommand,
   history: historyCommand,
+  'char.new': charNewCommand,
+  'char.set': charSetCommand,
+  'char.delete': charDeleteCommand,
   config: configCommand,
   'config.set': configSetCommand,
   storage: storageCommand,
@@ -180,6 +192,8 @@ export async function executeDebuggerCommand(
         io.log('info', LOREBOOK_HELP);
       } else if (sub === 'rag' || sub === 'embed') {
         io.log('info', RAG_HELP);
+      } else if (sub === 'char' || sub === 'chars') {
+        io.log('info', CHAR_EDIT_HELP);
       } else if (sub === 'settings') {
         io.log('info', SETTINGS_HELP);
       } else if (sub === 'mem' || sub === 'memory') {
