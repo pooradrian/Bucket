@@ -1200,6 +1200,9 @@ export function createStyles(s: AppSettings) {
       borderColor: s.accentColor,
       borderRadius: s.cardRadius,
       padding: 14,
+      // Android doesn't re-measure a focused input when its font size changes
+      // (e.g. while editing "Body font size"), leaving the text clipped.
+      minHeight: bodyLH + 2 * 14 + 2,
       fontSize: s.fontSizeBody,
       color: s.textPrimary,
     },
