@@ -17,7 +17,12 @@ jest.mock('../src/Database', () => ({
   setKV: jest.fn(),
 }));
 
-import { runHeadless, toastText } from '../src/UsbDebugBridge';
+import { DeviceEventEmitter, NativeModules } from 'react-native';
+import {
+  runHeadless,
+  startUsbDebugBridge,
+  toastText,
+} from '../src/UsbDebugBridge';
 import { DEFAULT_APP_SETTINGS, useAppStore } from '../src/store';
 
 beforeEach(() => {
@@ -51,5 +56,34 @@ describe('toastText', () => {
     expect(toastText('help', { ok: true, text: 'a'.repeat(300) }).length).toBe(
       120,
     );
+  });
+});
+
+describe('startUsbDebugBridge', () => {
+  it('keeps a single listener when started again (Fast Refresh)', async () => {
+    const native = { start: jest.fn(), reply: jest.fn() };
+    (NativeModules as Record<string, unknown>).UsbDebugModule = native;
+    startUsbDebugBridge();
+    // Fast Refresh re-executes the module and the fresh copy starts again
+    // (react-native itself is shared). Call it outside isolateModules so RN's
+    // lazy getters resolve in the shared registry, as on device.
+    const rn = require('react-native');
+    let startFresh: () => void = () => {};
+    jest.isolateModules(() => {
+      jest.doMock('react-native', () => rn);
+      startFresh = require('../src/UsbDebugBridge').startUsbDebugBridge;
+    });
+    startFresh();
+    DeviceEventEmitter.emit('UsbDebugCommand', {
+      id: 1,
+      cmd: 'settings fontSizeBody',
+    });
+    // Let every registered listener finish before counting replies.
+    for (let i = 0; i < 50 && native.reply.mock.calls.length === 0; i++) {
+      await new Promise<void>(r => setTimeout(() => r(), 10));
+    }
+    await new Promise<void>(r => setTimeout(() => r(), 100));
+    expect(native.reply).toHaveBeenCalledTimes(1);
+    expect(native.reply).toHaveBeenCalledWith(1, true, 'fontSizeBody = 15');
   });
 });
