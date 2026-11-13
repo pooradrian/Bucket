@@ -1,4 +1,8 @@
-import { useAppStore } from '../store';
+import {
+  NUMERIC_SETTING_RANGES,
+  isNumericSettingKey,
+  useAppStore,
+} from '../store';
 import { setIcon } from '../IconModule';
 import {
   encodeThemeURL,
@@ -24,6 +28,12 @@ import {
   TextField,
   MutedNote,
 } from './ui';
+
+function rangeNote(key: string): string | undefined {
+  if (!isNumericSettingKey(key)) return undefined;
+  const [min, max] = NUMERIC_SETTING_RANGES[key];
+  return `Range ${min}–${max}`;
+}
 
 export type CustomizationSection =
   'theme' | 'colors' | 'sizes' | 'fonts' | 'display';
@@ -174,6 +184,7 @@ export default function CustomizationView({
           <TextField
             key={key}
             label={LABELS[key]}
+            note={rangeNote(key)}
             value={values[key]}
             onChangeText={text => handleChange(key, text)}
             placeholder={defaults[key]}
@@ -192,6 +203,7 @@ export default function CustomizationView({
           <TextField
             key={key}
             label={LABELS[key]}
+            note={rangeNote(key)}
             value={values[key]}
             onChangeText={text => handleChange(key, text)}
             placeholder={defaults[key]}
@@ -296,12 +308,14 @@ export default function CustomizationView({
         ]}
         value={appSettings.textBoxMode}
         accent={values.accentColor}
-        onChange={textBoxMode => setAppSettings({ ...appSettings, textBoxMode })}
+        onChange={textBoxMode =>
+          setAppSettings({ ...appSettings, textBoxMode })
+        }
       />
 
       <TextField
         label={LABELS.carouselAnimMs}
-        note="How long the message studio carousel takes to appear."
+        note={`How long the message studio carousel takes to appear. ${rangeNote('carouselAnimMs')}.`}
         value={values.carouselAnimMs}
         onChangeText={text => handleChange('carouselAnimMs', text)}
         placeholder={defaults.carouselAnimMs}

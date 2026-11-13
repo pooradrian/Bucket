@@ -17,6 +17,7 @@ import {
   getThemePreset,
   DEFAULT_APP_SETTINGS,
   bubbleWidthFraction,
+  NUMERIC_SETTING_RANGES,
 } from '../src/store';
 
 describe('parseSavedSettings', () => {
@@ -131,5 +132,27 @@ describe('bubbleMaxWidth', () => {
     expect(bubbleWidthFraction({ bubbleMaxWidth: 0 })).toBe(0.1);
     expect(bubbleWidthFraction({ bubbleMaxWidth: 250 })).toBe(1);
     expect(bubbleWidthFraction({ bubbleMaxWidth: NaN })).toBeCloseTo(0.72);
+  });
+});
+
+describe('number setting ranges', () => {
+  it('clamps out-of-range saved values on load', () => {
+    const s = parseSavedSettings({
+      sendBtnSize: 500,
+      fontSizeBody: 0,
+      cardRadius: -4,
+      bubbleMaxWidth: 250,
+    });
+    expect(s.sendBtnSize).toBe(96);
+    expect(s.fontSizeBody).toBe(8);
+    expect(s.cardRadius).toBe(0);
+    expect(s.bubbleMaxWidth).toBe(100);
+  });
+
+  it('keeps every default inside its range', () => {
+    for (const [k, [min, max]] of Object.entries(NUMERIC_SETTING_RANGES)) {
+      const v = (DEFAULT_APP_SETTINGS as unknown as Record<string, number>)[k];
+      expect([k, v >= min && v <= max]).toEqual([k, true]);
+    }
   });
 });

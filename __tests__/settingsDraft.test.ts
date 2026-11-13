@@ -112,4 +112,14 @@ describe('fromDraft', () => {
       fromDraft(draft, DEFAULT_APP_SETTINGS, DEFAULT_APP_SETTINGS).cardRadius,
     ).toBe(0);
   });
+  it('clamps numbers to their range', () => {
+    const draft = {
+      ...toDraft(DEFAULT_APP_SETTINGS),
+      sendBtnSize: '500',
+      fontSizeBody: '2',
+    };
+    const out = fromDraft(draft, DEFAULT_APP_SETTINGS, DEFAULT_APP_SETTINGS);
+    expect(out.sendBtnSize).toBe(96);
+    expect(out.fontSizeBody).toBe(8);
+  });
 });

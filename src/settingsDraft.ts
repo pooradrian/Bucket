@@ -1,4 +1,4 @@
-import { AppSettings } from './store';
+import { AppSettings, clampSetting, isNumericSettingKey } from './store';
 
 export type Settings = Omit<Record<keyof AppSettings, string>, 'themeMode'> & {
   themeMode: 'dark' | 'light';
@@ -76,7 +76,7 @@ export function fromDraft(
       if (raw.trim() === '') {
         out[k] = def[k];
       } else if (Number.isFinite(n)) {
-        out[k] = n;
+        out[k] = isNumericSettingKey(k) ? clampSetting(k, n) : n;
       }
     } else {
       out[k] = raw;

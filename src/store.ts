@@ -176,6 +176,42 @@ interface AppStore {
   toggleDebugLogging: () => void;
 }
 
+/**
+ * Allowed range for every number setting. Values outside it (e.g. a radius of
+ * 500 or a 0px font) are clamped on load and on edit so the UI stays usable.
+ */
+export const NUMERIC_SETTING_RANGES: Record<
+  (typeof NUMERIC_SETTING_KEYS)[number],
+  readonly [number, number]
+> = {
+  cardRadius: [0, 60],
+  pillRadius: [0, 100],
+  bubbleRadius: [0, 60],
+  inputRadius: [0, 60],
+  bubbleMaxWidth: [10, 100],
+  fontSizeBody: [8, 40],
+  fontSizeHeader: [8, 48],
+  fontSizeTab: [8, 40],
+  bottomBarPad: [0, 200],
+  sideBtnSize: [24, 96],
+  sendBtnSize: [24, 96],
+  carouselAnimMs: [0, 5000],
+};
+
+export function clampSetting(
+  key: (typeof NUMERIC_SETTING_KEYS)[number],
+  value: number,
+): number {
+  const [min, max] = NUMERIC_SETTING_RANGES[key];
+  return Math.min(max, Math.max(min, value));
+}
+
+export function isNumericSettingKey(
+  key: string,
+): key is (typeof NUMERIC_SETTING_KEYS)[number] {
+  return key in NUMERIC_SETTING_RANGES;
+}
+
 /** Replaces the item with the same id in place, or appends it. */
 export function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
   const i = list.findIndex(x => x.id === item.id);
@@ -230,7 +266,9 @@ export function parseSavedSettings(raw: unknown): AppSettings {
   for (const key of NUMERIC_SETTING_KEYS) {
     if (key in saved) {
       const n = Number(saved[key]);
-      result[key] = Number.isNaN(n) ? DEFAULT_APP_SETTINGS[key] : n;
+      result[key] = Number.isFinite(n)
+        ? clampSetting(key, n)
+        : DEFAULT_APP_SETTINGS[key];
     }
   }
 
