@@ -19,6 +19,7 @@ import {
   SIZE_KEYS,
   FONT_KEYS,
   NUMERIC_KEYS,
+  fromDraft,
 } from '../src/settingsDraft';
 import { AppSettings, DEFAULT_APP_SETTINGS } from '../src/store';
 
@@ -67,5 +68,36 @@ describe('key sets', () => {
     for (const k of NUMERIC_KEYS) {
       expect(SETTINGS_KEYS).toContain(k);
     }
+  });
+});
+
+describe('fromDraft', () => {
+  it('round-trips toDraft without changing any value or type', () => {
+    const s: AppSettings = { ...DEFAULT_APP_SETTINGS, debugLogging: true };
+    expect(fromDraft(toDraft(s), s, DEFAULT_APP_SETTINGS)).toEqual(s);
+  });
+
+  it('turns every boolean draft back into a real boolean', () => {
+    const s: AppSettings = { ...DEFAULT_APP_SETTINGS, debugLogging: false };
+    const out = fromDraft(toDraft(s), s, DEFAULT_APP_SETTINGS);
+    expect(out.debugLogging).toBe(false);
+    for (const [k, v] of Object.entries(DEFAULT_APP_SETTINGS)) {
+      if (typeof v === 'boolean') {
+        expect(typeof (out as unknown as Record<string, unknown>)[k]).toBe(
+          'boolean',
+        );
+      }
+    }
+  });
+
+  it('falls back to the default for unparseable numbers', () => {
+    const draft = { ...toDraft(DEFAULT_APP_SETTINGS), cardRadius: 'abc' };
+    expect(
+      fromDraft(
+        draft,
+        { ...DEFAULT_APP_SETTINGS, cardRadius: 5 },
+        DEFAULT_APP_SETTINGS,
+      ).cardRadius,
+    ).toBe(DEFAULT_APP_SETTINGS.cardRadius);
   });
 });

@@ -22,7 +22,7 @@ import {
   getThemePreset,
   AppSettings,
 } from './store';
-import { Settings, toDraft, NUMERIC_KEYS } from './settingsDraft';
+import { Settings, toDraft, fromDraft } from './settingsDraft';
 import { useTheme } from './ThemeContext';
 import CustomizationView, {
   CustomizationSection,
@@ -366,23 +366,13 @@ export default function SettingsHandler({
 
   const applyThemeSettings = useCallback(
     (draft: Settings) => {
-      const converted: Record<string, unknown> = { ...draft };
-      for (const k of NUMERIC_KEYS) {
-        converted[k] = Number(converted[k]);
-        if (isNaN(converted[k] as number)) {
-          converted[k] = (
-            DEFAULT_APP_SETTINGS as unknown as Record<string, unknown>
-          )[k];
-        }
-      }
-      converted.showCharacterIcons = draft.showCharacterIcons === 'true';
-      converted.showThinking = draft.showThinking === 'true';
-      converted.showRag = draft.showRag === 'true';
-      converted.showContextUsage = draft.showContextUsage === 'true';
-      converted.showContextPercent = draft.showContextPercent === 'true';
-      converted.forceItalic = draft.forceItalic === 'true';
-      converted.dynamicIcon = draft.dynamicIcon === 'true';
-      onApply?.(converted as unknown as AppSettings);
+      onApply?.(
+        fromDraft(
+          draft,
+          useAppStore.getState().appSettings,
+          DEFAULT_APP_SETTINGS,
+        ),
+      );
     },
     [onApply],
   );

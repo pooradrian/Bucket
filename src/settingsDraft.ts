@@ -51,6 +51,35 @@ export function toDraft(s: AppSettings): Settings {
   return draft;
 }
 
+/**
+ * Converts edited draft strings back into typed settings. Each field is
+ * coerced by the type it has in `current`, so every boolean (including ones
+ * added later) becomes a real boolean instead of the string "false" — which is
+ * truthy. Unparseable numbers fall back to `defaults`.
+ */
+export function fromDraft(
+  draft: Settings,
+  current: AppSettings,
+  defaults: AppSettings,
+): AppSettings {
+  const out = { ...current } as unknown as Record<string, unknown>;
+  const cur = current as unknown as Record<string, unknown>;
+  const def = defaults as unknown as Record<string, unknown>;
+  for (const k of Object.keys(draft) as (keyof Settings)[]) {
+    const raw = draft[k];
+    const prev = cur[k];
+    if (typeof prev === 'boolean') {
+      out[k] = raw === 'true';
+    } else if (typeof prev === 'number') {
+      const n = Number(raw);
+      out[k] = Number.isNaN(n) ? def[k] : n;
+    } else {
+      out[k] = raw;
+    }
+  }
+  return out as unknown as AppSettings;
+}
+
 export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   bgPrimary: 'Background (primary)',
   bgSecondary: 'Background (secondary)',
