@@ -55,7 +55,8 @@ export function toDraft(s: AppSettings): Settings {
  * Converts edited draft strings back into typed settings. Each field is
  * coerced by the type it has in `current`, so every boolean (including ones
  * added later) becomes a real boolean instead of the string "false" — which is
- * truthy. Unparseable numbers fall back to `defaults`.
+ * truthy. An empty number field (shown with the default as placeholder)
+ * means the default; an unparseable one keeps the current value.
  */
 export function fromDraft(
   draft: Settings,
@@ -72,7 +73,11 @@ export function fromDraft(
       out[k] = raw === 'true';
     } else if (typeof prev === 'number') {
       const n = Number(raw);
-      out[k] = Number.isNaN(n) ? def[k] : n;
+      if (raw.trim() === '') {
+        out[k] = def[k];
+      } else if (Number.isFinite(n)) {
+        out[k] = n;
+      }
     } else {
       out[k] = raw;
     }

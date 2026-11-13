@@ -285,7 +285,13 @@ export default function SettingsHandler({
     } as AppSettings);
   }, [values.themeMode]);
 
+  // Settings this form just applied itself. Re-deriving the draft from them
+  // would overwrite what is being typed (a cleared field would snap back), so
+  // only resync on changes made elsewhere (theme mode, theme import, ...).
+  const lastAppliedRef = useRef<AppSettings | null>(null);
+
   useEffect(() => {
+    if (appSettings === lastAppliedRef.current) return;
     const draft = toDraft(appSettings);
     valuesRef.current = draft;
     setValues(draft);
@@ -366,13 +372,13 @@ export default function SettingsHandler({
 
   const applyThemeSettings = useCallback(
     (draft: Settings) => {
-      onApply?.(
-        fromDraft(
-          draft,
-          useAppStore.getState().appSettings,
-          DEFAULT_APP_SETTINGS,
-        ),
-      );
+      const mode = draft.themeMode === 'light' ? 'light' : 'dark';
+      const next = fromDraft(draft, useAppStore.getState().appSettings, {
+        ...DEFAULT_APP_SETTINGS,
+        ...getThemePreset(mode),
+      });
+      lastAppliedRef.current = next;
+      onApply?.(next);
     },
     [onApply],
   );

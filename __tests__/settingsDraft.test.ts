@@ -90,14 +90,26 @@ describe('fromDraft', () => {
     }
   });
 
-  it('falls back to the default for unparseable numbers', () => {
-    const draft = { ...toDraft(DEFAULT_APP_SETTINGS), cardRadius: 'abc' };
+  it('uses the default for an emptied number field, not 0', () => {
+    const current = { ...DEFAULT_APP_SETTINGS, cardRadius: 5 };
+    const draft = { ...toDraft(current), cardRadius: '' };
+    expect(fromDraft(draft, current, DEFAULT_APP_SETTINGS).cardRadius).toBe(
+      DEFAULT_APP_SETTINGS.cardRadius,
+    );
+  });
+
+  it('keeps the current value for an unparseable number', () => {
+    const current = { ...DEFAULT_APP_SETTINGS, fontSizeBody: 18 };
+    const draft = { ...toDraft(current), fontSizeBody: 'abc' };
+    expect(fromDraft(draft, current, DEFAULT_APP_SETTINGS).fontSizeBody).toBe(
+      18,
+    );
+  });
+
+  it('applies an explicit 0', () => {
+    const draft = { ...toDraft(DEFAULT_APP_SETTINGS), cardRadius: '0' };
     expect(
-      fromDraft(
-        draft,
-        { ...DEFAULT_APP_SETTINGS, cardRadius: 5 },
-        DEFAULT_APP_SETTINGS,
-      ).cardRadius,
-    ).toBe(DEFAULT_APP_SETTINGS.cardRadius);
+      fromDraft(draft, DEFAULT_APP_SETTINGS, DEFAULT_APP_SETTINGS).cardRadius,
+    ).toBe(0);
   });
 });
