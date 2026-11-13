@@ -52,7 +52,7 @@ export interface AppSettings extends ThemePreset {
   cardRadius: number;
   pillRadius: number;
   bubbleRadius: number;
-  chatMaxWidth: number;
+  bubbleMaxWidth: number;
   fontSizeBody: number;
   fontSizeHeader: number;
   fontSizeTab: number;
@@ -110,7 +110,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   cardRadius: 12,
   pillRadius: 50,
   bubbleRadius: 16,
-  chatMaxWidth: 100,
+  bubbleMaxWidth: 72,
   fontSizeBody: 15,
   fontSizeHeader: 17,
   fontSizeTab: 15,
@@ -176,6 +176,12 @@ interface AppStore {
   toggleDebugLogging: () => void;
 }
 
+/** Message bubble max width as a fraction of the chat content area. */
+export function bubbleWidthFraction(s: Pick<AppSettings, 'bubbleMaxWidth'>) {
+  const pct = Number.isFinite(s.bubbleMaxWidth) ? s.bubbleMaxWidth : 72;
+  return Math.min(100, Math.max(10, pct)) / 100;
+}
+
 export function getThemePreset(mode: 'dark' | 'light'): ThemePreset {
   return mode === 'dark' ? DARK_THEME : LIGHT_THEME;
 }
@@ -184,7 +190,7 @@ const NUMERIC_SETTING_KEYS = [
   'cardRadius',
   'pillRadius',
   'bubbleRadius',
-  'chatMaxWidth',
+  'bubbleMaxWidth',
   'fontSizeBody',
   'fontSizeHeader',
   'fontSizeTab',

@@ -1,5 +1,5 @@
 import { DimensionValue, Platform, StyleSheet } from 'react-native';
-import { AppSettings } from './store';
+import { AppSettings, bubbleWidthFraction } from './store';
 
 export function createStyles(s: AppSettings) {
   const monospace = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
@@ -552,7 +552,7 @@ export function createStyles(s: AppSettings) {
     // =========================================================================
     messageContainer: {
       marginBottom: 8,
-      maxWidth: '72%' as DimensionValue,
+      maxWidth: `${bubbleWidthFraction(s) * 100}%` as DimensionValue,
     },
     messageContainerUser: {
       alignSelf: 'flex-end',

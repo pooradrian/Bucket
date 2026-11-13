@@ -34,7 +34,7 @@ import Animated, {
   Extrapolate,
   SharedValue,
 } from 'react-native-reanimated';
-import { useAppStore } from '../store';
+import { bubbleWidthFraction, useAppStore } from '../store';
 import AutoGrowTextInput from './AutoGrowTextInput';
 import { ChatMessage, ReplyVariant } from '../useChat';
 import { renderFormattedText } from '../textFormat';
@@ -49,9 +49,8 @@ import type { RetrievalInfo } from '../PromptHandler';
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
 const CHAT_H_PADDING = 32;
-// Must match the bubbles' `maxWidth: '72%'` of the chat content area
-// (SCREEN_W - 2 * 16 padding) so text wraps at identical points.
-const CARD_W = (SCREEN_W - CHAT_H_PADDING) * 0.72;
+// Cards must match the bubbles' `maxWidth` ("Message max width %") of the chat
+// content area (SCREEN_W - 2 * 16 padding) so text wraps at identical points.
 const PEEK = Math.round(SCREEN_W * 0.12);
 // While editing: how far below the visible-area center the card sits (closer
 // to the keyboard), the gap between the card bottom and the Save/Cancel row,
@@ -229,7 +228,7 @@ export default function Carousel({
 
   const count = items.length;
   const liveIndex = items.findIndex(it => it.live);
-  const standardMaxW = CARD_W;
+  const standardMaxW = (SCREEN_W - CHAT_H_PADDING) * bubbleWidthFraction(theme);
   const isUser = message.role === 'user';
   const isError = message.id === '__error__';
   const showCounter =
@@ -428,10 +427,10 @@ export default function Carousel({
     axis: null as 'x' | 'y' | null,
     pullAnchor: 0,
   });
-  const cardSpanRef = useRef(SCREEN_W / 2 + CARD_W / 2 - PEEK);
+  const cardSpanRef = useRef(SCREEN_W / 2 + standardMaxW / 2 - PEEK);
   cardSpanRef.current =
     SCREEN_W / 2 +
-    (origin && origin.width > 0 ? origin.width : CARD_W) / 2 -
+    (origin && origin.width > 0 ? origin.width : standardMaxW) / 2 -
     PEEK;
   const panResponder = useRef(
     PanResponder.create({
@@ -1066,7 +1065,7 @@ function CarouselCard({
     const rel = i - pos.value;
     const absRel = Math.abs(rel);
     const sign = rel >= 0 ? 1 : -1;
-    const w = cardW > 0 ? cardW : CARD_W;
+    const w = cardW > 0 ? cardW : maxW;
     const span = SCREEN_W / 2 + w / 2 - PEEK;
     let restX = 0;
     if (rel !== 0) {
@@ -1557,7 +1556,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    maxWidth: '72%',
     overflow: 'hidden',
     borderWidth: 1,
   },

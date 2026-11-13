@@ -408,7 +408,7 @@ export const settingsCommand: CommandHandler = (rest, env, io) => {
       `Card Radius:     ${s.cardRadius}`,
       `Pill Radius:     ${s.pillRadius}`,
       `Bubble Radius:   ${s.bubbleRadius}`,
-      `Chat Max Width:  ${s.chatMaxWidth}%`,
+      `Msg Max Width:   ${s.bubbleMaxWidth}%`,
       `Font Body:       ${s.fontSizeBody}`,
       `Font Header:     ${s.fontSizeHeader}`,
       `Font Tab:        ${s.fontSizeTab}`,

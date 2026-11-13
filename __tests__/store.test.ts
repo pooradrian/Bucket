@@ -16,6 +16,7 @@ import {
   parseSavedSettings,
   getThemePreset,
   DEFAULT_APP_SETTINGS,
+  bubbleWidthFraction,
 } from '../src/store';
 
 describe('parseSavedSettings', () => {
@@ -111,5 +112,24 @@ describe('getThemePreset', () => {
   });
   test('light preset uses an off-white background', () => {
     expect(getThemePreset('light').bgPrimary).toBe('#F5F5F5');
+  });
+});
+
+describe('bubbleMaxWidth', () => {
+  it('ignores the legacy chatMaxWidth key, which never had any effect', () => {
+    const s = parseSavedSettings({ chatMaxWidth: 100 });
+    expect(s.bubbleMaxWidth).toBe(72);
+    expect('chatMaxWidth' in s).toBe(false);
+  });
+
+  it('keeps a saved bubbleMaxWidth', () => {
+    expect(parseSavedSettings({ bubbleMaxWidth: 90 }).bubbleMaxWidth).toBe(90);
+  });
+
+  it('clamps the width fraction to 10..100%', () => {
+    expect(bubbleWidthFraction({ bubbleMaxWidth: 72 })).toBeCloseTo(0.72);
+    expect(bubbleWidthFraction({ bubbleMaxWidth: 0 })).toBe(0.1);
+    expect(bubbleWidthFraction({ bubbleMaxWidth: 250 })).toBe(1);
+    expect(bubbleWidthFraction({ bubbleMaxWidth: NaN })).toBeCloseTo(0.72);
   });
 });
