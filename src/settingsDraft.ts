@@ -100,7 +100,7 @@ export const LABELS: Record<Exclude<keyof Settings, 'themeMode'>, string> = {
   fontSizeBody: 'Body font size',
   fontSizeHeader: 'Header font size',
   fontSizeTab: 'Tab font size',
-  bottomBarPad: 'Bottom bar padding',
+  bottomBarPad: 'Chat input gap above keyboard',
   sideBtnSize: 'Side button size',
   inputRadius: 'Input border radius',
   sendBtnSize: 'Send button size',

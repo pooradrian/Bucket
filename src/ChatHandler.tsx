@@ -698,6 +698,7 @@ export default function ChatHandler({
   const accentColor = useAppStore(s => s.appSettings.accentColor);
   const bgSecondary = useAppStore(s => s.appSettings.bgSecondary);
   const borderPrimary = useAppStore(s => s.appSettings.borderPrimary);
+  const bottomBarPad = useAppStore(s => s.appSettings.bottomBarPad);
   const inlineMode =
     useAppStore(s => s.appSettings.messageEditMode) === 'inline';
   const showContextUsage = useAppStore(s => s.appSettings.showContextUsage);
@@ -1544,7 +1545,11 @@ export default function ChatHandler({
         <View
           style={[
             st.inputBar,
-            { paddingBottom: keyboardVisible ? bottomInset + 30 : bottomInset },
+            {
+              paddingBottom: keyboardVisible
+                ? bottomInset + bottomBarPad
+                : bottomInset,
+            },
           ]}
         >
           {isGroupChat && selectedReplyCharacter ? (

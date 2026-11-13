@@ -703,7 +703,6 @@ export function createStyles(s: AppSettings) {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingBottom: s.bottomBarPad,
       paddingTop: 6,
       borderTopWidth: 1,
       borderTopColor: s.borderPrimary,
