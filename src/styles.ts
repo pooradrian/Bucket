@@ -1,7 +1,13 @@
 import { DimensionValue, Platform, StyleSheet } from 'react-native';
 import { AppSettings, bubbleWidthFraction } from './store';
 
+/** Line height for body-size text; scales with the font (15 -> 20). */
+export function bodyLineHeight(fontSize: number) {
+  return Math.round((fontSize * 4) / 3);
+}
+
 export function createStyles(s: AppSettings) {
+  const bodyLH = bodyLineHeight(s.fontSizeBody);
   const monospace = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
 
   return StyleSheet.create({
@@ -599,7 +605,7 @@ export function createStyles(s: AppSettings) {
     },
     bubbleText: {
       fontSize: s.fontSizeBody,
-      lineHeight: 20,
+      lineHeight: bodyLH,
       color: s.textSecondary,
     },
     bubbleTextUser: {
@@ -612,7 +618,7 @@ export function createStyles(s: AppSettings) {
     },
     thinkingBody: {
       fontSize: s.fontSizeBody,
-      lineHeight: 20,
+      lineHeight: bodyLH,
       color: s.textMuted,
     },
     timestampText: {
@@ -790,7 +796,7 @@ export function createStyles(s: AppSettings) {
     },
     errorText: {
       fontSize: s.fontSizeBody,
-      lineHeight: 20,
+      lineHeight: bodyLH,
       color: s.dangerColor,
     },
     retryBtn: {

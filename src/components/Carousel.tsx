@@ -45,6 +45,7 @@ import {
 } from '../thinking';
 import { formatRagDuration, parseRagInfo } from '../ragInfo';
 import type { RetrievalInfo } from '../PromptHandler';
+import { bodyLineHeight } from '../styles';
 
 const SCREEN_W = Dimensions.get('window').width;
 const SCREEN_H = Dimensions.get('window').height;
@@ -1214,7 +1215,7 @@ function CarouselCard({
                     {
                       color: textColor,
                       fontSize: colors.fontSizeBody,
-                      lineHeight: 20,
+                      lineHeight: bodyLineHeight(colors.fontSizeBody),
                     },
                   ]}
                   value={editDraft}
@@ -1311,7 +1312,7 @@ function CarouselCard({
                               {
                                 color: colors.textMuted,
                                 fontSize: colors.fontSizeBody,
-                                lineHeight: 20,
+                                lineHeight: bodyLineHeight(colors.fontSizeBody),
                               },
                             ]}
                           >
@@ -1320,7 +1321,7 @@ function CarouselCard({
                               {
                                 color: colors.textMuted,
                                 fontSize: colors.fontSizeBody,
-                                lineHeight: 20,
+                                lineHeight: bodyLineHeight(colors.fontSizeBody),
                               },
                               colors.forceItalic,
                             )}
@@ -1333,7 +1334,7 @@ function CarouselCard({
                             {
                               color: textColor,
                               fontSize: colors.fontSizeBody,
-                              lineHeight: 20,
+                              lineHeight: bodyLineHeight(colors.fontSizeBody),
                             },
                           ]}
                         >
@@ -1347,7 +1348,7 @@ function CarouselCard({
                             {
                               color: textColor,
                               fontSize: colors.fontSizeBody,
-                              lineHeight: 20,
+                              lineHeight: bodyLineHeight(colors.fontSizeBody),
                             },
                             colors.forceItalic,
                           )}
@@ -1361,7 +1362,7 @@ function CarouselCard({
                         {
                           color: textColor,
                           fontSize: colors.fontSizeBody,
-                          lineHeight: 20,
+                          lineHeight: bodyLineHeight(colors.fontSizeBody),
                         },
                       ]}
                     >
@@ -1370,7 +1371,7 @@ function CarouselCard({
                         {
                           color: textColor,
                           fontSize: colors.fontSizeBody,
-                          lineHeight: 20,
+                          lineHeight: bodyLineHeight(colors.fontSizeBody),
                         },
                         colors.forceItalic,
                       )}
